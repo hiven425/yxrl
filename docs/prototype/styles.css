@@ -1005,6 +1005,73 @@ body:not([data-page="clock"]) .taskbar-calendar::after {
 .form-error:empty {
   display: none;
 }
+.date-reminder-menu,
+.date-reminder-popup {
+  position: fixed;
+  z-index: 8;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: 0 8px 22px rgb(0 0 0 / 16%);
+}
+.date-reminder-menu {
+  display: grid;
+  max-width: min(280px, calc(100vw - 8px));
+  max-height: 60vh;
+  overflow: auto;
+  padding: 4px;
+}
+.date-reminder-menu button {
+  text-align: left;
+  padding: 7px 12px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+}
+.date-reminder-menu button:is(:focus, :hover) {
+  background: var(--accent-fill);
+}
+.date-reminder-popup {
+  right: 14px;
+  bottom: 67px;
+  width: min(318px, calc(100vw - 28px));
+  padding: 10px 12px;
+}
+.date-reminder-popup h2 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+.date-reminder-popup .notice-entries {
+  max-height: 45vh;
+  overflow: auto;
+}
+.notice-entries > div,
+.date-reminder-form .reminder-preview {
+  margin: 8px 0;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--subtle);
+  overflow-wrap: anywhere;
+}
+.notice-entries p {
+  margin: 3px 0 0;
+}
+.date-reminder-popup button {
+  display: block;
+  margin-left: auto;
+}
+.date-reminder-menu[hidden], .date-reminder-popup[hidden] {
+  display: none;
+}
+.date-reminder-dot {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: currentColor;
+}
 .form-actions {
   justify-content: flex-end;
   border-top: 1px solid var(--line);

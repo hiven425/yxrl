@@ -34,12 +34,14 @@ internal partial class CalendarWindow : Window
     private PixelRect CalendarArea => detailWidth == 0 ? resizeArea
         : resizeArea with { Left = resizeArea.Left + detailWidth + detailGap };
 
-    public CalendarWindow(SettingsStore store, CalendarService calendar, WeatherService weather, Action openSettings)
+    public CalendarWindow(SettingsStore store, CalendarService calendar, WeatherService weather,
+        ReminderStore reminderStore, Action openSettings)
     {
         InitializeComponent();
         Width = DefaultSize.Width;
         Height = DefaultSize.Height;
         (this.store,this.calendar,this.weather,this.openSettings)=(store,calendar,weather,openSettings);
+        this.reminderStore = reminderStore;
         vm=new(calendar); vm.Select(DateOnly.FromDateTime(DateTime.Now));
         Closing += (_, e) => {
             if (!presented) return;
@@ -153,14 +155,14 @@ internal partial class CalendarWindow : Window
         MaxHeight = area.Height / scale;
     }
 
-    public void Dismiss() { presented=false; HideDetails(); Hide(); }
-    public void Finish() { presented=false; HideDetails(); Close(); }
+    public void Dismiss() { presented=false; CloseReminderMenu(); HideDetails(); Hide(); }
+    public void Finish() { presented=false; CloseReminderMenu(); HideDetails(); Close(); }
     private void OnDeactivated(object? sender, EventArgs e)
     {
         if (!presented || !store.CloseOnBlur) return;
         // Activation can move between the two windows before the dispatcher returns to idle.
         Dispatcher.InvokeAsync(() => {
-            if (presented && store.CloseOnBlur && !IsActive && details?.IsActive != true) Dismiss();
+            if (presented && store.CloseOnBlur && !IsManagingReminder && !IsActive && details?.IsActive != true) Dismiss();
         }, DispatcherPriority.Background);
     }
     private void SettingsClick(object sender,RoutedEventArgs e) => openSettings();
@@ -276,6 +278,7 @@ internal partial class CalendarWindow : Window
     }
     private void OnKey(object sender,KeyEventArgs e)
     {
+        if (IsManagingReminder) return;
         if (e.Key == Key.Escape) {
             if (details?.IsVisible == true) CloseDetails();
             else Dismiss();
@@ -337,6 +340,7 @@ internal partial class CalendarWindow : Window
                 if(cell.IsToday && cell.IsSelected) host.Children.Insert(0,new Border {BorderBrush=ColorOf("OnSelected"),BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(5)});
                 AutomationProperties.SetName(button,$"{date:yyyy年M月d日} {info.Festivals} {info.Mark}".Trim());
                 AutomationProperties.SetAutomationId(button,$"Day-{date:yyyy-MM-dd}");
+                AttachReminderMenu(button,host,date,cell.IsToday);
                 if (cell.IsSelected) selectedDayButton = button;
                 button.Click+=(_,_)=>ToggleDetails(date); Put(button,r,col+1);
             }

@@ -31,6 +31,14 @@
     wheelDistance = 0;
   const initialHash = location.hash.slice(1);
   const themeFromSystem = matchMedia("(prefers-color-scheme: dark)");
+  const dateReminderPreview = ReminderPreview.connect({
+    host, dialog, menu: $("#date-reminder-menu"), popup: $("#date-reminder-popup"),
+    showDialog: (title, body) => showDialog(simpleDialog(title, body)),
+    entries: () => state.dateReminders,
+    now: () => new Date(M.today + "T" + tick().stamp).getTime(),
+    refresh: render,
+    locked: () => locked
+  });
 
   function announce(message) {
     clearTimeout(toastTimer);
@@ -109,6 +117,7 @@
     DesktopPreview.place(host, livePosition || (state.general.rememberPosition ? savedPosition : null), calendarSize);
   }
   function go(next, { focus = true, preserveDraft = false } = {}) {
+    dateReminderPreview.closeMenu();
     if (!routeIds.has(next)) next = "month";
     if (next === "clock" && !locked && state.general.privacy && page !== "clock") {
       lockNow();
@@ -185,6 +194,7 @@
   function updateClock() {
     const { stamp } = tick(),
       p = M.partsFor(state, stamp);
+    dateReminderPreview.tick(new Date(M.today + "T" + stamp).getTime());
     const lines = locked
       ? [p.short, M.displayDate(M.today)]
       : M.clockLines(state.preset, p, state.formats);
@@ -467,6 +477,7 @@
   }
   function resetDemo() {
     if (dialog.open) dialog.close();
+    dateReminderPreview.reset();
     clearTimeout(scrollTimer);
     locked = false;
     otherWindow = null;

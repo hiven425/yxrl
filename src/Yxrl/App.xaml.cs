@@ -30,6 +30,7 @@ public partial class App : Application
     private CalendarService calendar=null!;
     private WeatherService weather=null!;
     private CalendarWindow panel=null!;
+    private ReminderDelivery? reminderDelivery;
     private SettingsWindow? settingsWindow;
     private CancellationTokenSource? weatherRequest;
     private long? weatherCity;
@@ -48,12 +49,16 @@ public partial class App : Application
         Theme.Apply();
         var directory=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Yxrl");
         store=new(directory); store.Load(); calendar=new(store); weather=new(directory); weather.Load();
-        panel=new(store,calendar,weather,OpenSettings);
+        var reminders = new ReminderStore(directory);
+        reminders.Load();
+        panel=new(store,calendar,weather,reminders,OpenSettings);
+        reminderDelivery = new(reminders, () => ActiveAnchor?.Taskbar ?? Native.FindWindow("Shell_TrayWnd", null));
         listener=ThreadPool.RegisterWaitForSingleObject(openSignal,(_,_)=>Dispatcher.BeginInvoke(OpenSettings),null,Timeout.Infinite,false);
         SystemEvents.UserPreferenceChanged+=PreferenceChanged;
         ApplySettings();
         timer=new DispatcherTimer {Interval=TimeSpan.FromMilliseconds(25)};
         timer.Tick+=(_,_)=>Tick(); timer.Start(); Tick();
+        reminderDelivery.Start();
     }
     private void PreferenceChanged(object sender,UserPreferenceChangedEventArgs e) => Dispatcher.BeginInvoke(() => {
         if(stopping) return;
@@ -65,6 +70,7 @@ public partial class App : Application
     {
         if(stopping) return;
         if(firstScan) { wantSettings=true; return; }
+        if (panel.FocusReminderEditor()) return;
         if (settingsWindow is not null) { settingsWindow.BringForward(); return; }
         bool resumeDate = panel.IsVisible;
         panel.Dismiss();
@@ -92,6 +98,7 @@ public partial class App : Application
     private void ClickClock(ClockAnchor anchor)
     {
         if(stopping || mouse is null || !detected.Contains(anchor)) return;
+        if (panel.FocusReminderEditor()) return;
         if (settingsWindow is not null) {
             if (!settingsWindow.IsEnabled) { settingsWindow.BringForward(); return; }
             settingsWindow.Close();
@@ -194,6 +201,7 @@ public partial class App : Application
     {
         stopping=true; timer?.Stop();
         if(owner) {
+            reminderDelivery?.Dispose();
             SystemEvents.UserPreferenceChanged-=PreferenceChanged;
             listener?.Unregister(null); mouse?.Dispose(); weatherRequest?.Cancel(); weather?.Dispose();
             if(panel is not null) panel.Finish();

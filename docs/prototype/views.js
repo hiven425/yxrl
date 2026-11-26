@@ -87,7 +87,10 @@ const CalendarViews = (function () {
                 ].join(" ");
                 const disabled = key.slice(0, 7) < M.firstMonth || key.slice(0, 7) > M.lastMonth;
                 const expanded = detailOpen && key === state.selected;
-                return `<button type="button" class="${cl}" data-date="${key}" ${disabled ? "disabled" : ""} ${key === M.today ? 'aria-current="date"' : ""} aria-expanded="${expanded}"${expanded ? ' aria-controls="day-detail"' : ""} aria-label="${e(M.displayDate(key, true) + " 星期" + M.weekday(key) + " " + label + (mark ? " " + mark : ""))}"><span class="date-main">${Number(key.slice(-2))}</span><small class="${fest.length || l.term ? "observance" : ""}">${e(label)}</small>${mark ? `<span class="day-mark ${mark === "班" ? "work" : ""}">${mark}</span>` : ""}</button>`;
+                const reminders = state.dateReminders.filter(item => item.date === key).length;
+                const aria = M.displayDate(key, true) + " 星期" + M.weekday(key) + " " + label +
+                  (mark ? " " + mark : "") + (reminders ? " · " + reminders + " 条日期提醒" : "");
+                return `<button type="button" class="${cl}" data-date="${key}" ${disabled ? "disabled" : ""} ${key === M.today ? 'aria-current="date"' : ""} aria-expanded="${expanded}"${expanded ? ' aria-controls="day-detail"' : ""} aria-label="${e(aria)}"><span class="date-main">${Number(key.slice(-2))}</span><small class="${fest.length || l.term ? "observance" : ""}">${e(label)}</small>${mark ? `<span class="day-mark ${mark === "班" ? "work" : ""}">${mark}</span>` : ""}${reminders ? '<span class="date-reminder-dot" aria-hidden="true"></span>' : ""}</button>`;
               })
               .join(""),
         )

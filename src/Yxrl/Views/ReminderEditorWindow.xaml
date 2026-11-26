@@ -1,0 +1,41 @@
+<Window x:Class="Yxrl.Views.ReminderEditorWindow" x:ClassModifier="internal"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="新建日期提醒" AutomationProperties.AutomationId="YxrlReminderEditor" Width="412" SizeToContent="Height"
+        ResizeMode="NoResize" ShowInTaskbar="False" WindowStartupLocation="CenterOwner" UseLayoutRounding="True"
+        FontFamily="Segoe UI, Microsoft YaHei UI" FontSize="13" Background="{DynamicResource Surface}">
+  <StackPanel Margin="20,16">
+    <Label Content="标题" Target="{Binding ElementName=TitleField}" Padding="0,0,0,5"/>
+    <TextBox x:Name="TitleField" AutomationProperties.Name="提醒标题" TextChanged="DraftChanged"/>
+    <Grid Margin="0,11,0,0">
+      <Grid.ColumnDefinitions><ColumnDefinition Width="3*"/><ColumnDefinition Width="11"/><ColumnDefinition Width="2*"/></Grid.ColumnDefinitions>
+      <StackPanel>
+        <Label Content="事项日期" Target="{Binding ElementName=DateField}" Padding="0,0,0,5"/>
+        <DatePicker x:Name="DateField" AutomationProperties.Name="事项日期"
+                    SelectedDateChanged="DraftChanged" DateValidationError="DateInvalid"/>
+      </StackPanel>
+      <StackPanel Grid.Column="2">
+        <Label Content="事项时间（24 小时制）" Target="{Binding ElementName=TimeField}" Padding="0,0,0,5"/>
+        <TextBox x:Name="TimeField" AutomationProperties.Name="事项时间" MaxLength="5" TextChanged="DraftChanged"/>
+      </StackPanel>
+    </Grid>
+    <Label Content="提前分钟数" Target="{Binding ElementName=LeadField}" Padding="0,11,0,5"/>
+    <DockPanel LastChildFill="False">
+      <ComboBox x:Name="LeadField" AutomationProperties.Name="提前分钟数" Width="110" IsEditable="True" IsTextSearchEnabled="False"
+                SelectionChanged="DraftChanged" TextBoxBase.TextChanged="DraftChanged"/>
+      <TextBlock Text="可直接输入，0 为到点提醒" Style="{StaticResource Subtle}" VerticalAlignment="Center" Margin="9,0,0,0"/>
+    </DockPanel>
+    <Border CornerRadius="7" Background="{DynamicResource Card}" Padding="10,8" Margin="0,12,0,0">
+      <TextBlock x:Name="NextAlert" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"/>
+    </Border>
+    <TextBlock x:Name="ErrorText" Foreground="{DynamicResource Weekend}" TextWrapping="Wrap" Margin="0,7,0,0"
+               Visibility="Collapsed" AutomationProperties.LiveSetting="Polite"/>
+    <DockPanel Margin="0,12,0,0" LastChildFill="False">
+      <Button x:Name="DeleteButton" Content="删除提醒" Visibility="Collapsed" Click="DeleteClick" DockPanel.Dock="Left"/>
+      <Button x:Name="SaveButton" DockPanel.Dock="Right" AutomationProperties.Name="保存提醒" IsDefault="True"
+              Background="{DynamicResource Selected}" Click="SaveClick" Padding="14,7">
+        <TextBlock Text="保存提醒" Foreground="{DynamicResource OnSelected}"/>
+      </Button>
+      <Button Content="取消" IsCancel="True" DockPanel.Dock="Right" Margin="0,0,6,0"/>
+    </DockPanel>
+  </StackPanel>
+</Window>

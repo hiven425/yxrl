@@ -12,6 +12,7 @@
   <script defer src="views.js"></script>
   <script defer src="preferences.js"></script>
   <script defer src="desktop-preview.js"></script>
+  <script defer src="reminders.js"></script>
   <script defer src="app.js"></script>
 </head>
 <body>
@@ -40,6 +41,12 @@
     </main>
   </div>
   <dialog id="modal"></dialog>
+  <div id="date-reminder-menu" class="date-reminder-menu" role="menu" aria-label="日期操作" hidden></div>
+  <aside id="date-reminder-popup" class="date-reminder-popup" aria-label="日期提醒" hidden>
+    <h2>日期提醒</h2>
+    <div class="notice-entries" role="status"></div>
+    <button type="button" class="secondary">知道了</button>
+  </aside>
   <div id="announce" class="toast" role="status" aria-live="polite"></div>
   <noscript>启用 JavaScript 即可操作本地日历原型。</noscript>
 </body>

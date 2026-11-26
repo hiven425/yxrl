@@ -226,6 +226,7 @@ const CalendarModel = (() => {
       width: "normal",
       theme: "system",
       scrollStart: null,
+      dateReminders: [],
       calendar: {
         showLunar: true,
         showAdjustments: true,
