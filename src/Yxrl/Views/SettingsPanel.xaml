@@ -147,6 +147,7 @@
               <StackPanel Margin="0,0,0,4"><TextBlock Text="下行格式" Style="{StaticResource Subtle}" FontSize="12" Margin="0,0,0,4"/>
                 <TextBox x:Name="Lower" AutomationProperties.Name="下行格式" Style="{StaticResource FormatBox}" MaxLength="64" TextChanged="FormatEdited"/></StackPanel>
             </UniformGrid>
+            <TextBlock Text="任务栏原位空间不足时，会缩小文字并折行。" Style="{StaticResource Subtle}" FontSize="12" Margin="0,3,0,0" TextWrapping="Wrap"/>
             <StackPanel x:Name="CountdownGroup" Margin="0,6,0,0"><TextBlock Text="倒数节日" Style="{StaticResource Subtle}" FontSize="12" Margin="0,0,0,4"/>
               <ComboBox x:Name="Target" AutomationProperties.Name="倒数节日" SelectionChanged="DraftChanged" MaxWidth="285" HorizontalAlignment="Left" MinWidth="160"/></StackPanel>
           </StackPanel>

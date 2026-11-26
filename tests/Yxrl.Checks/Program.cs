@@ -70,8 +70,6 @@ try
         var lines=ClockFormatter.Render(now,pref with { Clock=pref.Clock with { Preset=style.Id } },calendar,null);
         if(lines.Upper.Length==0 && lines.Lower.Length==0) throw new Exception(style.Id);
     }
-    var narrow=ClockFormatter.Fit(clock,8,s=>s.Length,0);
-    Equal("10:32:01",narrow.Top);
     File.WriteAllText(store.FilePath,"{\"schemaVersion\":1,\"general\":{\"trayIcon\":true},\"clock\":{\"futureKey\":1}}");
     store.Load(); store.Save(pref); var reopened=new SettingsStore(directory.FullName); reopened.Load();
     Equal(pref,reopened.Current);

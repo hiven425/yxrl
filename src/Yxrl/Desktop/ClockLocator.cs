@@ -27,10 +27,11 @@ internal readonly record struct ClockPlacement(PixelRect Bounds, PixelRect Visib
 {
     public PixelRect? Clip => Bounds == Visible ? null : Visible.Offset(-Bounds.Left,-Bounds.Top);
 }
-internal sealed record Discovery(ClockAnchor[] Clocks, nint[] Deferred, bool OtherClock, bool Retracted)
+internal sealed record Discovery(ClockAnchor[] Clocks, nint[] Deferred, nint[] Missing, bool OtherClock, bool Retracted)
 {
-    public ClockAnchor[] MergeWith(ClockAnchor[] previous) =>
-        Clocks.Concat(previous.Where(anchor => Deferred.Contains(anchor.Taskbar))).ToArray();
+    public ClockAnchor[] MergeWith(ClockAnchor[] previous, nint[] lastMissing) =>
+        Clocks.Concat(previous.Where(anchor => Deferred.Contains(anchor.Taskbar) ||
+            (Missing.Contains(anchor.Taskbar) && !lastMissing.Contains(anchor.Taskbar)))).ToArray();
 }
 internal static class ClockLocator
 {
@@ -49,6 +50,7 @@ internal static class ClockLocator
         },0);
         var clocks = new List<ClockAnchor>();
         var deferred = new List<nint>();
+        var missing = new List<nint>();
         bool other = false, retracted = false;
         foreach (var hwnd in bars)
         {
@@ -112,7 +114,7 @@ internal static class ClockLocator
                     deferred.Add(hwnd);
                     continue;
                 }
-                if (rect.IsEmpty) continue;
+                if (rect.IsEmpty) { missing.Add(hwnd); continue; }
                 var dpi = Native.GetDpiForWindow(hwnd);
                 var bounds = new PixelRect((int)Math.Floor(rect.Left),(int)Math.Floor(rect.Top),
                     (int)Math.Ceiling(rect.Right),(int)Math.Ceiling(rect.Bottom)).Intersect(bar);
@@ -130,7 +132,7 @@ internal static class ClockLocator
             catch (Exception ex) when (ex is ElementNotAvailableException or InvalidOperationException or COMException or UnauthorizedAccessException or ArgumentException)
             { deferred.Add(hwnd); }
         }
-        return new(clocks.ToArray(),deferred.ToArray(),other,retracted);
+        return new(clocks.ToArray(),deferred.ToArray(),missing.ToArray(),other,retracted);
     }
     private static PropertyCondition Property(AutomationProperty key, string value) => new(key,value);
 }

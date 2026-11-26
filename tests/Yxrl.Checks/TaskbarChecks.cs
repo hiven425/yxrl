@@ -24,13 +24,16 @@ internal static class TaskbarChecks
         var vertical = new ClockAnchor(2,leftClock,leftBar,leftMonitor,96,leftMonitor);
         Equal(new PixelRect(20,0,48,65),vertical.PlaceAt(leftBar.Offset(-20,0),96)?.Clip);
 
-        var deferred = new Discovery([],[1],OtherClock:false,Retracted:true);
-        Equal(anchor,deferred.MergeWith([anchor]).Single());
-        var replaced = new Discovery([],[],OtherClock:true,Retracted:false);
-        Equal(0,replaced.MergeWith([anchor]).Length);
+        var deferred = new Discovery([],[1],[],OtherClock:false,Retracted:true);
+        Equal(anchor,deferred.MergeWith([anchor],[]).Single());
+        var missing = new Discovery([],[],[1],OtherClock:false,Retracted:false);
+        Equal(anchor,missing.MergeWith([anchor],[]).Single());
+        Equal(0,missing.MergeWith([anchor],[1]).Length);
+        var replaced = new Discovery([],[],[],OtherClock:true,Retracted:false);
+        Equal(0,replaced.MergeWith([anchor],[]).Length);
         var updated = anchor with { Bounds = clock with { Left = 2925 } };
-        var measured = new Discovery([updated],[],OtherClock:false,Retracted:false);
-        Equal(updated,measured.MergeWith([anchor]).Single());
+        var measured = new Discovery([updated],[],[],OtherClock:false,Retracted:false);
+        Equal(updated,measured.MergeWith([anchor],[]).Single());
         Console.WriteLine("通过：任务栏收放保留原位、动画裁剪、DPI/布局失效和释放占位。");
     }
 

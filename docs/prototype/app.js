@@ -7,8 +7,7 @@
     dialog = $("#modal"),
     tray = $("#tray-clock");
   const routeIds = new Set(V.screens.map((row) => row[0]));
-  const start = Date.now(),
-    measure = document.createElement("canvas").getContext("2d");
+  const start = Date.now();
   let state = M.initialState(),
     page = "month",
     returnFromEditor = "day",
@@ -146,62 +145,49 @@
     const elapsed = Math.max(0, Math.floor((Date.now() - start) / 1000));
     const total = (10 * 3600 + 32 * 60 + 1 + elapsed) % 86400;
     return {
-      elapsed,
       stamp: [Math.floor(total / 3600), Math.floor(total / 60) % 60, total % 60].map(M.two).join(":"),
     };
   }
-  function chunkText(words, width) {
-    const lines = [];
-    let buffer = "";
-    function flush() {
-      if (buffer) lines.push(buffer);
-      buffer = "";
+  function fitTrayClock(lines) {
+    const top = $("#tray-line1"), bottom = $("#tray-line2");
+    function setLine(element, line) {
+      if (element.textContent === line) return;
+      const parts = line.match(/\S+|\s+/gu) ?? [];
+      element.replaceChildren(...parts.map(part => {
+        if (!part.trim()) return part;
+        const word = document.createElement("span");
+        word.className = "clock-word";
+        word.textContent = part;
+        return word;
+      }));
     }
-    for (const word of words) {
-      const combined = buffer ? buffer + " " + word : word;
-      if (measure.measureText(combined).width <= width) {
-        buffer = combined;
-        continue;
-      }
-      flush();
-      if (measure.measureText(word).width <= width) {
-        buffer = word;
-        continue;
-      }
-      for (const char of word) {
-        if (buffer && measure.measureText(buffer + char).width > width) flush();
-        buffer += char;
-      }
+    setLine(top, lines[0]);
+    setLine(bottom, lines[1]);
+    const css = getComputedStyle(tray);
+    const height = tray.clientHeight - parseFloat(css.paddingTop) - parseFloat(css.paddingBottom);
+    const fits = (size) => {
+      tray.style.setProperty("--clock-font-size", size + "px");
+      return top.getBoundingClientRect().height + bottom.getBoundingClientRect().height <= height;
+    };
+    if (height <= 0 || fits(13)) return;
+    let smallest = 1, largest = 13;
+    while (largest - smallest > 0.2) {
+      const candidate = (smallest + largest) / 2;
+      if (fits(candidate)) smallest = candidate;
+      else largest = candidate;
     }
-    flush();
-    return lines;
+    fits(smallest);
   }
   function updateClock() {
-    const { stamp, elapsed } = tick(),
+    const { stamp } = tick(),
       p = M.partsFor(state, stamp);
     const lines = locked
       ? [p.short, M.displayDate(M.today)]
       : M.clockLines(state.preset, p, state.formats);
     if (state.network === "cached" && ["weather", "forecast"].includes(state.preset))
       lines[1] += " 缓存";
-    $("#tray-line1").textContent = lines[0];
-    $("#tray-line2").textContent = lines[1];
-    const css = getComputedStyle(tray);
-    const available = tray.clientWidth - parseFloat(css.paddingLeft) - parseFloat(css.paddingRight) - 2;
-    measure.font = css.fontSize + " " + css.fontFamily;
-    const overflow = available > 0 && lines.some((line) => measure.measureText(line).width > available);
-    tray.dataset.rolling = String(overflow);
-    if (overflow) {
-      const keep = lines.join(" ").includes(stamp)
-        ? state.calendar.hour12
-          ? p.stamp
-          : stamp
-        : p.short;
-      const extra = lines.join(" ").replace(keep, "").trim().split(/\s+/).filter(Boolean);
-      const pages = chunkText(extra, available);
-      $("#tray-line1").textContent = keep;
-      $("#tray-line2").textContent = pages.length ? pages[Math.floor(elapsed / 4) % pages.length] : "";
-    }
+    if (!lines.some(Boolean)) lines[0] = p.stamp;
+    fitTrayClock(lines);
     tray.setAttribute(
       "aria-label",
       "任务栏时钟，" + lines.filter(Boolean).join("，") + "，打开或收起月历",

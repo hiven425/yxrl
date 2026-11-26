@@ -1,9 +1,11 @@
 using System.Globalization;
+using System.Text;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Documents;
 using Yxrl.Desktop;
 
 namespace Yxrl.Views;
@@ -14,6 +16,8 @@ internal sealed class ClockOverlay : Window
     private readonly StackPanel stack = new() { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
     private readonly nint handle;
     private PixelRect? placed, clip;
+    private Size lastTextArea;
+    private ClockText? lastText;
     public ClockOverlay()
     {
         Title = "YXRL 任务栏时钟";
@@ -23,15 +27,24 @@ internal sealed class ClockOverlay : Window
         UseLayoutRounding = true; SnapsToDevicePixels = true;
         FontFamily = new FontFamily("Segoe UI, Microsoft YaHei UI");
         stack.Children.Add(top); stack.Children.Add(bottom);
-        Content = new Grid { IsHitTestVisible = false, Children = { stack } };
+        Content = new Viewbox {
+            IsHitTestVisible = false, Stretch = Stretch.Uniform, StretchDirection = StretchDirection.DownOnly,
+            Margin = new Thickness(1.5,1,1.5,1), Child = stack
+        };
         handle = new WindowInteropHelper(this).EnsureHandle();
         // A layered transparent window passes hit-testing to the original Explorer HWND.
         const int exStyle = -20, transparent = 0x20, tool = 0x80, noActivate = 0x08000000;
         Native.SetStyle(handle,exStyle,Native.GetStyle(handle,exStyle) | transparent | tool | noActivate);
         AutomationProperties.SetAutomationId(this,"YxrlClock");
     }
-    private static TextBlock Line() => new() { FontSize = 12, TextAlignment = TextAlignment.Center,
-        HorizontalAlignment = HorizontalAlignment.Center, SnapsToDevicePixels = true };
+    private static TextBlock Line()
+    {
+        var line = new TextBlock {
+            TextAlignment = TextAlignment.Center, TextWrapping = TextWrapping.Wrap, TextTrimming = TextTrimming.None
+        };
+        Typography.SetNumeralAlignment(line,FontNumeralAlignment.Tabular);
+        return line;
+    }
     public bool Place(nint taskbar, ClockPlacement placement)
     {
         var bounds = placement.Bounds;
@@ -60,22 +73,62 @@ internal sealed class ClockOverlay : Window
         var ink = color.R * 0.299 + color.G * 0.587 + color.B * 0.114 > 150 ? Brushes.Black : Brushes.White;
         top.Foreground = bottom.Foreground = ink;
     }
-    public void Draw(ClockAnchor anchor, ClockText value, DateTime now)
+    public void Draw(ClockAnchor anchor, ClockText value)
     {
         var scale = anchor.Dpi / 96.0;
-        double width = Math.Max(1,anchor.Bounds.Width / scale - 4);
-        var height = anchor.Bounds.Height / scale;
-        var fontSize = Math.Min(12.25, Math.Max(8, (height - 2) / 2.65));
-        var type = new Typeface(FontFamily,FontStyles.Normal,FontWeights.Normal,FontStretches.Normal);
-        double Measure(string s) => new FormattedText(s,CultureInfo.CurrentUICulture,FlowDirection.LeftToRight,
-            type,fontSize,Brushes.Black,scale).WidthIncludingTrailingWhitespace;
-        var (upper,lower) = ClockFormatter.Fit(value,width,Measure,now.Ticks / TimeSpan.FromSeconds(4).Ticks);
-        top.FontSize = Measure(upper) > width ? Math.Max(6, fontSize * width / Measure(upper)) : fontSize;
-        bottom.FontSize = fontSize;
-        if (top.Text != upper) top.Text = upper;
-        if (bottom.Text != lower) bottom.Text = lower;
+        var area = new Size(Math.Max(1,anchor.Bounds.Width / scale - 3),Math.Max(1,anchor.Bounds.Height / scale - 2));
+        if (lastTextArea == area && lastText == value) return;
+        lastTextArea = area;
+        lastText = value;
+        string upper = value.Upper.Length == 0 && value.Lower.Length == 0 ? value.Time : value.Upper;
+        string lower = value.Lower;
+        AutomationProperties.SetName(top,upper);
+        AutomationProperties.SetName(bottom,lower);
         top.Visibility = upper.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
         bottom.Visibility = lower.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+        stack.Width = area.Width;
+        var typeface = new Typeface(FontFamily,FontStyles.Normal,FontWeights.Normal,FontStretches.Normal);
+
+        // Measure the actual wrapped text and keep the largest size that fits.
+        // The Viewbox also fits unusually long strings beyond the minimum font size.
+        bool Fits(double font)
+        {
+            double Width(string value) => new FormattedText(value,CultureInfo.CurrentUICulture,FlowDirection.LeftToRight,
+                typeface,font,Brushes.Black,scale).Width;
+            TextElement.SetFontSize(stack,font);
+            top.Text = BreakAtSpaces(upper,area.Width,Width);
+            bottom.Text = BreakAtSpaces(lower,area.Width,Width);
+            stack.Measure(new Size(area.Width,double.PositiveInfinity));
+            return stack.DesiredSize.Height <= area.Height;
+        }
+        var max = Math.Clamp(area.Height / 2.65,1,12.25);
+        if (Fits(max)) return;
+        double smallest = 1, largest = max;
+        while (largest - smallest > 0.2) {
+            var candidate = (smallest + largest) / 2;
+            if (Fits(candidate)) smallest = candidate;
+            else largest = candidate;
+        }
+        Fits(smallest);
+    }
+    private static string BreakAtSpaces(string text, double width, Func<string,double> measure)
+    {
+        // Prefer the actual spaces between format fields. WPF can still wrap
+        // inside a long field if it cannot fit on a row by itself.
+        StringBuilder? result = null;
+        int start = 0, space = -1;
+        for (int index = 0; index <= text.Length; index++) {
+            char current = index == text.Length ? '\n' : text[index];
+            if (current is not (' ' or '\n' or '\r')) continue;
+            if (space >= start && measure(text[start..index]) > width) {
+                result ??= new StringBuilder(text);
+                result[space] = '\n';
+                start = space + 1;
+            }
+            if (current == ' ') space = index;
+            else { start = index + 1; space = -1; }
+        }
+        return result?.ToString() ?? text;
     }
     public static Color SampleBackground(nint taskbar, PixelRect bounds, PixelRect visible, PixelRect bar)
     {

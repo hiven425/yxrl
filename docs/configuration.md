@@ -28,7 +28,7 @@
 | 事项编辑 | `repeat` 为 `none/daily/weekly`，`reminderMinutes` 为 `null/0/10/30` | 单次，无提醒 | 随事项保存。0 表示到点，正数为提前分钟数。 |
 | 全天事项 | `time`，`HH:mm` 字符串或 `null` | 选择全天后为 `null` | 全天显示在列表前面。开启全天提醒时以系统当地 09:00 为基准。 |
 
-任务栏宽度取系统原时钟的实际可用区域。原型的「标准／窄」仅用于复现布局，分别模拟 161 和 85 CSS 像素。长内容固定显示时间，其余信息每 4 秒轮换；空间足够时两行静态展示。原型默认城市深圳，便于评审天气界面。桌面版首次运行的城市为空。
+桌面版按 Windows 原时钟区域的实际宽高排字。上下行同时显示，遇到长内容自动折行并缩小字号。原型的「标准／窄」分别模拟 161 和 85 CSS 像素。原型默认城市深圳，便于评审天气界面。桌面版首次运行的城市为空。
 
 ### 日历设置
 
@@ -197,4 +197,4 @@
 
 已知经纬度后，同时查询到期的气温和美标 AQI。主源出错或等待满 3 秒即并行查询备用源，每项采用最先返回的有效结果。已取得两项数据或已切换地点时取消剩余请求。离线时显示已有数值、缓存标记和数据时间。缺项会明确显示暂不可用。[城市查询](https://open-meteo.com/en/docs/geocoding-api) · [天气预报](https://open-meteo.com/en/docs) · [空气质量及归属](https://open-meteo.com/en/docs/air-quality-api) · [Visual Crossing 免密钥接口](https://www.visualcrossing.com/resources/documentation/weather-api/free-weather-api-no-key/)
 
-任务栏样式用到备用源数据时，下行附上 Visual Crossing Weather，空间不足时随其他信息轮显。月历中的来源名称可打开供应方网站。
+任务栏样式用到备用源数据时，下行附上 Visual Crossing Weather，并与其他内容一起自适应排版。月历中的来源名称可打开供应方网站。

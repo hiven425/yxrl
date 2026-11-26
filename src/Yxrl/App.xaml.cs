@@ -21,6 +21,7 @@ public partial class App : Application
     private long lastRenderSecond=-1;
     private readonly Dictionary<nint, ClockOverlay> overlays=[];
     private ClockAnchor[] detected=[];
+    private nint[] lastMissing=[];
     private nint lastBar;
     private ClockMouse? mouse;
     private string? inputError;
@@ -113,7 +114,7 @@ public partial class App : Application
             if(overlays.Values.Any(x=>x.IsVisible)) {
                 var text=ClockFormatter.Render(now,store.Current,calendar,weather.Read(store.Current.City));
                 foreach(var a in detected) {
-                    if (overlays.TryGetValue(a.Taskbar,out var view) && view.IsVisible) view.Draw(a,text,now);
+                    if (overlays.TryGetValue(a.Taskbar,out var view) && view.IsVisible) view.Draw(a,text);
                 }
             }
             if(panel.IsVisible) panel.Tick(now);
@@ -137,7 +138,11 @@ public partial class App : Application
             var previous=detected;
             var result=await Task.Run(()=>ClockLocator.Find(previous));
             if(stopping) return;
-            detected=result.MergeWith(previous); otherClock=result.OtherClock;
+            detected=result.MergeWith(previous,lastMissing); otherClock=result.OtherClock;
+            lastMissing=result.Missing;
+            // A visible taskbar may momentarily lack its XAML clock during a reveal.
+            if (detected.Any(anchor => lastMissing.Contains(anchor.Taskbar)))
+                nextScan = DateTime.UtcNow.AddMilliseconds(250);
             foreach(var id in overlays.Keys.Except(detected.Select(a=>a.Taskbar)).ToArray()) {
                 overlays[id].Close(); overlays.Remove(id);
             }
@@ -175,7 +180,7 @@ public partial class App : Application
                 view.Colorize(ClockOverlay.SampleBackground(a.Taskbar,placement.Bounds,placement.Visible,bar));
             if (!view.IsVisible) {
                 text ??= ClockFormatter.Render(now,store.Current,calendar,weather.Read(store.Current.City));
-                view.Draw(a,text,now);
+                view.Draw(a,text);
             }
             if (!view.Place(a.Taskbar,placement)) {
                 view.Hide();

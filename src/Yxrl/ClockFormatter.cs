@@ -1,6 +1,5 @@
 using System.Globalization;
 using System.Text;
-using System.Text.RegularExpressions;
 
 namespace Yxrl;
 
@@ -99,27 +98,5 @@ internal static class ClockFormatter
             if (attributed) return lines with { Lower = (lines.Lower + " " + VisualCrossing.Name).TrimStart() };
         }
         return lines;
-    }
-    private static readonly Regex ClockPattern = new(@"(?:上午|下午)?\d{1,2}:\d{2}(?::\d{2})?");
-    public static (string Top, string Bottom) Fit(ClockText text, double width, Func<string,double> measure, long period)
-    {
-        if (measure(text.Upper) <= width && measure(text.Lower) <= width) return (text.Upper, text.Lower);
-        var combined = text.Upper + " " + text.Lower;
-        var match = ClockPattern.Match(combined);
-        string fixedTime = match.Success ? match.Value : text.Time;
-        var rest = match.Success ? combined.Remove(match.Index, match.Length) : combined;
-        var parts = new List<string>();
-        foreach (var word in rest.Split(' ',StringSplitOptions.RemoveEmptyEntries))
-        {
-            var piece = "";
-            var elements = StringInfo.GetTextElementEnumerator(word);
-            while (elements.MoveNext()) {
-                var letter = elements.GetTextElement();
-                if (piece.Length > 0 && measure(piece + letter) > width) { parts.Add(piece); piece = ""; }
-                piece += letter;
-            }
-            if (piece.Length > 0) parts.Add(piece);
-        }
-        return (fixedTime, parts.Count == 0 ? "" : parts[(int)(period % parts.Count)]);
     }
 }

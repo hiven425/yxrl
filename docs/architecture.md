@@ -41,7 +41,7 @@ flowchart LR
 
 用例先取本地历法与事项，生成可显示的月历。天气缓存可读时一起显示。选定城市后，气温和美标 AQI 并行刷新，各自在取得有效结果时更新界面和缓存。主源失败或等待满 3 秒时，本轮尚缺的数据共用一次备用查询。切换城市会取消旧请求，已经取得的结果保留在原城市。
 
-WPF 源码中，`Desktop/ClockLocator.cs` 在后台识别 Explorer 控件，`Desktop/ClockMouse.cs` 在独立消息线程处理已确认时钟边界内的左键。Windows 11 25H2 的部分系统按钮共用 UIA 类名，识别时还会检查原始树中的时间和日期文本。任务栏收起时释放命中区域，重新展开后重新定位。`Views/ClockOverlay.cs` 用同一个格式器绘制两行，月历和日详情通过 `MonthViewModel` 与 `CalendarService` 查询日期。
+WPF 源码中，`Desktop/ClockLocator.cs` 在后台识别 Explorer 控件，`Desktop/ClockMouse.cs` 在独立消息线程处理已确认时钟边界内的左键。Windows 11 25H2 的部分系统按钮共用 UIA 类名，识别时还会检查原始树中的时间和日期文本。`Views/ClockOverlay.cs` 将格式器输出排进原时钟的可用宽高，根据实际折行后的高度选择字号。月历和日详情通过 `MonthViewModel` 与 `CalendarService` 查询日期。
 
 ## 点击系统时间
 
@@ -64,7 +64,7 @@ sequenceDiagram
 
 Windows 适配层在普通用户进程中，用 UI Automation 识别 Explorer 原生日期、时间控件，缓存物理像素矩形，再按目标显示器 DPI 转换成 WPF 尺寸。独立的无激活绘制窗口贴合该区域，左键命中时切换月历。视觉层对其他指针操作透传，使时钟右键与相邻通知、网络、音量等系统操作仍由 Windows 处理。桌面版本需单独实测命中与窗口层级。[微软 UI Automation 坐标说明](https://learn.microsoft.com/en-us/dotnet/framework/ui-automation/ui-automation-and-screen-scaling) · [Win32 分层窗口与指针命中](https://learn.microsoft.com/en-us/windows/win32/winmsg/window-features)
 
-任务栏隐藏、Explorer 重建、布局或 DPI 改变时，使旧矩形失效，再枚举可见控件。无法确认边界时释放该区域的显示和点击处理，并在应用设置里提示当前状态。退出应用后销毁自有窗口、解除回调。再次启动同一程序时由当前用户的现有实例打开界面。
+覆盖窗口紧贴任务栏的窗口层级，绘制由实时边界驱动。任务栏滑入、滑出时，按上次测得的相对位置移动覆盖层，并裁剪到屏幕内。收起时隐藏覆盖层并释放鼠标命中区域，展开时复用窗口和位置。Explorer 重建、任务栏尺寸或 DPI 改变时重新测量。退出应用后销毁自有窗口、解除回调。再次启动同一程序时由当前用户的现有实例打开界面。
 
 Windows 版的月历浮窗与设置窗口各自布局。月历齿轮和重复启动共用一个设置窗口，激活已打开的窗口会保留草稿。九张样式卡、底部实际预览和任务栏调用同一个时钟格式器。固定示例使用独立的内置节日与样例天气。显示当前时间时复用用户历法和天气缓存，每秒只更新变化的文字。
 
@@ -115,7 +115,7 @@ sequenceDiagram
 | [model.js](prototype/model.js) | 日期键、ISO 周数、节日匹配、休班表、重复事项、格式检查和演示初始值 |
 | [lunar-days.js](prototype/data/lunar-days.js) | 来自锁定版本历法库的连续日期快照，随文件保留许可；含月历首尾行所需的相邻日期 |
 | [views.js](prototype/views.js) | 根据状态构建月历、日详情、事项表单与设置视图，并转义用户输入 |
-| [app.js](prototype/app.js) | 单会话状态、命令、导航、焦点、时钟轮显、演示网络状态与表单提交 |
+| [app.js](prototype/app.js) | 单会话状态、命令、导航、焦点、时钟折行、演示网络状态与表单提交 |
 | [preferences.js](prototype/preferences.js) | 日历和软件设置页、周数范围、演示 PIN 及声音表单 |
 | [desktop-preview.js](prototype/desktop-preview.js) | 本页隐私验证、完成提示音、窗口拖动及位置恢复 |
 | [样式](prototype/styles.css) | 明暗主题、紧凑布局、可用宽度、焦点和系统高对比度适配 |

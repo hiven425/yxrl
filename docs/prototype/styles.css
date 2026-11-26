@@ -794,22 +794,35 @@ body:not([data-page="clock"]) .taskbar-calendar::after {
 #tray-clock {
   width: 161px;
   align-self: stretch;
-  font-size: 13px;
-  line-height: 17px;
-  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  font-size: var(--clock-font-size, 13px);
+  line-height: 1.2;
+  text-align: center;
   font-variant-numeric: tabular-nums;
   border: 1px solid transparent;
   border-radius: 5px;
-  padding: 4px 7px;
+  padding: 3px;
 }
 #tray-clock:hover,
 #tray-clock[aria-expanded="true"] {
   background: var(--accent-fill);
 }
-#tray-clock span {
+#tray-clock > span {
   display: block;
-  overflow: hidden;
-  white-space: nowrap;
+  flex: none;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+#tray-clock > span:empty {
+  display: none;
+}
+#tray-clock .clock-word {
+  display: inline-block;
+  max-width: 100%;
+  white-space: normal;
 }
 :root[data-width="narrow"] #tray-clock {
   width: 85px;
