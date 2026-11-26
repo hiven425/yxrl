@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -10,6 +11,10 @@ namespace Yxrl.Views;
 
 internal partial class CalendarWindow : Window
 {
+    private static readonly Size DefaultSize = new(408, 558);
+    private static readonly Size MinimumSize = new(340, 450);
+    private const int WmSizing = 0x0214, WmExitSizeMove = 0x0232;
+
     private readonly SettingsStore store;
     private readonly CalendarService calendar;
     private readonly WeatherService weather;
@@ -17,47 +22,114 @@ internal partial class CalendarWindow : Window
     private readonly Action openSettings;
     private DateOnly today;
     private bool presented;
+    private Size preferredSize = DefaultSize;
+    private PixelRect resizeArea;
+    private PixelRect? resizeStart;
 
     public CalendarWindow(SettingsStore store, CalendarService calendar, WeatherService weather, Action openSettings)
     {
         InitializeComponent();
+        Width = DefaultSize.Width;
+        Height = DefaultSize.Height;
         (this.store,this.calendar,this.weather,this.openSettings)=(store,calendar,weather,openSettings);
         vm=new(calendar); vm.Select(DateOnly.FromDateTime(DateTime.Now));
         Closing += (_,e) => { if (presented) { e.Cancel=true; Dismiss(); } };
     }
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        HwndSource.FromHwnd(new WindowInteropHelper(this).Handle)?.AddHook(ResizeMessage);
+    }
+
+    private nint ResizeMessage(nint hwnd, int message, nint wParam, nint lParam, ref bool handled)
+    {
+        if (message == WmSizing && resizeArea.HasArea) {
+            if (resizeStart is null && Native.GetWindowRect(hwnd, out var current)) resizeStart = current;
+            var proposed = Marshal.PtrToStructure<PixelRect>(lParam);
+            var bounded = proposed.Intersect(resizeArea);
+            if (bounded.HasArea && bounded != proposed) {
+                Marshal.StructureToPtr(bounded, lParam, false);
+                handled = true;
+                return 1;
+            }
+        } else if (message == WmExitSizeMove && resizeStart is { } start) {
+            resizeStart = null;
+            if (Native.GetWindowRect(hwnd, out var end) && (end.Width != start.Width || end.Height != start.Height)) {
+                double scale = VisualTreeHelper.GetDpi(this).DpiScaleX;
+                preferredSize = new(end.Width / scale, end.Height / scale);
+            }
+        }
+        return 0;
+    }
+
+    private void ScaleContent(object sender, SizeChangedEventArgs e)
+    {
+        double scale = Math.Min(e.NewSize.Width / DefaultSize.Width, e.NewSize.Height / DefaultSize.Height);
+        if (scale <= 0) return;
+        ContentScale.ScaleX = scale;
+        ContentScale.ScaleY = scale;
+    }
+
     public void Present(ClockAnchor? anchor, bool resetDate = true)
     {
         presented = false;
         if (resetDate) vm.Select(DateOnly.FromDateTime(DateTime.Now));
         ShowMonth();
         var hwnd = new WindowInteropHelper(this).EnsureHandle();
-        var taskbar = anchor?.Taskbar ?? Native.FindWindow("Shell_TrayWnd", null);
-        var info = Native.MonitorOf(taskbar==0 ? hwnd : taskbar);
-        var work = anchor?.Work ?? info.Work;
-        uint dpi = anchor?.Dpi ?? Native.GetDpiForWindow(hwnd);
-        double scale = Math.Max(1,dpi / 96.0); int gap=(int)Math.Round(8*scale);
-        int w = Math.Min((int)Math.Round(408*scale), work.Width-2*gap);
-        int h = Math.Min((int)Math.Round(558*scale),work.Height-2*gap);
-        var b = anchor?.Bounds;
-        int x = Math.Clamp(b?.Right - w ?? work.Right-w-gap,work.Left+gap,work.Right-w-gap);
-        int y = work.Bottom-h-gap;
-        if (Native.GetWindowRect(taskbar,out var bar)) {
-            if (bar.Width >= bar.Height) {
-                bool atTop = bar.Top < (work.Top + work.Bottom) / 2;
-                int edge = atTop ? Math.Max(bar.Bottom,info.Monitor.Top+bar.Height) : Math.Min(bar.Top,info.Monitor.Bottom-bar.Height);
-                y = atTop ? Math.Max(work.Top,edge)+gap : Math.Min(work.Bottom,edge)-h-gap;
-                y = Math.Clamp(y,work.Top+gap,work.Bottom-h-gap);
-            } else {
-                y=Math.Clamp((anchor?.Bounds.Bottom??work.Bottom)-h,work.Top+gap,work.Bottom-h-gap);
-                x = bar.Left < (work.Left+work.Right)/2 ? Math.Max(work.Left,bar.Right)+gap : Math.Min(work.Right,bar.Left)-gap-w;
-                x = Math.Clamp(x,work.Left+gap,work.Right-w-gap);
-            }
-        }
-        Native.SetWindowPos(hwnd,Native.Topmost,x,y,w,h,Native.NoActivate);
+        var bounds = Placement(anchor, hwnd);
+        if (!bounds.HasArea) return;
+        Native.SetWindowPos(hwnd, Native.Topmost, bounds.Left, bounds.Top, bounds.Width, bounds.Height, Native.NoActivate);
         if (!IsVisible) Show();
-        Native.SetWindowPos(hwnd,Native.Topmost,x,y,w,h,Native.Show);
+        Native.SetWindowPos(hwnd, Native.Topmost, bounds.Left, bounds.Top, bounds.Width, bounds.Height, Native.Show);
         Native.SetForegroundWindow(hwnd); Activate(); Focus();
         presented=true;
+    }
+
+    private PixelRect Placement(ClockAnchor? anchor, nint hwnd)
+    {
+        var taskbar = anchor?.Taskbar ?? Native.FindWindow("Shell_TrayWnd", null);
+        var monitorWindow = taskbar == 0 ? hwnd : taskbar;
+        var info = Native.MonitorOf(monitorWindow);
+        var work = anchor?.Work ?? info.Work;
+        var monitor = anchor?.Monitor ?? info.Monitor;
+        uint dpi = anchor?.Dpi ?? Native.GetDpiForWindow(monitorWindow);
+        double scale = dpi == 0 ? 1 : dpi / 96.0;
+        int gap = (int)Math.Round(8 * scale);
+        var available = work;
+        bool atTop = false, atLeft = false, vertical = false;
+        if (Native.GetWindowRect(taskbar, out var bar) && bar.HasArea) {
+            if (bar.Width >= bar.Height) {
+                atTop = bar.Top < monitor.Center.Y;
+                // Reserve the expanded taskbar even if it is auto-hidden when the window is reopened.
+                available = atTop
+                    ? work with { Top = Math.Max(work.Top, Math.Max(bar.Bottom, monitor.Top + bar.Height)) }
+                    : work with { Bottom = Math.Min(work.Bottom, Math.Min(bar.Top, monitor.Bottom - bar.Height)) };
+            } else {
+                vertical = true;
+                atLeft = bar.Left < monitor.Center.X;
+                available = atLeft
+                    ? work with { Left = Math.Max(work.Left, Math.Max(bar.Right, monitor.Left + bar.Width)) }
+                    : work with { Right = Math.Min(work.Right, Math.Min(bar.Left, monitor.Right - bar.Width)) };
+            }
+        }
+        if (!available.HasArea) available = work;
+        if (!available.HasArea) return default;
+        gap = Math.Min(gap, (Math.Min(available.Width, available.Height) - 1) / 2);
+        resizeArea = new(available.Left + gap, available.Top + gap, available.Right - gap, available.Bottom - gap);
+        MaxWidth = resizeArea.Width / scale;
+        MaxHeight = resizeArea.Height / scale;
+        MinWidth = Math.Min(MinimumSize.Width, MaxWidth);
+        MinHeight = Math.Min(MinimumSize.Height, MaxHeight);
+        int w = (int)Math.Round(Math.Clamp(preferredSize.Width, MinWidth, MaxWidth) * scale);
+        int h = (int)Math.Round(Math.Clamp(preferredSize.Height, MinHeight, MaxHeight) * scale);
+        int x = atLeft ? resizeArea.Left : resizeArea.Right - w;
+        int y = atTop ? resizeArea.Top : resizeArea.Bottom - h;
+        if (anchor is { } clock) {
+            if (vertical) y = Math.Clamp(clock.Bounds.Bottom - h, resizeArea.Top, resizeArea.Bottom - h);
+            else x = Math.Clamp(clock.Bounds.Right - w, resizeArea.Left, resizeArea.Right - w);
+        }
+        return new(x, y, x + w, y + h);
     }
     public void Dismiss() { presented=false; Hide(); }
     public void Finish() { presented=false; Close(); }
@@ -82,7 +154,7 @@ internal partial class CalendarWindow : Window
         var w=weather.Read(place);
         WeatherLine.Visibility=Visibility.Visible;
         WeatherLine.Text=WeatherReading.Summary(place, w);
-        WeatherLine.ToolTip=weather.Warning;
+        WeatherLine.ToolTip=weather.Warning is { } warning ? $"{WeatherLine.Text}\n{warning}" : WeatherLine.Text;
         WeatherCredit.Visibility=w?.UsesVisualCrossing == true ? Visibility.Visible : Visibility.Collapsed;
     }
     private void PreviousClick(object sender,RoutedEventArgs e) => Move(-1);
@@ -133,7 +205,7 @@ internal partial class CalendarWindow : Window
         for(int col=0;col<7;col++) Put(Text("日一二三四五六"[(opt.WeekStart+col)%7].ToString(),12,"Muted"),0,col+1);
         int r=0;
         foreach(var row in vm.Weeks(opt,DateOnly.FromDateTime(DateTime.Now))) {
-            r++; DaysGrid.RowDefinitions.Add(new(){Height=new GridLength(45)});
+            r++; DaysGrid.RowDefinitions.Add(new(){Height=new GridLength(1, GridUnitType.Star)});
             if(row.Number is { } week) Put(Text(week.ToString(),11,"Muted"),r,0);
             for(int col=0;col<7;col++) {
                 if(row.Days[col] is not { } cell) continue;

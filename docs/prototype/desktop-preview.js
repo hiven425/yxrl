@@ -57,26 +57,58 @@ const DesktopPreview = (function () {
       },
     };
   }
-  function place(host, point) {
+  function place(host, point, size) {
     const panel = host.querySelector(".month-window,.detail-window");
-    if (!point || !panel) return;
-    const left = Math.max(0, Math.min(point.x, host.clientWidth - panel.offsetWidth));
-    const top = Math.max(0, Math.min(point.y, host.clientHeight - panel.offsetHeight));
-    Object.assign(panel.style, { position: "absolute", left: left + "px", top: top + "px" });
+    if (!panel) return;
+    if (size) {
+      panel.style.width = size.width + "px";
+      panel.style.height = size.height + "px";
+    }
+    if (point) {
+      panel.style.position = "absolute";
+      panel.style.left = Math.max(0, Math.min(point.x, host.clientWidth - panel.offsetWidth)) + "px";
+      panel.style.top = Math.max(0, Math.min(point.y, host.clientHeight - panel.offsetHeight)) + "px";
+    }
+    const zoom = Math.min(panel.clientWidth / 418, panel.clientHeight / 618);
+    if (zoom > 0) panel.style.setProperty("--calendar-zoom", zoom);
   }
-  function bindDrag(host, onMove) {
+  function boundsInHost(host, panel) {
+    const bounds = panel.getBoundingClientRect(),
+      frame = host.getBoundingClientRect();
+    return {
+      left: bounds.left - frame.left,
+      top: bounds.top - frame.top,
+      right: bounds.right - frame.left,
+      bottom: bounds.bottom - frame.top,
+    };
+  }
+  function bindDrag(host, onChange) {
     let active = null;
+    function resize(bounds, edge, dx, dy) {
+      let { left, top, right, bottom } = bounds;
+      const minWidth = Math.min(340, right - left),
+        minHeight = Math.min(450, bottom - top);
+      if (edge === "start") {
+        left = Math.max(0, Math.min(left + dx, right - minWidth));
+        top = Math.max(0, Math.min(top + dy, bottom - minHeight));
+      } else {
+        right = Math.min(host.clientWidth, Math.max(right + dx, left + minWidth));
+        bottom = Math.min(host.clientHeight, Math.max(bottom + dy, top + minHeight));
+      }
+      onChange({ x: left, y: top }, { width: right - left, height: bottom - top });
+    }
     host.addEventListener("pointerdown", (ev) => {
-      const handle = ev.target.closest(".month-hero,.detail-window .panel-head");
-      if (!handle || ev.target.closest("button,input,select") || ev.button !== 0) return;
-      const panel = handle.closest(".flyout").getBoundingClientRect(),
-        frame = host.getBoundingClientRect();
+      if (ev.button !== 0 || active) return;
+      const grip = ev.target.closest("[data-resize]");
+      const handle = grip || ev.target.closest(".month-hero,.detail-window .panel-head");
+      if (!handle || (!grip && ev.target.closest("button,input,select"))) return;
       active = {
         id: ev.pointerId,
         x: ev.clientX,
         y: ev.clientY,
-        left: panel.left - frame.left,
-        top: panel.top - frame.top,
+        bounds: boundsInHost(host, handle.closest(".flyout")),
+        edge: grip?.dataset.resize,
+        moved: false,
       };
       host.setPointerCapture(ev.pointerId);
     });
@@ -84,13 +116,23 @@ const DesktopPreview = (function () {
       if (active?.id !== ev.pointerId) return;
       const dx = ev.clientX - active.x,
         dy = ev.clientY - active.y;
-      if (Math.abs(dx) + Math.abs(dy) > 3) onMove({ x: active.left + dx, y: active.top + dy });
+      if (!active.moved && Math.abs(dx) + Math.abs(dy) <= 3) return;
+      active.moved = true;
+      if (active.edge) resize(active.bounds, active.edge, dx, dy);
+      else onChange({ x: active.bounds.left + dx, y: active.bounds.top + dy });
     });
     const end = (ev) => {
       if (active?.id === ev.pointerId) active = null;
     };
     host.addEventListener("pointerup", end);
     host.addEventListener("lostpointercapture", end);
+    host.addEventListener("keydown", (ev) => {
+      const grip = ev.target.closest("[data-resize]");
+      const arrows = { ArrowLeft: [-12, 0], ArrowRight: [12, 0], ArrowUp: [0, -12], ArrowDown: [0, 12] };
+      if (!grip || !Object.hasOwn(arrows, ev.key)) return;
+      ev.preventDefault();
+      resize(boundsInHost(host, grip.closest(".flyout")), grip.dataset.resize, ...arrows[ev.key]);
+    });
   }
   return { playTone, sessionPin, place, bindDrag };
 })();

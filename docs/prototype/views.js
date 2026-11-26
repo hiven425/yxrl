@@ -92,9 +92,16 @@ const CalendarViews = (function () {
         )
         .join("")}</div>`;
   }
+  function resizeGrips() {
+    return ["start", "end"].map((edge, index) => {
+      const corner = ["左上角", "右下角"][index];
+      return `<button type="button" class="calendar-grip" data-resize="${edge}"
+        aria-label="从${corner}调整窗口大小" title="拖动或按方向键调整窗口大小"></button>`;
+    }).join("");
+  }
   function month(state) {
     const entries = M.itemsOn(state.items, state.selected);
-    return `<section class="flyout month-window" aria-label="月历弹窗">
+    return `<section class="flyout month-window" aria-label="月历弹窗"><div class="calendar-surface">
       <header class="month-hero"><div><div class="digital"><em data-period></em><span data-hour-minute></span><small data-seconds></small></div><p>${M.displayDate(M.today, true)}<span>星期${M.weekday(M.today)}</span></p></div>${state.calendar.showWeather ? weatherBadge(state) : ""}</header>
       <div class="month-tool"><h2>${Number(state.month.slice(0, 4))}<small> 年 </small>${Number(state.month.slice(5))}<small> 月</small></h2><div><button class="today-btn" type="button" data-action="today">今天</button>${button("prev", "上个月", "left")}${button("next", "下个月", "right")}</div></div>
       ${monthGrid(state)}
@@ -106,7 +113,8 @@ const CalendarViews = (function () {
               .join("")
           : emptyItems()
       }</div>
-      <footer class="fly-foot"><button type="button" class="primary" data-action="add">${icon("plus", 16)} 添加事项</button>${button("settings", "打开设置", "settings")}</footer></section>`;
+      <footer class="fly-foot"><button type="button" class="primary" data-action="add">${icon("plus", 16)} 添加事项</button>${button("settings", "打开设置", "settings")}</footer>
+      </div>${resizeGrips()}</section>`;
   }
   function day(state) {
     const key = state.selected,
@@ -115,11 +123,12 @@ const CalendarViews = (function () {
       mark = state.calendar.showAdjustments ? M.dayMark(key) : "",
       entries = M.itemsOn(state.items, key);
     const tag = (t) => `<span class="tag">${e(t)}</span>`;
-    return `<section class="flyout detail-window" aria-label="当日详情"><header class="panel-head">${button("month", "返回月历", "back")}<h2>当日详情</h2>${button("close", "收起面板", "close")}</header>
-      <div class="day-overview"><div class="date-tile"><small>${Number(key.slice(5, 7))}月</small><strong>${Number(key.slice(-2))}</strong></div><div><h3>${M.displayDate(key, true)}</h3><p>星期${M.weekday(key)}${M.weekForDate(key, state.calendar) === null ? "" : " · 第 " + M.weekForDate(key, state.calendar) + " 周"}</p><div class="tags">${festivals.map((f) => tag(f.name)).join("")}${l.term ? tag(l.term) : ""}${mark ? tag(mark === "班" ? "调休上班" : "放假") : ""}</div></div></div>
+    return `<section class="flyout detail-window" aria-label="当日详情"><div class="calendar-surface"><header class="panel-head">${button("month", "返回月历", "back")}<h2>当日详情</h2>${button("close", "收起面板", "close")}</header>
+      <div class="day-scroll"><div class="day-overview"><div class="date-tile"><small>${Number(key.slice(5, 7))}月</small><strong>${Number(key.slice(-2))}</strong></div><div><h3>${M.displayDate(key, true)}</h3><p>星期${M.weekday(key)}${M.weekForDate(key, state.calendar) === null ? "" : " · 第 " + M.weekForDate(key, state.calendar) + " 周"}</p><div class="tags">${festivals.map((f) => tag(f.name)).join("")}${l.term ? tag(l.term) : ""}${mark ? tag(mark === "班" ? "调休上班" : "放假") : ""}</div></div></div>
       <section class="detail-section almanac"><h3>农历${l.monthName}${l.dayName}</h3><p class="muted">${e(l.ganzhi)}</p><div class="auspice"><b>宜</b><span>${e(l.yi || "—")}</span></div><div class="auspice avoid"><b>忌</b><span>${e(l.ji || "—")}</span></div></section>
-      <section class="detail-section"><header class="section-title"><h3>日程与待办</h3><span>${entries.length} 项</span></header>${entries.length ? entries.map((i) => occurrenceRow(i, key, state.calendar)).join("") : emptyItems()}</section>
-      <footer class="fly-foot"><button class="primary" type="button" data-action="add">${icon("plus", 16)} 添加事项</button><button type="button" class="text-button" data-page="month">回到月历</button></footer></section>`;
+      <section class="detail-section"><header class="section-title"><h3>日程与待办</h3><span>${entries.length} 项</span></header>${entries.length ? entries.map((i) => occurrenceRow(i, key, state.calendar)).join("") : emptyItems()}</section></div>
+      <footer class="fly-foot"><button class="primary" type="button" data-action="add">${icon("plus", 16)} 添加事项</button><button type="button" class="text-button" data-page="month">回到月历</button></footer>
+      </div>${resizeGrips()}</section>`;
   }
   function editor(item) {
     const isNew = !item.id;

@@ -26,6 +26,7 @@
     otherWindow = null,
     livePosition = null,
     savedPosition = null,
+    calendarSize = null,
     scrollTimer,
     wheelDistance = 0;
   const initialHash = location.hash.slice(1);
@@ -102,7 +103,10 @@
     syncRail();
     paintTheme();
     updateClock();
-    DesktopPreview.place(host, livePosition || (state.general.rememberPosition ? savedPosition : null));
+    placeCalendar();
+  }
+  function placeCalendar() {
+    DesktopPreview.place(host, livePosition || (state.general.rememberPosition ? savedPosition : null), calendarSize);
   }
   function go(next, { focus = true, preserveDraft = false } = {}) {
     if (!routeIds.has(next)) next = "month";
@@ -465,6 +469,7 @@
     otherWindow = null;
     livePosition = null;
     savedPosition = null;
+    calendarSize = null;
     pinVault.clear();
     state = M.initialState();
     festivalKind = "solar";
@@ -853,10 +858,11 @@
   $(".tray-bell").innerHTML = V.icon("bell", 15);
   $("#optional-tray").innerHTML = V.icon("calendar", 16);
   host.addEventListener("wheel", scrollCalendar, { passive: false });
-  DesktopPreview.bindDrag(host, (point) => {
+  DesktopPreview.bindDrag(host, (point, size) => {
     livePosition = point;
     if (state.general.rememberPosition) savedPosition = point;
-    DesktopPreview.place(host, point);
+    if (size) calendarSize = size;
+    placeCalendar();
   });
   window.addEventListener("blur", () => {
     if (!dialog.open && state.general.closeOnBlur && ["month", "day"].includes(page)) closeCalendar();
@@ -864,7 +870,7 @@
   themeFromSystem.addEventListener("change", paintTheme);
   window.addEventListener("resize", () => {
     updateClock();
-    DesktopPreview.place(host, livePosition || savedPosition);
+    placeCalendar();
   });
   window.addEventListener("hashchange", () => go(location.hash.slice(1), { focus: false }));
   go(routeIds.has(initialHash) ? initialHash : "month", { focus: false });
