@@ -29,6 +29,7 @@ public partial class App : Application
     private CalendarService calendar=null!;
     private WeatherService weather=null!;
     private CalendarWindow panel=null!;
+    private SettingsWindow? settingsWindow;
     private CancellationTokenSource? weatherRequest;
     private long? weatherCity;
 
@@ -45,7 +46,7 @@ public partial class App : Application
         Theme.Apply();
         var directory=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Yxrl");
         store=new(directory); store.Load(); calendar=new(store); weather=new(directory); weather.Load();
-        panel=new(store,calendar,weather,ApplySettings,Shutdown);
+        panel=new(store,calendar,weather,OpenSettings);
         listener=ThreadPool.RegisterWaitForSingleObject(openSignal,(_,_)=>Dispatcher.BeginInvoke(OpenSettings),null,Timeout.Infinite,false);
         SystemEvents.UserPreferenceChanged+=PreferenceChanged;
         ApplySettings();
@@ -63,7 +64,14 @@ public partial class App : Application
     {
         if(stopping) return;
         if(firstScan) { wantSettings=true; return; }
-        panel.Present(ActiveAnchor,true);
+        if (settingsWindow is not null) { settingsWindow.BringForward(); return; }
+        bool resumeDate = panel.IsVisible;
+        panel.Dismiss();
+        settingsWindow = new SettingsWindow(store, calendar, weather, ApplySettings,
+            () => panel.Present(ActiveAnchor, resetDate: !resumeDate), Shutdown);
+        settingsWindow.Closed += (_, _) => settingsWindow = null;
+        UpdateStatus();
+        settingsWindow.Present(ActiveAnchor);
     }
     private void ApplySettings()
     {
@@ -81,8 +89,12 @@ public partial class App : Application
     private void ClickClock(ClockAnchor anchor)
     {
         if(stopping || mouse is null || !detected.Contains(anchor)) return;
+        if (settingsWindow is not null) {
+            if (!settingsWindow.IsEnabled) { settingsWindow.BringForward(); return; }
+            settingsWindow.Close();
+        }
         if(panel.IsVisible && lastBar==anchor.Taskbar) panel.Dismiss();
-        else { lastBar=anchor.Taskbar; panel.Present(anchor,false); }
+        else { lastBar=anchor.Taskbar; panel.Present(anchor); }
     }
     private void Tick()
     {
@@ -101,6 +113,8 @@ public partial class App : Application
                 foreach(var view in overlays.Values) view.Draw(text,now);
             }
             if(panel.IsVisible) panel.Tick(now);
+            if(settingsWindow is { IsVisible: true, WindowState: not WindowState.Minimized })
+                settingsWindow.Page.Tick(now);
         }
         if(store.Current.City is { } city && weatherRequest is null && utc>=nextWeather) RefreshWeather(city);
     }
@@ -134,7 +148,8 @@ public partial class App : Application
     }
     private void UpdateStatus()
     {
-        panel.IntegrationStatus = !store.Current.Clock.Enabled ? "原位时钟已关闭。再次运行 Yxrl.exe 可打开设置。" :
+        if (settingsWindow is null) return;
+        settingsWindow.Page.Status = !store.Current.Clock.Enabled ? "原位时钟已关闭。再次运行 Yxrl.exe 可打开设置。" :
             inputError ?? (detected.Length>0 ? "已连接任务栏原时钟。左键打开月历，再点收起。" :
             otherClock ? "优效日历正在使用原时间位置。正常退出优效后，这里会自动接入。" :
             "正在等待 Windows 任务栏显示原时钟。检测到后会自动接入。");

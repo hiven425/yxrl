@@ -50,7 +50,6 @@
           <TextBlock x:Name="DayJiFull" Margin="0,4" TextWrapping="Wrap"/>
         </StackPanel>
       </ScrollViewer>
-      <ContentControl x:Name="SettingsHost" Visibility="Collapsed"/>
     </Grid>
   </Border>
 </Window>

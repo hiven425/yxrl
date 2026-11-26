@@ -39,11 +39,12 @@ internal sealed class CalendarService
     private (DateOnly Date, string? Target, string Result)? lastCountdown;
     public FestivalRule[] Rules { get; }
     public static readonly DateOnly First = new(1901, 1, 1), Last = new(2099, 12, 31);
-    public CalendarService(SettingsStore settings)
+    public CalendarService(SettingsStore? settings = null)
     {
         using var stream = typeof(CalendarService).Assembly.GetManifestResourceStream("Yxrl.Calendar.CalendarData.json")!;
         catalog = JsonSerializer.Deserialize<Catalog>(stream, SettingsStore.Json)!;
-        Rules = catalog.Festivals.Concat(settings.CustomRules).Where(x => !settings.Disabled.Contains(x.Id)).ToArray();
+        Rules = settings is null ? catalog.Festivals :
+            catalog.Festivals.Concat(settings.CustomRules).Where(x => !settings.Disabled.Contains(x.Id)).ToArray();
     }
     public static string Weekday(DateOnly day) => "周" + "日一二三四五六"[(int)day.DayOfWeek];
     public DayInfo Get(DateOnly day)

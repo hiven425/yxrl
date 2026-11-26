@@ -156,22 +156,25 @@ const CalendarViews = (function () {
         "",
       )}<button type="button" class="nav-dialog" data-action="weather" aria-haspopup="dialog">${icon("cloud", 17)}城市与天气</button></nav><div class="settings-body"><h2>${title}</h2>${body}</div></div></section>`;
   }
-  function styles(state, draft) {
-    const p = M.partsFor({ ...state, target: draft.target }, "10:32:01");
+  const galleryExample = M.partsFor(M.initialState(), "12:25:31");
+  function styles(state, draft, stamp) {
+    const sample = draft.gallery === "example";
+    const p = sample ? galleryExample : M.partsFor({ ...state, target: draft.target }, stamp);
     const cards = M.presets
       .map(([id, label]) => {
         const lines = M.clockLines(id, p, draft.formats);
-        return `<button type="button" class="style-card" data-preset="${id}" aria-pressed="${draft.preset === id}"><span class="preset-name">${label}</span><span>${e(lines[0])}</span><small>${e(lines[1])}</small><i aria-hidden="true">${icon("check", 11)}</i></button>`;
+        return `<button type="button" class="style-card" data-preset="${id}" aria-pressed="${draft.preset === id}"><span class="preset-name">${label}</span><span data-upper>${e(lines[0])}</span><small data-lower>${e(lines[1])}</small><i aria-hidden="true">${icon("check", 11)}</i></button>`;
       })
       .join("");
     const enabled = state.rules.filter((r) => r.enabled);
     return settingsFrame(
       "任务栏时钟",
       "styles",
-      `<div class="styles-grid" aria-label="九种样式">${cards}</div><div class="custom-head"><label><input type="radio" name="custom-style" id="custom-style" ${draft.preset === "custom" ? "checked" : ""}> 自定义格式</label><button type="button" data-action="format-help" class="text-button">${icon("info", 14)} 格式说明</button></div>
+      `<div class="gallery-heading"><h3>时钟样式</h3><div class="segments" role="group" aria-label="样式预览时间"><button type="button" data-gallery-mode="example" aria-pressed="${sample}">示例日期</button><button type="button" data-gallery-mode="current" aria-pressed="${!sample}">当前时间</button></div></div>
+      <div class="styles-grid" aria-label="九种样式">${cards}</div><p class="gallery-note muted">${sample ? "示例取 2026 年 11 月 26 日，天气使用深圳样例。" : "使用原型的当前演示时间和所选城市。"}</p><div class="custom-head"><label><input type="radio" name="custom-style" id="custom-style" ${draft.preset === "custom" ? "checked" : ""}> 自定义格式</label><button type="button" data-action="format-help" class="text-button">${icon("info", 14)} 格式说明</button></div>
       <div class="field-pair custom-fields"><label class="field">上行<input id="format-top" maxlength="64" value="${e(draft.formats[0])}"></label><label class="field">下行<input id="format-bottom" maxlength="64" value="${e(draft.formats[1])}"></label></div>
       ${draft.preset === "countdown" ? `<label class="field countdown-target">倒数节日<select id="festival-target"><option value="">选择节日</option>${enabled.map((r) => `<option value="${e(r.id)}" ${r.id === draft.target ? "selected" : ""}>${e(r.name)}</option>`).join("")}</select></label>` : ""}
-      <div class="apply-bar"><div><small>任务栏预览</small><div id="format-preview" aria-live="polite"></div></div><button class="primary" type="button" data-action="apply-style">应用样式</button></div><p class="form-error" id="format-error" role="alert"></p>`,
+      <div class="apply-bar"><div><small>当前时间预览</small><div id="format-preview"></div></div><button class="primary" type="button" data-action="apply-style">应用样式</button></div><p class="form-error" id="format-error" role="alert"></p>`,
     );
   }
   function festivalRows(state, kind, query) {

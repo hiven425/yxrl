@@ -45,6 +45,20 @@ try
     var pref=store.Current with { Clock=new(Preset:"custom",Top:"hh:ff:ss 星期W JJ",Bottom:"{农历} 第{周数}周") };
     var clock=ClockFormatter.Render(now,pref,calendar,null);
     Equal("10:32:01 星期四 感恩节",clock.Upper); Equal("十月十八 第48周",clock.Lower);
+    var gallery = new ClockStyleGallery();
+    var examples = gallery.Tiles.Select(tile => tile.Lines).ToArray();
+    Equal(9, examples.Length);
+    Equal(true, examples.All(item => item.Upper.Length > 0 && item.Lower.Length > 0));
+    ClockText Tile(string id) => gallery.Tiles.Single(tile => tile.Id == id).Lines;
+    Equal("2026-11-26", Tile("simple").Lower);
+    Equal("11月26日 十月十八", Tile("dual").Lower);
+    Equal("距春节72天", Tile("countdown").Lower);
+    Equal("20～26° 美标AQI 42", Tile("forecast").Lower);
+    gallery.ShowCurrent(now.AddDays(1), pref, calendar, null);
+    Equal("11月27日 周五", Tile("seconds").Lower);
+    Equal("请选择城市", Tile("forecast").Lower);
+    gallery.ShowExamples();
+    Equal(true, examples.SequenceEqual(gallery.Tiles.Select(tile => tile.Lines)));
     foreach(var style in ClockFormatter.Styles) {
         var lines=ClockFormatter.Render(now,pref with { Clock=pref.Clock with { Preset=style.Id } },calendar,null);
         if(lines.Upper.Length==0 && lines.Lower.Length==0) throw new Exception(style.Id);
@@ -58,6 +72,6 @@ try
     Equal(1,(int?)doc?["clock"]?["futureKey"]);
     File.WriteAllText(store.FilePath,"broken"); var broken=new SettingsStore(directory.FullName); broken.Load();
     try { broken.Save(pref); throw new Exception("损坏配置被覆盖"); } catch(IOException) { Equal("broken",File.ReadAllText(store.FilePath)); }
-    Console.WriteLine("通过：离线历法、节日与休班、ISO 周边界、时钟预设与格式、范围与配置读回。");
+    Console.WriteLine("通过：离线历法、节日与休班、ISO 周边界、九种双行样式与示例切换、范围与配置读回。");
 }
 finally { directory.Delete(true); }

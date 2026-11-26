@@ -59,7 +59,7 @@
     };
   }
   function newDraft() {
-    return { preset: state.preset, target: state.target, formats: [...state.formats] };
+    return { preset: state.preset, target: state.target, formats: [...state.formats], gallery: "example" };
   }
   function syncRail() {
     $("#navigation")
@@ -84,7 +84,7 @@
       month: () => V.month(state),
       day: () => V.day(state),
       editor: () => V.editor(draftItem),
-      styles: () => V.styles(state, draft),
+      styles: () => V.styles(state, draft, tick().stamp),
       festivals: () => V.festivals(state, festivalKind, query),
       calendarSettings: () => SettingsPages.calendar(state),
       general: () => SettingsPages.general(state),
@@ -103,7 +103,6 @@
     syncRail();
     paintTheme();
     updateClock();
-    if (page === "styles") updatePreview();
     DesktopPreview.place(host, livePosition || (state.general.rememberPosition ? savedPosition : null));
   }
   function go(next, { focus = true, preserveDraft = false } = {}) {
@@ -218,17 +217,26 @@
         : stamp.slice(0, 5);
       $("[data-seconds]").textContent = ":" + p.second;
     }
+    if (page === "styles") updatePreview(stamp);
   }
-  function updatePreview() {
+  function updatePreview(stamp = tick().stamp) {
     const target = $("#format-preview"),
       error = $("#format-error"),
       apply = $('[data-action="apply-style"]');
+    const parts = M.partsFor({ ...state, target: draft.target }, stamp);
+    if (draft.gallery === "current") {
+      host.querySelectorAll("[data-preset]").forEach((card) => {
+        const [upper, lower] = M.clockLines(card.dataset.preset, parts, draft.formats);
+        card.querySelector("[data-upper]").textContent = upper;
+        card.querySelector("[data-lower]").textContent = lower;
+      });
+    }
     try {
       if (draft.preset === "custom" && !draft.formats.some((f) => f.trim()))
         throw new Error("请至少填写一行时钟格式");
       const lines = M.clockLines(
         draft.preset,
-        M.partsFor({ ...state, target: draft.target }, "10:32:01"),
+        parts,
         draft.formats,
       );
       target.textContent = lines.filter(Boolean).join("\n");
@@ -689,6 +697,12 @@
     }
     if (d.edit) {
       openItem(d.edit);
+      return;
+    }
+    if (d.galleryMode) {
+      draft.gallery = d.galleryMode;
+      render();
+      focusAfter(`[data-gallery-mode="${draft.gallery}"]`);
       return;
     }
     if (d.preset) {

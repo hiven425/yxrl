@@ -14,35 +14,30 @@ internal partial class CalendarWindow : Window
     private readonly CalendarService calendar;
     private readonly WeatherService weather;
     private readonly MonthViewModel vm;
-    private readonly Action changed;
-    private readonly Action quit;
-    private readonly SettingsPanel settingsPage;
+    private readonly Action openSettings;
     private DateOnly today;
-    private bool isSettings, presented;
-    public string IntegrationStatus { get => settingsPage.Status; set => settingsPage.Status = value; }
+    private bool presented;
 
-    public CalendarWindow(SettingsStore store, CalendarService calendar, WeatherService weather, Action changed, Action quit)
+    public CalendarWindow(SettingsStore store, CalendarService calendar, WeatherService weather, Action openSettings)
     {
         InitializeComponent();
-        (this.store,this.calendar,this.weather,this.changed,this.quit)=(store,calendar,weather,changed,quit);
+        (this.store,this.calendar,this.weather,this.openSettings)=(store,calendar,weather,openSettings);
         vm=new(calendar); vm.Select(DateOnly.FromDateTime(DateTime.Now));
-        settingsPage=new(store,calendar,weather,OnSettingsSaved,Back,quit);
-        SettingsHost.Content=settingsPage;
         Closing += (_,e) => { if (presented) { e.Cancel=true; Dismiss(); } };
     }
-    public void Present(ClockAnchor? anchor, bool settings)
+    public void Present(ClockAnchor? anchor, bool resetDate = true)
     {
         presented = false;
-        if (settings) OpenSettings(); else { isSettings=false; vm.Select(DateOnly.FromDateTime(DateTime.Now)); ShowMonth(); }
+        if (resetDate) vm.Select(DateOnly.FromDateTime(DateTime.Now));
+        ShowMonth();
         var hwnd = new WindowInteropHelper(this).EnsureHandle();
         var taskbar = anchor?.Taskbar ?? Native.FindWindow("Shell_TrayWnd", null);
         var info = Native.MonitorOf(taskbar==0 ? hwnd : taskbar);
         var work = anchor?.Work ?? info.Work;
         uint dpi = anchor?.Dpi ?? Native.GetDpiForWindow(hwnd);
         double scale = Math.Max(1,dpi / 96.0); int gap=(int)Math.Round(8*scale);
-        double desiredHeight = settings ? 600 : 558;
         int w = Math.Min((int)Math.Round(408*scale), work.Width-2*gap);
-        int h = Math.Min((int)Math.Round(desiredHeight*scale),work.Height-2*gap);
+        int h = Math.Min((int)Math.Round(558*scale),work.Height-2*gap);
         var b = anchor?.Bounds;
         int x = Math.Clamp(b?.Right - w ?? work.Right-w-gap,work.Left+gap,work.Right-w-gap);
         int y = work.Bottom-h-gap;
@@ -64,28 +59,20 @@ internal partial class CalendarWindow : Window
         Native.SetForegroundWindow(hwnd); Activate(); Focus();
         presented=true;
     }
-    public void Dismiss() { presented=false; settingsPage.CancelSearch(); Hide(); }
-    public void Finish() { presented=false; settingsPage.CancelSearch(); Close(); }
+    public void Dismiss() { presented=false; Hide(); }
+    public void Finish() { presented=false; Close(); }
     private void OnDeactivated(object? sender, EventArgs e)
     {
-        if (presented && !isSettings && store.CloseOnBlur) Dismiss();
+        if (presented && store.CloseOnBlur) Dismiss();
     }
-    private void SettingsClick(object sender,RoutedEventArgs e) => OpenSettings();
-    private void OpenSettings()
-    {
-        isSettings=true; settingsPage.LoadDraft(); Title="YXRL 时钟设置";
-        MonthPage.Visibility=DayPage.Visibility=Visibility.Collapsed; SettingsHost.Visibility=Visibility.Visible;
-    }
-    private void Back() { isSettings=false; ShowMonth(); SettingsButton.Focus(); }
-    private void OnSettingsSaved() { changed(); Back(); }
+    private void SettingsClick(object sender,RoutedEventArgs e) => openSettings();
     private void ShowMonth()
     {
-        Title="YXRL 月历"; MonthPage.Visibility=Visibility.Visible; DayPage.Visibility=SettingsHost.Visibility=Visibility.Collapsed;
+        Title="YXRL 月历"; MonthPage.Visibility=Visibility.Visible; DayPage.Visibility=Visibility.Collapsed;
         RenderMonth(); Tick(DateTime.Now);
     }
     public void Tick(DateTime now)
     {
-        if (isSettings) { settingsPage.Tick(now); return; }
         var date=DateOnly.FromDateTime(now);
         if (date != today) { if(vm.Selected==today) vm.Select(date); today=date; RenderMonth(); }
         TimePart.Text=ClockFormatter.Time(now,store.Current.Calendar.Hour12,false); SecondsPart.Text=now.ToString(":ss");
@@ -115,8 +102,7 @@ internal partial class CalendarWindow : Window
     }
     private void OnKey(object sender,KeyEventArgs e)
     {
-        if (e.Key==Key.Escape) { if(isSettings) Back(); else Dismiss(); e.Handled=true; return; }
-        if (isSettings) return;
+        if (e.Key==Key.Escape) { Dismiss(); e.Handled=true; return; }
         if (DayPage.IsVisible) { if(e.Key==Key.Back){ShowMonth(); e.Handled=true;} return; }
         switch(e.Key) {
             case Key.Enter: case Key.Space:
