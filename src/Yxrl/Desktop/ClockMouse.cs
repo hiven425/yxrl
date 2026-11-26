@@ -29,11 +29,8 @@ internal sealed class ClockMouse : IDisposable
         thread.Start(); ready.Wait();
         if (hook == 0) { ready.Dispose(); throw new Win32Exception(error,"无法接收任务栏时钟点击"); }
     }
-    public void Update(ClockAnchor[] visible, bool observeClicks)
-    {
-        Volatile.Write(ref anchors,visible);
-        Volatile.Write(ref observeOutsideClicks,observeClicks);
-    }
+    public void Update(ClockAnchor[] visible) => Volatile.Write(ref anchors,visible);
+    public void ObserveDesktopClicks(bool watch) => Volatile.Write(ref observeOutsideClicks,watch);
     private void Run()
     {
         pump = Dispatcher.CurrentDispatcher;
@@ -70,7 +67,8 @@ internal sealed class ClockMouse : IDisposable
     }
     public void Dispose()
     {
-        Update([],false);
+        ObserveDesktopClicks(false);
+        Update([]);
         pump?.BeginInvokeShutdown(DispatcherPriority.Send);
         thread.Join(); ready.Dispose();
     }

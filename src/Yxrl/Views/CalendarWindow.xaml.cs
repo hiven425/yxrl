@@ -6,7 +6,6 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
-using System.Windows.Threading;
 using Yxrl.Desktop;
 
 namespace Yxrl.Views;
@@ -109,12 +108,12 @@ internal partial class CalendarWindow : Window
         var hwnd = new WindowInteropHelper(this).EnsureHandle();
         var bounds = Placement(anchor, hwnd);
         if (!bounds.HasArea) return;
+        presented = true;
         var order = IsPinned ? Native.Topmost : 0;
         Native.SetWindowPos(hwnd, order, bounds.Left, bounds.Top, bounds.Width, bounds.Height, Native.NoActivate);
         if (!IsVisible) Show();
         Native.SetWindowPos(hwnd, order, bounds.Left, bounds.Top, bounds.Width, bounds.Height, Native.Show);
         Native.SetForegroundWindow(hwnd); Activate(); Focus();
-        presented=true;
         PollPointer();
     }
 

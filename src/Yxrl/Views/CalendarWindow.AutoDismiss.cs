@@ -12,7 +12,6 @@ internal partial class CalendarWindow
 
     public bool IsPinned => PinButton.IsChecked == true;
     private bool CanAutoDismiss => presented && IsVisible && !IsPinned && !resizing && !IsManagingReminder;
-    public bool ObserveOutsideClicks => CanAutoDismiss && store.CloseOnOutsideClick;
 
     private void PinChanged(object sender, RoutedEventArgs e)
     {
@@ -29,7 +28,7 @@ internal partial class CalendarWindow
 
     public void HandleDesktopClick(PixelPoint point)
     {
-        if (ObserveOutsideClicks && !OverCalendar(point)) Dismiss();
+        if (CanAutoDismiss && store.CloseOnOutsideClick && !OverCalendar(point)) Dismiss();
     }
 
     private bool OverCalendar(PixelPoint point)

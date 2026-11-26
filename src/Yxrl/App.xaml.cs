@@ -52,6 +52,7 @@ public partial class App : Application
         var reminders = new ReminderStore(directory);
         reminders.Load();
         panel=new(store,calendar,weather,reminders,OpenSettings);
+        panel.IsVisibleChanged += (_, _) => mouse?.ObserveDesktopClicks(panel.IsVisible);
         reminderDelivery = new(reminders, () => ActiveAnchor?.Taskbar ?? Native.FindWindow("Shell_TrayWnd", null));
         listener=ThreadPool.RegisterWaitForSingleObject(openSignal,(_,_)=>Dispatcher.BeginInvoke(OpenSettings),null,Timeout.Infinite,false);
         SystemEvents.UserPreferenceChanged+=PreferenceChanged;
@@ -86,6 +87,7 @@ public partial class App : Application
             try {
                 mouse=new ClockMouse(a=>Dispatcher.BeginInvoke(()=>ClickClock(a)),
                     point=>Dispatcher.BeginInvoke(()=>panel.HandleDesktopClick(point)));
+                mouse.ObserveDesktopClicks(panel.IsVisible);
                 inputError=null;
             }
             catch(Win32Exception ex) { inputError=ex.Message; }
@@ -200,7 +202,7 @@ public partial class App : Application
             }
             if (bar == a.Bar) clickable.Add(a);
         }
-        mouse?.Update(clickable.ToArray(),panel.ObserveOutsideClicks);
+        mouse?.Update(clickable.ToArray());
     }
     protected override void OnExit(ExitEventArgs e)
     {
