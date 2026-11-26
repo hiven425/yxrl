@@ -14,6 +14,7 @@ static void Equal<T>(T expected, T actual)
 {
     if (!EqualityComparer<T>.Default.Equals(expected,actual)) throw new Exception($"期望 {expected}，得到 {actual}");
 }
+TaskbarChecks.Verify();
 var directory = Directory.CreateTempSubdirectory("yxrl-check-");
 try
 {

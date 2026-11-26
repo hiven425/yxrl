@@ -42,7 +42,8 @@ internal sealed class ClockMouse : IDisposable
         if (code == 0 && (msg == 0x201 || msg == 0x202)) {
             if (msg == 0x202 && pressed is null) return Native.CallNextHookEx(0,code,msg,data);
             var point = Marshal.PtrToStructure<PixelPoint>(data);
-            var hit = Array.Find(Volatile.Read(ref anchors), a => a.Bounds.Contains(point) && Native.OnTaskbar(a.Taskbar,point));
+            var hit = Array.Find(Volatile.Read(ref anchors), a => a.Bounds.Contains(point) && Native.OnTaskbar(a.Taskbar,point)
+                && Native.GetWindowRect(a.Taskbar,out var bar) && bar == a.Bar);
             if (msg == 0x201 && hit is not null) { pressed = hit; return 1; }
             if (msg == 0x202 && pressed is { } start) {
                 pressed = null;

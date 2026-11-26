@@ -13,13 +13,13 @@ internal sealed class ClockOverlay : Window
     private readonly TextBlock top = Line(), bottom = Line();
     private readonly StackPanel stack = new() { VerticalAlignment = VerticalAlignment.Center, HorizontalAlignment = HorizontalAlignment.Center };
     private readonly nint handle;
-    private ClockAnchor? placed;
+    private PixelRect? placed, clip;
     public ClockOverlay()
     {
         Title = "YXRL 任务栏时钟";
         WindowStyle = WindowStyle.None; ResizeMode = ResizeMode.NoResize; ShowInTaskbar = false;
-        AllowsTransparency = true; ShowActivated = false; Focusable = false; Topmost = true;
-        Width = 60; Height = 32; Opacity = 0;
+        AllowsTransparency = true; ShowActivated = false; Focusable = false;
+        Width = 60; Height = 32;
         UseLayoutRounding = true; SnapsToDevicePixels = true;
         FontFamily = new FontFamily("Segoe UI, Microsoft YaHei UI");
         stack.Children.Add(top); stack.Children.Add(bottom);
@@ -32,16 +32,27 @@ internal sealed class ClockOverlay : Window
     }
     private static TextBlock Line() => new() { FontSize = 12, TextAlignment = TextAlignment.Center,
         HorizontalAlignment = HorizontalAlignment.Center, SnapsToDevicePixels = true };
-    public void Place(ClockAnchor anchor)
+    public bool Place(nint taskbar, ClockPlacement placement)
     {
-        bool moved = placed != anchor || !IsVisible;
-        placed = anchor;
-        if (!IsVisible) Show();
-        if (moved) {
-            var b = anchor.Bounds;
-            Native.SetWindowPos(handle,Native.Topmost,b.Left,b.Top,b.Width,b.Height,Native.NoActivate | Native.Show);
-            Opacity = 1;
+        var bounds = placement.Bounds;
+        if (clip != placement.Clip) {
+            if (!Native.ClipWindow(handle,placement.Clip)) return false;
+            clip = placement.Clip;
         }
+        var above = Native.WindowAbove(taskbar);
+        bool moved = placed != bounds;
+        if (moved || above != handle) {
+            uint flags = Native.NoActivate | Native.NoOwnerZOrder;
+            if (!moved) flags |= Native.NoMove | Native.NoSize;
+            if (above == handle) flags |= Native.NoZOrder;
+            // Sit immediately over Explorer. Other windows that cover the taskbar
+            // must cover its clock as well, including system menus and full-screen apps.
+            var after = above == 0 && Native.IsTopmost(taskbar) ? Native.Topmost : above;
+            if (!Native.SetWindowPos(handle,after,bounds.Left,bounds.Top,bounds.Width,bounds.Height,flags)) return false;
+            placed = bounds;
+        }
+        if (!IsVisible) Show();
+        return true;
     }
     public void Colorize(Color color)
     {
@@ -49,12 +60,11 @@ internal sealed class ClockOverlay : Window
         var ink = color.R * 0.299 + color.G * 0.587 + color.B * 0.114 > 150 ? Brushes.Black : Brushes.White;
         top.Foreground = bottom.Foreground = ink;
     }
-    public void Draw(ClockText value, DateTime now)
+    public void Draw(ClockAnchor anchor, ClockText value, DateTime now)
     {
-        if (placed is null || !IsVisible) return;
-        var scale = placed.Dpi / 96.0;
-        double width = Math.Max(1,placed.Bounds.Width / scale - 4);
-        var height = placed.Bounds.Height / scale;
+        var scale = anchor.Dpi / 96.0;
+        double width = Math.Max(1,anchor.Bounds.Width / scale - 4);
+        var height = anchor.Bounds.Height / scale;
         var fontSize = Math.Min(12.25, Math.Max(8, (height - 2) / 2.65));
         var type = new Typeface(FontFamily,FontStyles.Normal,FontWeights.Normal,FontStretches.Normal);
         double Measure(string s) => new FormattedText(s,CultureInfo.CurrentUICulture,FlowDirection.LeftToRight,
@@ -67,12 +77,16 @@ internal sealed class ClockOverlay : Window
         top.Visibility = upper.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
         bottom.Visibility = lower.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
     }
-    public static Color SampleBackground(ClockAnchor a)
+    public static Color SampleBackground(nint taskbar, PixelRect bounds, PixelRect visible, PixelRect bar)
     {
+        // Sample outside our own surface so recoloring never requires briefly hiding it.
+        int x = bounds.Left > bar.Left ? bounds.Left-1 : bounds.Right;
+        var point = new PixelPoint(x,visible.Top + visible.Height/5);
+        if (!bar.Contains(point) || !Native.OnTaskbar(taskbar,point)) return Theme.SystemBar;
         var dc = Native.GetDC(0);
         if (dc == 0) return Theme.SystemBar;
         try {
-            var p = a.Bounds; var rgb = Native.GetPixel(dc,p.Left + 1,p.Top + Math.Max(1,p.Height/5));
+            var rgb = Native.GetPixel(dc,point.X,point.Y);
             if (rgb == uint.MaxValue) return Theme.SystemBar;
             return Color.FromRgb((byte)(rgb & 255),(byte)((rgb >> 8)&255),(byte)((rgb >> 16)&255));
         } finally { Native.ReleaseDC(0,dc); }

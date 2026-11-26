@@ -51,14 +51,13 @@ public partial class App : Application
         listener=ThreadPool.RegisterWaitForSingleObject(openSignal,(_,_)=>Dispatcher.BeginInvoke(OpenSettings),null,Timeout.Infinite,false);
         SystemEvents.UserPreferenceChanged+=PreferenceChanged;
         ApplySettings();
-        timer=new DispatcherTimer {Interval=TimeSpan.FromMilliseconds(120)};
+        timer=new DispatcherTimer {Interval=TimeSpan.FromMilliseconds(25)};
         timer.Tick+=(_,_)=>Tick(); timer.Start(); Tick();
     }
     private void PreferenceChanged(object sender,UserPreferenceChangedEventArgs e) => Dispatcher.BeginInvoke(() => {
         if(stopping) return;
         Theme.Apply();
-        foreach(var view in overlays.Values) view.Hide();
-        RefreshVisible();
+        RefreshVisible(DateTime.Now,recolor:true);
     });
     private ClockAnchor? ActiveAnchor => detected.FirstOrDefault(x=>x.Taskbar==lastBar) ?? detected.FirstOrDefault();
     private void OpenSettings()
@@ -87,7 +86,7 @@ public partial class App : Application
             weatherCity=store.Current.City?.Id; directWeatherConnection=store.Current.DirectWeatherConnection;
             weatherRequest?.Cancel();
         }
-        UpdateStatus(); RefreshVisible();
+        UpdateStatus(); RefreshVisible(DateTime.Now);
     }
     private void ClickClock(ClockAnchor anchor)
     {
@@ -107,13 +106,15 @@ public partial class App : Application
             lastPrimary=primary; nextScan=DateTime.MinValue;
         }
         if(!scanning && utc>=nextScan) Scan();
-        RefreshVisible();
+        RefreshVisible(now);
         var second=now.Ticks/TimeSpan.TicksPerSecond;
         if(lastRenderSecond!=second) {
             lastRenderSecond=second;
             if(overlays.Values.Any(x=>x.IsVisible)) {
                 var text=ClockFormatter.Render(now,store.Current,calendar,weather.Read(store.Current.City));
-                foreach(var view in overlays.Values) view.Draw(text,now);
+                foreach(var a in detected) {
+                    if (overlays.TryGetValue(a.Taskbar,out var view) && view.IsVisible) view.Draw(a,text,now);
+                }
             }
             if(panel.IsVisible) panel.Tick(now);
             if(settingsWindow is { IsVisible: true, WindowState: not WindowState.Minimized })
@@ -133,13 +134,14 @@ public partial class App : Application
     {
         scanning=true; nextScan=DateTime.UtcNow.AddSeconds(2);
         try {
-            var result=await Task.Run(ClockLocator.Find);
+            var previous=detected;
+            var result=await Task.Run(()=>ClockLocator.Find(previous));
             if(stopping) return;
-            detected=result.Clocks; otherClock=result.OtherClock;
+            detected=result.MergeWith(previous); otherClock=result.OtherClock;
             foreach(var id in overlays.Keys.Except(detected.Select(a=>a.Taskbar)).ToArray()) {
                 overlays[id].Close(); overlays.Remove(id);
             }
-            UpdateStatus(); RefreshVisible();
+            UpdateStatus(); RefreshVisible(DateTime.Now);
             bool requested = firstScan && (wantSettings || store.ReadError is not null || inputError is not null || !store.Current.Clock.Enabled);
             firstScan=false;
             if (awaitingVisible && !result.Retracted) {
@@ -157,19 +159,31 @@ public partial class App : Application
             otherClock ? "优效日历正在使用原时间位置。正常退出优效后，这里会自动接入。" :
             "正在等待 Windows 任务栏显示原时钟。检测到后会自动接入。");
     }
-    private void RefreshVisible()
+    private void RefreshVisible(DateTime now, bool recolor=false)
     {
-        List<ClockAnchor> visible=[];
+        var clickable = new List<ClockAnchor>();
+        ClockText? text = null;
         foreach(var a in detected) {
-            var exposed=mouse is not null && Native.IsWindowVisible(a.Taskbar) && Native.GetWindowRect(a.Taskbar,out var bar)
-                && bar==a.Bar && Native.OnTaskbar(a.Taskbar,a.Bounds.Center);
             overlays.TryGetValue(a.Taskbar,out var view);
-            if(!exposed) { if(view?.IsVisible==true)view.Hide(); continue; }
+            if (mouse is null || !Native.IsWindowVisible(a.Taskbar) || !Native.GetWindowRect(a.Taskbar,out var bar) ||
+                a.PlaceAt(bar,Native.GetDpiForWindow(a.Taskbar)) is not { } placement) {
+                if (view?.IsVisible==true) view.Hide();
+                continue;
+            }
             if(view is null) { view=new ClockOverlay(); overlays[a.Taskbar]=view; }
-            if(!view.IsVisible) { view.Colorize(ClockOverlay.SampleBackground(a)); lastRenderSecond=-1; }
-            view.Place(a); visible.Add(a);
+            if (recolor || !view.IsVisible)
+                view.Colorize(ClockOverlay.SampleBackground(a.Taskbar,placement.Bounds,placement.Visible,bar));
+            if (!view.IsVisible) {
+                text ??= ClockFormatter.Render(now,store.Current,calendar,weather.Read(store.Current.City));
+                view.Draw(a,text,now);
+            }
+            if (!view.Place(a.Taskbar,placement)) {
+                view.Hide();
+                continue;
+            }
+            if (bar == a.Bar) clickable.Add(a);
         }
-        mouse?.Update(visible.ToArray());
+        mouse?.Update(clickable.ToArray());
     }
     protected override void OnExit(ExitEventArgs e)
     {
