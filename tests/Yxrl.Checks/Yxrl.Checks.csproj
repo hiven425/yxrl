@@ -8,6 +8,8 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
+    <!-- Pixel checks also run in Windows sessions with the monitor disconnected. -->
+    <RuntimeHostConfigurationOption Include="Switch.System.Windows.Media.ShouldRenderEvenWhenNoDisplayDevicesAreAvailable" Value="true" />
     <ProjectReference Include="../../src/Yxrl/Yxrl.csproj"/>
     <EmbeddedResource Include="../../src/Yxrl/App.xaml" LogicalName="CalendarTheme.xaml"/>
   </ItemGroup>

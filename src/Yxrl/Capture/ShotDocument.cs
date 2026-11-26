@@ -159,6 +159,9 @@ internal sealed class ShotDocument
         return geometry;
     }
 
+    // Unmarked PNG exports can keep the source pixels without a premultiplied-alpha render pass.
+    public BitmapSource RenderForExport() => marks.Count == 0 ? Image : Render();
+
     public BitmapSource Render(bool forOcr = false)
     {
         var drawing = new DrawingVisual();

@@ -67,7 +67,7 @@ internal static class CaptureChecks
             Console.WriteLine($"真实翻译 {options.Model}：The meeting starts at 2 PM. → {translated}");
         }
 
-        Console.WriteLine("通过：截图设置兼容、裁剪、负坐标、标注与马赛克、PNG 回读、翻译接口与异常。");
+        Console.WriteLine("通过：截图设置兼容、裁剪、负坐标、标注与马赛克、剪贴板格式和透明度、PNG 回读、翻译接口与异常。");
     }
 
     private static void Sta(Action work)
@@ -110,6 +110,7 @@ internal static class CaptureChecks
 
     private static void CheckImages(string directory, string[] args)
     {
+        CheckClipboardImage(directory);
         var image = TestImage();
         var doc = new ShotDocument(image);
         var frame = new DesktopFrame(image, new(-420, -10, 140, 120), [new(-370, 0, -120, 95)]);
@@ -150,6 +151,8 @@ internal static class CaptureChecks
         {
             var bmp = BitmapFrame.Create(stream, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
             Check(bmp.PixelWidth == 325 && bmp.PixelHeight == 109, "PNG 原始像素尺寸");
+            new FormatConvertedBitmap(bmp, PixelFormats.Bgra32, null, 0).CopyPixels(new Int32Rect(2, 0, 1, 1), pixels, 4, 0);
+            Check(pixels.SequenceEqual(new byte[] { 47, 64, 212, 255 }), "导出的 PNG 缺少矩形标注");
         }
 
         if (!args.Contains("--ocr"))
@@ -170,6 +173,39 @@ internal static class CaptureChecks
             Check(recognized.Contains("screenshot", StringComparison.OrdinalIgnoreCase) && recognized.Contains("toolbar", StringComparison.OrdinalIgnoreCase), "示例英文识别");
             Console.WriteLine($"实图识别 {bmp.PixelWidth}×{bmp.PixelHeight}，命中 screenshot 和 toolbar，共 {recognized.Length} 字符。");
         }
+    }
+
+    private static void CheckClipboardImage(string directory)
+    {
+        byte[] expected = [41, 64, 160, 255, 41, 73, 161, 47, 0, 0, 0, 0];
+        var original = BitmapSource.Create(3, 1, 96, 96, PixelFormats.Bgra32, null, expected, 12);
+        var emptyBitmap = BitmapSource.Create(3, 1, 96, 96, PixelFormats.Bgra32, null, new byte[12], 12);
+        var data = new DataObject();
+        data.SetData(DataFormats.Bitmap, emptyBitmap);
+        Check(CaptureTools.ReadClipboardImage(data) == emptyBitmap, "纯位图剪贴板");
+
+        BitmapSource image;
+        using (var png = new MemoryStream())
+        {
+            var encoder = new PngBitmapEncoder();
+            encoder.Frames.Add(BitmapFrame.Create(original));
+            encoder.Save(png);
+            data.SetData("PNG", png, autoConvert: false);
+            image = CaptureTools.ReadClipboardImage(data) ?? throw new Exception("混合格式剪贴板没有图片");
+            Check(png.Position == png.Length, "读取图片改变了提供方的流位置");
+        }
+        var path = Path.Combine(directory, "clipboard-export.png");
+        CaptureTools.SavePng(new ShotDocument(image), path);
+        using var exported = File.OpenRead(path);
+        var frame = BitmapFrame.Create(exported, BitmapCreateOptions.None, BitmapCacheOption.OnLoad);
+        var pixels = new byte[expected.Length];
+        new FormatConvertedBitmap(frame, PixelFormats.Bgra32, null, 0).CopyPixels(pixels, 12, 0);
+        Check(pixels.SequenceEqual(expected), "剪贴板 PNG 导出丢失颜色或透明度");
+
+        using var broken = new MemoryStream([1, 2, 3]);
+        data.SetData("PNG", broken, autoConvert: false);
+        Check(CaptureTools.ReadClipboardImage(data) == emptyBitmap, "PNG 损坏时没有读取同一份剪贴板里的位图");
+        Check(CaptureTools.ReadClipboardImage(new DataObject()) is null, "空剪贴板产生了贴图");
     }
 
     private static async Task CheckTranslation()

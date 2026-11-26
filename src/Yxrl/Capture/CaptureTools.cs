@@ -66,7 +66,7 @@ internal sealed class CaptureTools : IDisposable
                     Show(selection);
                     break;
                 case ShotAction.Clipboard:
-                    if (Clipboard.GetImage() is not { } image)
+                    if (ReadClipboardImage(Clipboard.GetDataObject()) is not { } image)
                     {
                         Feedback("剪贴板中没有图片。");
                         return;
@@ -82,6 +82,34 @@ internal sealed class CaptureTools : IDisposable
         catch (Exception ex) when (ex is ExternalException or Win32Exception or InvalidOperationException or IOException or NotSupportedException)
         {
             Feedback("打开截图工具失败。" + ex.Message);
+        }
+    }
+
+    internal static BitmapSource? ReadClipboardImage(IDataObject? data)
+    {
+        if (data is null)
+            return null;
+
+        BitmapSource? ReadBitmap() =>
+            data.TryGetData(DataFormats.Bitmap, autoConvert: true, out BitmapSource? bitmap) ? bitmap : null;
+
+        // Windows can synthesize a bitmap with all alpha bytes zero from an opaque 24-bit DIB.
+        if (!data.TryGetData("PNG", autoConvert: false, out MemoryStream? png))
+            return ReadBitmap();
+
+        long position = png.Position;
+        try
+        {
+            png.Position = 0;
+            return new PngBitmapDecoder(png, BitmapCreateOptions.PreservePixelFormat, BitmapCacheOption.OnLoad).Frames[0];
+        }
+        catch (Exception ex) when (ex is FileFormatException or NotSupportedException or IOException)
+        {
+            return ReadBitmap() ?? throw new IOException("无法解码剪贴板中的 PNG 图片。", ex);
+        }
+        finally
+        {
+            png.Position = position;
         }
     }
 
@@ -135,7 +163,7 @@ internal sealed class CaptureTools : IDisposable
         try
         {
             var png = new PngBitmapEncoder();
-            png.Frames.Add(BitmapFrame.Create(image.Render()));
+            png.Frames.Add(BitmapFrame.Create(image.RenderForExport()));
             using (var stream = File.Create(tmp))
                 png.Save(stream);
             File.Move(tmp, path, true);
