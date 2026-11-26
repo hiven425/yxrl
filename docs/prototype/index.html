@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>个人日历 · Windows 交互原型</title>
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="data/lunar-days.js"></script>
+  <script defer src="model.js"></script>
+  <script defer src="icons.js"></script>
+  <script defer src="views.js"></script>
+  <script defer src="preferences.js"></script>
+  <script defer src="desktop-preview.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+  <div class="workspace">
+    <aside class="rail" aria-label="原型导航">
+      <div class="brand"><div class="brand-mark" aria-hidden="true"><span></span><strong>26</strong></div><div><h1>个人日历</h1><p>Windows 交互原型</p></div></div>
+      <nav class="nav" id="navigation" aria-label="界面导航"></nav>
+      <div class="environment">
+        <h2>演示环境</h2>
+        <label for="theme">外观<select id="theme"><option value="system">跟随系统</option><option value="light">浅色</option><option value="dark">深色</option></select></label>
+        <label for="clock-width">时钟宽度<select id="clock-width"><option value="normal">标准</option><option value="narrow">窄</option></select></label>
+        <label for="network">天气状态<select id="network"><option value="online">在线样例</option><option value="cached">离线有缓存</option><option value="empty">离线无缓存</option></select></label>
+        <button class="reset" id="reset-demo" type="button">重置演示</button>
+      </div>
+    </aside>
+    <main class="desk" id="desktop" aria-label="模拟 Windows 桌面">
+      <header class="desk-caption"><span class="caption-monitor" aria-hidden="true"></span><span>桌面预览</span><span class="caption-divider"></span><time datetime="2026-11-26">2026 / 11 / 26</time></header>
+      <button type="button" class="mobile-environment secondary" data-action="environment">演示环境</button>
+      <label class="mobile-nav">界面<select id="mobile-page" aria-label="选择原型界面"></select></label>
+      <div class="wall" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+      <div id="window-host" class="window-host"></div>
+      <footer class="taskbar" aria-label="模拟任务栏">
+        <div class="taskbar-apps" aria-hidden="true"></div>
+        <div class="tray"><button type="button" id="optional-tray" class="icon-button" hidden aria-label="日历托盘图标"></button><span class="tray-symbols" aria-hidden="true"></span><button type="button" id="tray-clock" aria-label="任务栏时钟，打开或收起月历" aria-expanded="true"><span id="tray-line1"></span><span id="tray-line2"></span></button><span class="tray-bell" aria-hidden="true"></span></div>
+      </footer>
+    </main>
+  </div>
+  <dialog id="modal"></dialog>
+  <div id="announce" class="toast" role="status" aria-live="polite"></div>
+  <noscript>启用 JavaScript 即可操作本地日历原型。</noscript>
+</body>
+</html>
