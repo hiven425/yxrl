@@ -38,7 +38,7 @@ internal sealed class SettingsStore(string directory)
     private JsonObject original = new();
     public string? ReadError { get; private set; }
     public Preferences Current { get; private set; } = new(new(), new(), null);
-    public bool CloseOnBlur => original["general"]?["closeOnBlur"]?.GetValue<bool>() ?? true;
+    public bool CloseOnOutsideClick => original["general"]?["closeOnBlur"]?.GetValue<bool>() ?? true;
     public HashSet<string> Disabled { get; private set; } = [];
     public FestivalRule[] CustomRules { get; private set; } = [];
 

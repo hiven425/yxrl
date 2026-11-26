@@ -3,7 +3,7 @@
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Title="YXRL 日详情" AutomationProperties.AutomationId="YxrlDayDetail"
         WindowStyle="None" ResizeMode="NoResize" AllowsTransparency="False" Background="Transparent"
-        ShowInTaskbar="False" ShowActivated="False" Topmost="True"
+        ShowInTaskbar="False" ShowActivated="False"
         FontFamily="Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI" FontSize="13"
         UseLayoutRounding="True" SnapsToDevicePixels="True" KeyDown="OnKey">
   <shell:WindowChrome.WindowChrome>

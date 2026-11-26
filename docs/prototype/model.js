@@ -246,6 +246,7 @@ const CalendarModel = (() => {
       theme: "system",
       scrollStart: null,
       dateReminders: [],
+      calendarPinned: false,
       calendar: {
         showLunar: true,
         showAdjustments: true,

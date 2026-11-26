@@ -72,7 +72,7 @@ const SettingsPages = (function () {
       ) +
         section(
           "窗口行为",
-          t("closeOnBlur", "失去焦点自动关闭日历窗口") +
+          t("closeOnBlur", "点击月历外自动收起") +
             t("closeRelated", "关闭日历时同时关闭其他窗口") +
             t("rememberPosition", "记忆上次日历位置"),
         ) +

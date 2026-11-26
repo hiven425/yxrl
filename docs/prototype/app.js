@@ -31,14 +31,39 @@
     wheelDistance = 0;
   const initialHash = location.hash.slice(1);
   const themeFromSystem = matchMedia("(prefers-color-scheme: dark)");
+  const dateMenu = $("#date-reminder-menu");
   const dateReminderPreview = ReminderPreview.connect({
-    host, dialog, menu: $("#date-reminder-menu"), popup: $("#date-reminder-popup"),
+    host, dialog, menu: dateMenu, popup: $("#date-reminder-popup"),
     showDialog: (title, body) => showDialog(simpleDialog(title, body)),
     entries: () => state.dateReminders,
     now: () => new Date(M.today + "T" + tick().stamp).getTime(),
     refresh: render,
     locked: () => locked
   });
+  let pointer = null,
+    draggingCalendar = false,
+    leaveTimer;
+
+  function canAutoDismiss() {
+    return ["month", "day"].includes(page) && !state.calendarPinned && !draggingCalendar &&
+      !dialog.open && dateMenu.hidden;
+  }
+  function isOverCalendar(target) {
+    return !!target?.closest(".month-window,.detail-window");
+  }
+  function updateLeaveTimer() {
+    const over = pointer && isOverCalendar(document.elementFromPoint(pointer.x, pointer.y));
+    if (!canAutoDismiss() || over) {
+      clearTimeout(leaveTimer);
+      leaveTimer = undefined;
+    } else if (leaveTimer === undefined) {
+      leaveTimer = setTimeout(() => {
+        leaveTimer = undefined;
+        if (canAutoDismiss() && (!pointer || !isOverCalendar(document.elementFromPoint(pointer.x, pointer.y))))
+          closeCalendar();
+      }, 5000);
+    }
+  }
 
   function announce(message) {
     clearTimeout(toastTimer);
@@ -194,6 +219,7 @@
   function updateClock() {
     const { stamp } = tick(),
       p = M.partsFor(state, stamp);
+    updateLeaveTimer();
     dateReminderPreview.tick(new Date(M.today + "T" + stamp).getTime());
     const lines = locked
       ? [p.short, M.displayDate(M.today)]
@@ -255,6 +281,7 @@
   function showDialog(html, focusSelector) {
     dialog.innerHTML = html;
     if (!dialog.open) dialog.showModal();
+    updateLeaveTimer();
     if (focusSelector) dialog.querySelector(focusSelector)?.focus();
   }
   function simpleDialog(title, body) {
@@ -560,6 +587,13 @@
     showDialog(simpleDialog("命令行默认分类", body));
   }
   const actions = {
+    "calendar-pin": () => {
+      state.calendarPinned = !state.calendarPinned;
+      const pin = $('[data-action="calendar-pin"]');
+      pin.setAttribute("aria-pressed", String(state.calendarPinned));
+      pin.title = state.calendarPinned ? "取消固定月历" : "钉住月历";
+      updateLeaveTimer();
+    },
     "close-day": closeDay,
     return: () => {
       otherWindow = null;
@@ -658,17 +692,7 @@
 
   document.addEventListener("click", (event) => {
     const btn = event.target.closest("button");
-    if (!btn) {
-      if (
-        !dialog.open &&
-        event.target.closest(".desk") &&
-        !event.target.closest(".window-host,.mobile-nav") &&
-        state.general.closeOnBlur &&
-        ["month", "day"].includes(page)
-      )
-        closeCalendar();
-      return;
-    }
+    if (!btn) return;
     const d = btn.dataset;
     if (btn === tray || btn.id === "optional-tray") {
       if (page === "editor") {
@@ -884,9 +908,29 @@
     if (size) calendarSize = size;
     placeCalendar();
   });
-  window.addEventListener("blur", () => {
-    if (!dialog.open && state.general.closeOnBlur && ["month", "day"].includes(page)) closeCalendar();
+  document.addEventListener("pointermove", event => {
+    pointer = { x: event.clientX, y: event.clientY };
+    updateLeaveTimer();
   });
+  document.documentElement.addEventListener("pointerleave", () => {
+    pointer = null;
+    updateLeaveTimer();
+  });
+  document.addEventListener("pointerdown", event => {
+    const target = event.target;
+    pointer = { x: event.clientX, y: event.clientY };
+    draggingCalendar = !!target.closest(".month-window [data-resize],.month-hero");
+    if (canAutoDismiss() && state.general.closeOnBlur && !isOverCalendar(target) &&
+        target.closest(".desk") && !target.closest("#tray-clock,#optional-tray,.mobile-nav")) closeCalendar();
+    updateLeaveTimer();
+  });
+  for (const name of ["pointerup", "pointercancel"]) {
+    window.addEventListener(name, () => {
+      draggingCalendar = false;
+      updateLeaveTimer();
+    });
+  }
+  dialog.addEventListener("close", updateLeaveTimer);
   themeFromSystem.addEventListener("change", paintTheme);
   window.addEventListener("resize", () => {
     updateClock();

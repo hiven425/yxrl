@@ -2,11 +2,11 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
-using System.Windows.Threading;
 using Yxrl.Desktop;
 
 namespace Yxrl.Views;
@@ -15,7 +15,7 @@ internal partial class CalendarWindow : Window
 {
     private static readonly Size DefaultSize = new(412, 566);
     private static readonly Size MinimumSize = new(344, 460);
-    private const int WmSizing = 0x0214, WmExitSizeMove = 0x0232;
+    private const int WmSizing = 0x0214, WmEnterSizeMove = 0x0231, WmExitSizeMove = 0x0232;
 
     private readonly SettingsStore store;
     private readonly CalendarService calendar;
@@ -52,13 +52,14 @@ internal partial class CalendarWindow : Window
             Dispatcher.InvokeAsync(Dismiss);
         };
         LocationChanged += (_, _) => PositionDetails();
+        MouseEnter += (_, _) => leaveTimeout.Reset();
     }
 
     protected override void OnSourceInitialized(EventArgs e)
     {
         base.OnSourceInitialized(e);
-        var hwnd = new WindowInteropHelper(this).Handle;
-        HwndSource.FromHwnd(hwnd)?.AddHook(ResizeMessage);
+        calendarHandle = new WindowInteropHelper(this).Handle;
+        HwndSource.FromHwnd(calendarHandle)?.AddHook(ResizeMessage);
         ApplyChrome();
     }
 
@@ -103,7 +104,10 @@ internal partial class CalendarWindow : Window
 
     private nint ResizeMessage(nint hwnd, int message, nint wParam, nint lParam, ref bool handled)
     {
-        if (message == WmSizing && CalendarArea.HasArea) {
+        if (message == WmEnterSizeMove) {
+            resizing = true;
+            leaveTimeout.Reset();
+        } else if (message == WmSizing && CalendarArea.HasArea) {
             if (resizeStart is null && Native.GetWindowRect(hwnd, out var current)) resizeStart = current;
             var inset = FrameInset(hwnd);
             var allowed = ExpandForFrame(CalendarArea, inset);
@@ -114,9 +118,12 @@ internal partial class CalendarWindow : Window
                 handled = true;
                 return 1;
             }
-        } else if (message == WmExitSizeMove && resizeStart is { } start) {
+        } else if (message == WmExitSizeMove) {
+            resizing = false;
+            var start = resizeStart;
             resizeStart = null;
-            if (Native.GetWindowRect(hwnd, out var end) && (end.Width != start.Width || end.Height != start.Height)) {
+            if (start is { } original && Native.GetWindowRect(hwnd, out var end) &&
+                (end.Width != original.Width || end.Height != original.Height)) {
                 var visible = TrimFrame(end, FrameInset(hwnd));
                 double scale = VisualTreeHelper.GetDpi(this).DpiScaleX;
                 preferredSize = new(visible.Width / scale, visible.Height / scale);
@@ -138,6 +145,7 @@ internal partial class CalendarWindow : Window
     public void Present(ClockAnchor? anchor, bool resetDate = true)
     {
         presented = false;
+        leaveTimeout.Reset();
         HideDetails();
         if (resetDate) vm.Select(DateOnly.FromDateTime(DateTime.Now));
         RenderMonth();
@@ -147,18 +155,20 @@ internal partial class CalendarWindow : Window
         if (!visibleBounds.HasArea) return;
         var initialInset = FrameInset(hwnd);
         var outer = ExpandForFrame(visibleBounds, initialInset);
-        Native.SetWindowPos(hwnd, Native.Topmost, outer.Left, outer.Top, outer.Width, outer.Height, Native.NoActivate);
+        presented = true;
+        var order = IsPinned ? Native.Topmost : 0;
+        Native.SetWindowPos(hwnd, order, outer.Left, outer.Top, outer.Width, outer.Height, Native.NoActivate);
         if (!IsVisible) Show();
         var actualInset = FrameInset(hwnd);
         if (actualInset != initialInset) {
             visibleBounds = Placement(anchor, hwnd);
             outer = ExpandForFrame(visibleBounds, actualInset);
         }
-        Native.SetWindowPos(hwnd, Native.Topmost, outer.Left, outer.Top, outer.Width, outer.Height, Native.Show);
+        Native.SetWindowPos(hwnd, order, outer.Left, outer.Top, outer.Width, outer.Height, Native.Show);
         Native.SetForegroundWindow(hwnd);
         Activate();
         Focus();
-        presented = true;
+        PollPointer();
     }
 
     private PixelRect Placement(ClockAnchor? anchor, nint hwnd)
@@ -215,17 +225,8 @@ internal partial class CalendarWindow : Window
         MaxHeight = area.Height / scale + extraH;
     }
 
-    public void Dismiss() { presented = false; CloseReminderMenu(); HideDetails(); Hide(); }
-    public void Finish() { presented = false; CloseReminderMenu(); HideDetails(); Close(); }
-
-    private void OnDeactivated(object? sender, EventArgs e)
-    {
-        if (!presented || !store.CloseOnBlur) return;
-        // Activation can move between the two windows before the dispatcher returns to idle.
-        Dispatcher.InvokeAsync(() => {
-            if (presented && store.CloseOnBlur && !IsManagingReminder && !IsActive && details?.IsActive != true) Dismiss();
-        }, DispatcherPriority.Background);
-    }
+    public void Dismiss() { presented = false; leaveTimeout.Reset(); CloseReminderMenu(); HideDetails(); Hide(); }
+    public void Finish() { presented = false; leaveTimeout.Reset(); CloseReminderMenu(); HideDetails(); Close(); }
 
     private void SettingsClick(object sender, RoutedEventArgs e) => openSettings(0);
     private void WeatherClick(object sender, RoutedEventArgs e) => openSettings(2);
@@ -320,8 +321,8 @@ internal partial class CalendarWindow : Window
         if (!IsVisible || resizeArea.Width < 3 || !Native.GetWindowRect(hwnd, out var monthOuter))
             return;
         if (details is null) {
-            details = new(CloseDetails) { Owner = this };
-            details.Deactivated += OnDeactivated;
+            details = new(CloseDetails) { Owner = this, Topmost = IsPinned };
+            details.MouseEnter += (_, _) => leaveTimeout.Reset();
             details.Closing += (_, e) => {
                 if (!presented) return;
                 e.Cancel = true;
@@ -424,7 +425,7 @@ internal partial class CalendarWindow : Window
         }
         switch (e.Key) {
             case Key.Enter: case Key.Space:
-                if (Keyboard.FocusedElement is Button btn && !AutomationProperties.GetAutomationId(btn).StartsWith("Day-")) return;
+                if (Keyboard.FocusedElement is ButtonBase btn && !AutomationProperties.GetAutomationId(btn).StartsWith("Day-")) return;
                 ToggleDetails(vm.Selected); break;
             case Key.Left: Select(vm.Selected.AddDays(-1)); break; case Key.Right: Select(vm.Selected.AddDays(1)); break;
             case Key.Up: Select(vm.Selected.AddDays(-7)); break; case Key.Down: Select(vm.Selected.AddDays(7)); break;

@@ -334,6 +334,14 @@ svg {
 .window-host > * {
   pointer-events: auto;
 }
+.month-actions {
+  display: flex;
+  gap: 3px;
+}
+.month-actions [aria-pressed="true"] {
+  background: var(--accent-fill);
+  color: var(--accent);
+}
 body:is(
     [data-page="styles"],
     [data-page="festivals"],

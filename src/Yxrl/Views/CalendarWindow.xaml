@@ -2,8 +2,8 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="clr-namespace:Yxrl.Views"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework" Title="YXRL 月历" AutomationProperties.AutomationId="YxrlFlyout"
         WindowStyle="None" ResizeMode="CanResize" AllowsTransparency="False" Background="Transparent"
-        ShowInTaskbar="False" Topmost="True" FontFamily="Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI" FontSize="13" UseLayoutRounding="True"
-        SnapsToDevicePixels="True" SizeChanged="ScaleContent" KeyDown="OnKey" Deactivated="OnDeactivated">
+        ShowInTaskbar="False" FontFamily="Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI" FontSize="13" UseLayoutRounding="True"
+        SnapsToDevicePixels="True" SizeChanged="ScaleContent" KeyDown="OnKey">
   <shell:WindowChrome.WindowChrome>
     <shell:WindowChrome CaptionHeight="0" ResizeBorderThickness="8" CornerRadius="12" GlassFrameThickness="-1" UseAeroCaptionButtons="False"/>
   </shell:WindowChrome.WindowChrome>
@@ -147,6 +147,45 @@
               <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center" Margin="8,0,0,0">
                 <Button x:Name="DetailToggleButton" Click="DetailToggleClick" Padding="7,4" MinHeight="28"
                         Foreground="{DynamicResource Accent}" FontSize="12" ToolTip="展开或收起当日详情" Margin="0,0,2,0"/>
+                <ToggleButton x:Name="PinButton" Width="30" Height="30" Margin="0,0,2,0"
+                              AutomationProperties.AutomationId="CalendarPin" AutomationProperties.Name="固定月历"
+                              Checked="PinChanged" Unchecked="PinChanged" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="15">
+                  <ToggleButton.Style>
+                    <Style TargetType="ToggleButton">
+                      <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
+                      <Setter Property="ToolTip" Value="钉住月历"/>
+                      <Setter Property="Content" Value="&#xE718;"/>
+                      <Setter Property="Cursor" Value="Hand"/>
+                      <Setter Property="Template">
+                        <Setter.Value>
+                          <ControlTemplate TargetType="ToggleButton">
+                            <Border x:Name="Box" Background="Transparent" BorderBrush="Transparent" BorderThickness="1" CornerRadius="6">
+                              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                              <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Box" Property="Background" Value="{DynamicResource Hot}"/>
+                              </Trigger>
+                              <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                              </Trigger>
+                              <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Box" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+                              </Trigger>
+                            </ControlTemplate.Triggers>
+                          </ControlTemplate>
+                        </Setter.Value>
+                      </Setter>
+                      <Style.Triggers>
+                        <Trigger Property="IsChecked" Value="True">
+                          <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+                          <Setter Property="Content" Value="&#xE842;"/>
+                          <Setter Property="ToolTip" Value="取消固定月历"/>
+                        </Trigger>
+                      </Style.Triggers>
+                    </Style>
+                  </ToggleButton.Style>
+                </ToggleButton>
                 <Button x:Name="SettingsButton" Style="{StaticResource IconButton}" Width="30" Height="30" Click="SettingsClick"
                         AutomationProperties.Name="时钟设置" ToolTip="打开设置" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="15" Content="&#xE713;"/>
               </StackPanel>

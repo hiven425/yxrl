@@ -65,7 +65,7 @@ internal partial class CalendarWindow
         };
         menu.Closed += (_, _) => {
             if (openDateMenu == menu) openDateMenu = null;
-            OnDeactivated(this, EventArgs.Empty);
+            leaveTimeout.Reset();
         };
         button.ContextMenu = menu;
     }
@@ -79,6 +79,7 @@ internal partial class CalendarWindow
             if (editor.ShowDialog() == true) Select(editor.ResultDate);
         } finally {
             reminderEditor = null;
+            leaveTimeout.Reset();
         }
     }
 

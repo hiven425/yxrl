@@ -25,6 +25,7 @@ const Icons = (() => {
     partly:
       '<g stroke="#bb790b" fill="#ffce65"><circle cx="15.4" cy="8.4" r="3.8"/><path d="M15.4 1v1.8M22.7 8.4h-1.6M20.7 3.1l-1.2 1.2M10.2 3.2l1.2 1.2"/></g><path d="M5.5 19h11a3.6 3.6 0 1 0-.6-7.1 5.5 5.5 0 0 0-10.4-.6 3.9 3.9 0 0 0 0 7.7Z" fill="#eaf4fd" stroke="#6d8fa9"/>',
     pin: '<path d="M19 10c0 4-7 11-7 11s-7-7-7-11a7 7 0 0 1 14 0Z"/><circle cx="12" cy="10" r="2"/>',
+    pushpin: '<path d="m14 3 7 7-3 1-4 4v3l-2 1-3-3-5 5-1-1 5-5-3-3 1-2h3l4-4z"/>',
     bell: '<path d="M5 17h14c-1.4-1.8-2-3.2-2-6a5 5 0 0 0-10 0c0 2.8-.7 4.2-2 6Zm5 2a2 2 0 0 0 4 0"/>',
     monitor: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8m-4-4v4"/>',
     wifi: '<path d="M2.5 8a15 15 0 0 1 19 0M6 12a9.7 9.7 0 0 1 12 0m-9 4a4.8 4.8 0 0 1 6 0"/><circle cx="12" cy="19" r=".8"/>',

@@ -52,6 +52,7 @@ public partial class App : Application
         var reminders = new ReminderStore(directory);
         reminders.Load();
         panel=new(store,calendar,weather,reminders,section=>OpenSettings(section));
+        panel.IsVisibleChanged += (_, _) => mouse?.ObserveDesktopClicks(panel.IsVisible);
         reminderDelivery = new(reminders, () => ActiveAnchor?.Taskbar ?? Native.FindWindow("Shell_TrayWnd", null));
         listener=ThreadPool.RegisterWaitForSingleObject(openSignal,(_,_)=>Dispatcher.BeginInvoke(()=>OpenSettings()),null,Timeout.Infinite,false);
         SystemEvents.UserPreferenceChanged+=PreferenceChanged;
@@ -75,7 +76,7 @@ public partial class App : Application
         if (panel.FocusReminderEditor()) return;
         if (settingsWindow is not null) { settingsWindow.SelectSection(section); return; }
         bool resumeDate = panel.IsVisible;
-        panel.Dismiss();
+        if (!panel.IsPinned) panel.Dismiss();
         settingsWindow = new SettingsWindow(store, calendar, weather, ApplySettings,
             () => panel.Present(ActiveAnchor, resetDate: !resumeDate), Shutdown);
         settingsWindow.Closed += (_, _) => settingsWindow = null;
@@ -84,10 +85,15 @@ public partial class App : Application
     }
     private void ApplySettings()
     {
-        if(store.Current.Clock.Enabled && mouse is null) {
-            try { mouse=new ClockMouse(a=>Dispatcher.BeginInvoke(()=>ClickClock(a))); inputError=null; }
+        if(mouse is null) {
+            try {
+                mouse=new ClockMouse(a=>Dispatcher.BeginInvoke(()=>ClickClock(a)),
+                    point=>Dispatcher.BeginInvoke(()=>panel.HandleDesktopClick(point)));
+                mouse.ObserveDesktopClicks(panel.IsVisible);
+                inputError=null;
+            }
             catch(Win32Exception ex) { inputError=ex.Message; }
-        } else if(!store.Current.Clock.Enabled && mouse is not null) { mouse.Dispose(); mouse=null; }
+        }
         nextScan=DateTime.MinValue;
         nextWeather=DateTime.MinValue;
         lastRenderSecond=-1;
@@ -99,7 +105,7 @@ public partial class App : Application
     }
     private void ClickClock(ClockAnchor anchor)
     {
-        if(stopping || mouse is null || !detected.Contains(anchor)) return;
+        if(stopping || mouse is null || !store.Current.Clock.Enabled || !detected.Contains(anchor)) return;
         if (panel.FocusReminderEditor()) return;
         if (settingsWindow is not null) {
             if (!settingsWindow.IsEnabled) { settingsWindow.BringForward(); return; }
@@ -116,6 +122,7 @@ public partial class App : Application
             lastPrimary=primary; nextScan=DateTime.MinValue;
         }
         if(!scanning && utc>=nextScan) Scan();
+        if (panel.IsVisible) panel.PollPointer();
         RefreshVisible(now);
         var second=now.Ticks/TimeSpan.TicksPerSecond;
         if(lastRenderSecond!=second) {
@@ -179,7 +186,7 @@ public partial class App : Application
         ClockText? text = null;
         foreach(var a in detected) {
             overlays.TryGetValue(a.Taskbar,out var view);
-            if (mouse is null || !Native.IsWindowVisible(a.Taskbar) || !Native.GetWindowRect(a.Taskbar,out var bar) ||
+            if (mouse is null || !store.Current.Clock.Enabled || !Native.IsWindowVisible(a.Taskbar) || !Native.GetWindowRect(a.Taskbar,out var bar) ||
                 a.PlaceAt(bar,Native.GetDpiForWindow(a.Taskbar)) is not { } placement) {
                 if (view?.IsVisible==true) view.Hide();
                 continue;

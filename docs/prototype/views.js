@@ -140,7 +140,7 @@ const CalendarViews = (function () {
               .join("")
           : emptyItems()
       }</div>
-      <footer class="fly-foot"><button type="button" class="primary" data-action="add">${icon("plus", 16)} 添加事项</button>${button("settings", "打开设置", "settings")}</footer>
+      <footer class="fly-foot"><button type="button" class="primary" data-action="add">${icon("plus", 16)} 添加事项</button><div class="month-actions"><button type="button" class="icon-button" data-action="calendar-pin" aria-label="固定月历" aria-pressed="${state.calendarPinned}" title="${state.calendarPinned ? "取消固定月历" : "钉住月历"}">${icon("pushpin", 17)}</button>${button("settings", "打开设置", "settings")}</div></footer>
       </div>${resizeGrips()}</section>`;
   }
   function day(state) {
