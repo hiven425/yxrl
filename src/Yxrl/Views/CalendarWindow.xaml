@@ -2,7 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="clr-namespace:Yxrl.Views"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework" Title="YXRL 月历" AutomationProperties.AutomationId="YxrlFlyout"
         WindowStyle="None" ResizeMode="CanResize" AllowsTransparency="False" Background="Transparent"
-        ShowInTaskbar="False" FontFamily="Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI" FontSize="13" UseLayoutRounding="True"
+        ShowInTaskbar="False" Topmost="True" FontFamily="Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI" FontSize="13" UseLayoutRounding="True"
         SnapsToDevicePixels="True" SizeChanged="ScaleContent" KeyDown="OnKey">
   <shell:WindowChrome.WindowChrome>
     <shell:WindowChrome CaptionHeight="0" ResizeBorderThickness="8" CornerRadius="12" GlassFrameThickness="-1" UseAeroCaptionButtons="False"/>

@@ -13,12 +13,7 @@ internal partial class CalendarWindow
     public bool IsPinned => PinButton.IsChecked == true;
     private bool CanAutoDismiss => presented && IsVisible && !IsPinned && !resizing && !IsManagingReminder;
 
-    private void PinChanged(object sender, RoutedEventArgs e)
-    {
-        Topmost = IsPinned;
-        if (details is not null) details.Topmost = IsPinned;
-        leaveTimeout.Reset();
-    }
+    private void PinChanged(object sender, RoutedEventArgs e) => leaveTimeout.Reset();
 
     public void PollPointer()
     {

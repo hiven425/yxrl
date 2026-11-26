@@ -156,15 +156,15 @@ internal partial class CalendarWindow : Window
         var initialInset = FrameInset(hwnd);
         var outer = ExpandForFrame(visibleBounds, initialInset);
         presented = true;
-        var order = IsPinned ? Native.Topmost : 0;
-        Native.SetWindowPos(hwnd, order, outer.Left, outer.Top, outer.Width, outer.Height, Native.NoActivate);
+        Native.SetWindowPos(hwnd, Native.Topmost, outer.Left, outer.Top, outer.Width, outer.Height, Native.NoActivate);
         if (!IsVisible) Show();
         var actualInset = FrameInset(hwnd);
         if (actualInset != initialInset) {
             visibleBounds = Placement(anchor, hwnd);
             outer = ExpandForFrame(visibleBounds, actualInset);
         }
-        Native.SetWindowPos(hwnd, order, outer.Left, outer.Top, outer.Width, outer.Height, Native.Show);
+        // Showing the flyout above other windows must work even if Windows denies activation.
+        Native.SetWindowPos(hwnd, Native.Topmost, outer.Left, outer.Top, outer.Width, outer.Height, Native.Show | Native.NoActivate);
         Native.SetForegroundWindow(hwnd);
         Activate();
         Focus();
@@ -321,7 +321,7 @@ internal partial class CalendarWindow : Window
         if (!IsVisible || resizeArea.Width < 3 || !Native.GetWindowRect(hwnd, out var monthOuter))
             return;
         if (details is null) {
-            details = new(CloseDetails) { Owner = this, Topmost = IsPinned };
+            details = new(CloseDetails) { Owner = this };
             details.MouseEnter += (_, _) => leaveTimeout.Reset();
             details.Closing += (_, e) => {
                 if (!presented) return;
