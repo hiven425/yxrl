@@ -22,6 +22,7 @@ internal partial class CalendarWindow : Window
     private readonly WeatherService weather;
     private readonly MonthViewModel vm;
     private readonly Action<int> openSettings;
+    private readonly Capture.CaptureTools captureTools;
     private DateOnly today;
     private bool presented;
     private bool backdropActive;
@@ -37,13 +38,14 @@ internal partial class CalendarWindow : Window
         : resizeArea with { Left = resizeArea.Left + detailWidth + detailGap };
 
     public CalendarWindow(SettingsStore store, CalendarService calendar, WeatherService weather,
-        ReminderStore reminderStore, Action<int> openSettings)
+        ReminderStore reminderStore, Action<int> openSettings, Capture.CaptureTools captureTools)
     {
         InitializeComponent();
         Width = DefaultSize.Width;
         Height = DefaultSize.Height;
         (this.store, this.calendar, this.weather, this.openSettings) = (store, calendar, weather, openSettings);
         this.reminderStore = reminderStore;
+        this.captureTools = captureTools;
         vm = new(calendar);
         vm.Select(DateOnly.FromDateTime(DateTime.Now));
         Closing += (_, e) => {
@@ -61,6 +63,26 @@ internal partial class CalendarWindow : Window
         calendarHandle = new WindowInteropHelper(this).Handle;
         HwndSource.FromHwnd(calendarHandle)?.AddHook(ResizeMessage);
         ApplyChrome();
+    }
+
+    private void CaptureMenuClick(object sender, RoutedEventArgs e)
+    {
+        var menu = CaptureEntry.ContextMenu;
+        foreach (MenuItem item in menu.Items)
+            item.IsEnabled = item.Tag is null || captureTools.Options.Enabled;
+        menu.PlacementTarget = CaptureEntry;
+        menu.Placement = PlacementMode.Top;
+        menu.IsOpen = true;
+    }
+    private void CaptureCommand(object sender, RoutedEventArgs e)
+    {
+        CaptureEntry.ContextMenu.IsOpen = false;
+        if (((MenuItem)sender).Tag is not string name) {
+            openSettings(CaptureSettingsPage.Section);
+            return;
+        }
+        var action = Enum.Parse<Capture.ShotAction>(name);
+        Dispatcher.InvokeAsync(() => captureTools.Invoke(action), System.Windows.Threading.DispatcherPriority.ContextIdle);
     }
 
     internal void RefreshTheme()

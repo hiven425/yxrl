@@ -29,7 +29,11 @@ internal sealed record City(long Id, string Name, double Latitude, double Longit
     internal bool HasValidLocation => !string.IsNullOrWhiteSpace(Name) && double.IsFinite(Latitude) && Math.Abs(Latitude) <= 90
         && double.IsFinite(Longitude) && Math.Abs(Longitude) <= 180;
 }
-internal sealed record Preferences(ClockOptions Clock, CalendarOptions Calendar, City? City, bool DirectWeatherConnection = false);
+internal sealed record Preferences(ClockOptions Clock, CalendarOptions Calendar, City? City, bool DirectWeatherConnection = false)
+{
+    public Capture.CaptureOptions Capture { get; init; } = new();
+    public Capture.TranslationOptions Translation { get; init; } = new();
+}
 internal sealed class SettingsStore(string directory)
 {
     internal static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true };
@@ -70,7 +74,10 @@ internal sealed class SettingsStore(string directory)
             if (custom.Any(x => x is null || !x.Valid)) throw new JsonException("自定义节日规则无效");
             Disabled = disabled.ToHashSet();
             CustomRules = custom;
-            Current = new(clock, calendar, city, Bool(doc["weather"], "directConnection", false));
+            var capture = doc["capture"]?.Deserialize<Capture.CaptureOptions>(Json) ?? new();
+            var translation = doc["translation"]?.Deserialize<Capture.TranslationOptions>(Json) ?? new();
+            capture.Validate(); translation.Validate();
+            Current = new(clock, calendar, city, Bool(doc["weather"], "directConnection", false)) { Capture = capture, Translation = translation };
             original = doc;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException or FormatException)
@@ -90,6 +97,7 @@ internal sealed class SettingsStore(string directory)
         if (ReadError is not null) throw new IOException(ReadError);
         ClockFormatter.Validate(next.Clock);
         ValidateCalendar(next.Calendar);
+        next.Capture.Validate(); next.Translation.Validate();
         var doc = (JsonObject)original.DeepClone();
         JsonObject Section(string name) => (JsonObject)(doc[name] ??= new JsonObject());
         doc["schemaVersion"] = 1;
@@ -105,6 +113,15 @@ internal sealed class SettingsStore(string directory)
         var weather = Section("weather");
         weather["location"] = JsonSerializer.SerializeToNode(next.City, Json);
         weather["directConnection"] = next.DirectWeatherConnection;
+        var capture = Section("capture");
+        capture["enabled"] = next.Capture.Enabled;
+        var shortcuts = (JsonObject)(capture["shortcuts"] ??= new JsonObject());
+        foreach (var action in Enum.GetValues<Capture.ShotAction>())
+            shortcuts[JsonNamingPolicy.CamelCase.ConvertName(action.ToString())] = next.Capture.Shortcuts[action];
+        var translation = Section("translation");
+        translation["baseUrl"] = next.Translation.BaseUrl;
+        translation["model"] = next.Translation.Model;
+        translation["targetLanguage"] = next.Translation.TargetLanguage;
         Directory.CreateDirectory(DirectoryPath);
         WriteAtomic(FilePath, doc.ToJsonString(Json));
         original = doc;

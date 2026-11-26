@@ -13,17 +13,30 @@
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>app.ico</ApplicationIcon>
-    <Version>0.2.7</Version>
+    <Version>0.3.0</Version>
     <Product>YXRL 个人日历</Product>
     <Description>任务栏时钟与中文月历</Description>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="lunar-csharp" Version="[1.6.9]" />
+    <PackageReference Include="RapidOcrNet" Version="[4.2.0]" GeneratePathProperty="true" ExcludeAssets="contentFiles;build;buildTransitive" />
     <InternalsVisibleTo Include="Yxrl.Checks" />
     <EmbeddedResource Include="Calendar/CalendarData.json" />
+    <EmbeddedResource Include="Capture/Models/*.onnx;Capture/Models/ppocrv5_dict.txt;$(PkgRapidOcrNet)/models/v5/ch_PP-OCRv5_mobile_det.onnx;$(PkgRapidOcrNet)/models/v5/ch_PP-LCNet_x0_25_textline_ori_cls_mobile.onnx" LogicalName="Ocr.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="Capture/Models/LICENSE-PaddleOCR.txt" LogicalName="License.PaddleOCR" />
+    <EmbeddedResource Include="Capture/Models/LICENSE-RapidOCR.txt" LogicalName="License.RapidOCR" />
+    <EmbeddedResource Include="$(NuGetPackageRoot)/microsoft.ml.onnxruntime/1.29.0/LICENSE" LogicalName="License.OnnxRuntime" />
+    <EmbeddedResource Include="$(NuGetPackageRoot)/microsoft.ml.onnxruntime/1.29.0/ThirdPartyNotices.txt" LogicalName="License.OnnxNotices" />
+    <EmbeddedResource Include="$(NuGetPackageRoot)/skiasharp/3.119.1/LICENSE.txt" LogicalName="License.SkiaSharp" />
+    <EmbeddedResource Include="$(NuGetPackageRoot)/clipper2/2.0.0/License.txt" LogicalName="License.Clipper" />
     <EmbeddedResource Include="$(NuGetPackageRoot)/lunar-csharp/1.6.9/LICENSE" LogicalName="License.Lunar" />
     <EmbeddedResource Include="$(NuGetPackageRoot)/microsoft.windowsdesktop.app.runtime.win-x64/$(BundledNETCoreAppPackageVersion)/LICENSE" LogicalName="License.Wpf" />
     <EmbeddedResource Include="$(NuGetPackageRoot)/microsoft.netcore.app.runtime.win-x64/$(BundledNETCoreAppPackageVersion)/LICENSE.TXT" LogicalName="License.Dotnet" />
     <EmbeddedResource Include="$(NuGetPackageRoot)/microsoft.netcore.app.runtime.win-x64/$(BundledNETCoreAppPackageVersion)/THIRD-PARTY-NOTICES.TXT" LogicalName="License.Notices" />
   </ItemGroup>
+  <Target Name="ExcludeOnnxImportLibraries" AfterTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(ResolvedFileToPublish.Extension)' == '.lib' And ('%(ResolvedFileToPublish.Filename)' == 'onnxruntime' Or '%(ResolvedFileToPublish.Filename)' == 'onnxruntime_providers_shared')" />
+    </ItemGroup>
+  </Target>
 </Project>

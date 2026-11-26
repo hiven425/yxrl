@@ -11,6 +11,8 @@ namespace Yxrl.Views;
 internal partial class SettingsPanel : UserControl
 {
     private readonly SettingsStore store;
+    private readonly Capture.CaptureTools capture;
+    public void StopRecording()=>CapturePage.StopRecording();
     private readonly CalendarService calendar;
     private readonly WeatherService weather;
     private readonly Action saved, back, quit;
@@ -29,8 +31,9 @@ internal partial class SettingsPanel : UserControl
         DependencyProperty.Register(nameof(NavigationColumns), typeof(int), typeof(SettingsPanel), new PropertyMetadata(1));
     public int NavigationColumns => (int)GetValue(NavigationColumnsProperty);
 
-    public SettingsPanel(SettingsStore store, CalendarService calendar, WeatherService weather, Action saved, Action back, Action quit)
+    public SettingsPanel(SettingsStore store, CalendarService calendar, WeatherService weather, Capture.CaptureTools capture, Action saved, Action back, Action quit)
     {
+        this.capture=capture;
         (this.store, this.calendar, this.weather, this.saved, this.back, this.quit) = (store, calendar, weather, saved, back, quit);
         InitializeComponent();
         Preset.ItemsSource = gallery.Tiles;
@@ -68,6 +71,7 @@ internal partial class SettingsPanel : UserControl
     {
         loading = true;
         var s = store.Current;
+        CapturePage.Load(s,capture);
         var c = s.Calendar;
         EnabledClock.IsChecked = s.Clock.Enabled;
         Preset.SelectedItem = gallery.Tiles.FirstOrDefault(x => x.Id == s.Clock.Preset);
@@ -107,7 +111,7 @@ internal partial class SettingsPanel : UserControl
         }
         var cal = new CalendarOptions(LunarBox.IsChecked == true, MarkBox.IsChecked == true, OutsideBox.IsChecked == true,
             Hour12.IsChecked == true, WeekBox.IsChecked == true, Math.Max(0, WeekStart.SelectedIndex), from, to);
-        return new(clock, cal, city, DirectWeather.IsChecked == true);
+        return new(clock, cal, city, DirectWeather.IsChecked == true) { Capture=CapturePage.Options, Translation=CapturePage.Translation };
     }
 
     private void SectionChanged(object sender, SelectionChangedEventArgs e)
@@ -124,7 +128,8 @@ internal partial class SettingsPanel : UserControl
         ClockPage.Visibility = Nav.SelectedIndex == 0 ? Visibility.Visible : Visibility.Collapsed;
         CalendarPage.Visibility = Nav.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
         WeatherPage.Visibility = Nav.SelectedIndex == 2 ? Visibility.Visible : Visibility.Collapsed;
-        AboutPage.Visibility = Nav.SelectedIndex == 3 ? Visibility.Visible : Visibility.Collapsed;
+        CapturePage.Visibility = Nav.SelectedIndex == CaptureSettingsPage.Section ? Visibility.Visible : Visibility.Collapsed;
+        AboutPage.Visibility = Nav.SelectedIndex == 4 ? Visibility.Visible : Visibility.Collapsed;
         LivePreview.Visibility = ClockPage.Visibility;
         BodyScroll.ScrollToTop();
     }
@@ -235,8 +240,9 @@ internal partial class SettingsPanel : UserControl
 
     private void SaveClick(object sender, RoutedEventArgs e)
     {
-        try { store.Save(Draft(true)); CancelSearch(); saved(); }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException) {
+        try { capture.Save(Draft(true),CapturePage.EditedSecret); CancelSearch(); saved(); }
+        catch (Capture.ShotBindingException ex) { SelectSection(CaptureSettingsPage.Section); CapturePage.ShowConflict(ex.Action,ex.Message); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or FormatException or System.ComponentModel.Win32Exception) {
             saveError = ex.Message;
             Tick(DateTime.Now);
         }
@@ -283,7 +289,7 @@ internal partial class SettingsPanel : UserControl
     private void ReadLicenses(object sender, RoutedEventArgs e)
     {
         if (LicenseText.Text.Length != 0) return;
-        string[] resources = ["License.Lunar", "License.Wpf", "License.Dotnet", "License.Notices"];
+        string[] resources = ["License.Lunar", "License.PaddleOCR", "License.RapidOCR", "License.OnnxRuntime", "License.OnnxNotices", "License.SkiaSharp", "License.Clipper", "License.Wpf", "License.Dotnet", "License.Notices"];
         LicenseText.Text = string.Join("\n\n", resources.Select(name => {
             using var stream = typeof(App).Assembly.GetManifestResourceStream(name)!;
             using var reader = new StreamReader(stream);

@@ -31,6 +31,7 @@ public partial class App : Application
     private WeatherService weather=null!;
     private CalendarWindow panel=null!;
     private ReminderDelivery? reminderDelivery;
+    private Capture.CaptureTools capture=null!;
     private SettingsWindow? settingsWindow;
     private CancellationTokenSource? weatherRequest;
     private long? weatherCity;
@@ -51,7 +52,8 @@ public partial class App : Application
         store=new(directory); store.Load(); calendar=new(store); weather=new(directory); weather.Load();
         var reminders = new ReminderStore(directory);
         reminders.Load();
-        panel=new(store,calendar,weather,reminders,section=>OpenSettings(section));
+        capture=new(store,()=>OpenSettings(CaptureSettingsPage.Section));
+        panel=new(store,calendar,weather,reminders,section=>OpenSettings(section),capture);
         panel.IsVisibleChanged += (_, _) => mouse?.ObserveDesktopClicks(panel.IsVisible);
         reminderDelivery = new(reminders, () => ActiveAnchor?.Taskbar ?? Native.FindWindow("Shell_TrayWnd", null));
         listener=ThreadPool.RegisterWaitForSingleObject(openSignal,(_,_)=>Dispatcher.BeginInvoke(()=>OpenSettings()),null,Timeout.Infinite,false);
@@ -77,7 +79,7 @@ public partial class App : Application
         if (settingsWindow is not null) { settingsWindow.SelectSection(section); return; }
         bool resumeDate = panel.IsVisible;
         if (!panel.IsPinned) panel.Dismiss();
-        settingsWindow = new SettingsWindow(store, calendar, weather, ApplySettings,
+        settingsWindow = new SettingsWindow(store, calendar, weather, capture, ApplySettings,
             () => panel.Present(ActiveAnchor, resetDate: !resumeDate), Shutdown);
         settingsWindow.Closed += (_, _) => settingsWindow = null;
         UpdateStatus();
@@ -163,13 +165,14 @@ public partial class App : Application
                 overlays[id].Close(); overlays.Remove(id);
             }
             UpdateStatus(); RefreshVisible(DateTime.Now);
+            bool keyConflict = firstScan && !wantSettings && store.ReadError is null && capture.Hotkeys.Errors.Count>0;
             bool requested = firstScan && (wantSettings || store.ReadError is not null || inputError is not null || !store.Current.Clock.Enabled);
             firstScan=false;
             if (awaitingVisible && !result.Retracted) {
                 awaitingVisible=false;
                 requested |= otherClock && detected.Length==0;
             }
-            if(requested) OpenSettings();
+            if(requested || keyConflict) OpenSettings(keyConflict ? CaptureSettingsPage.Section : 0);
         } finally { scanning=false; }
     }
     private void UpdateStatus()
@@ -210,6 +213,7 @@ public partial class App : Application
     {
         stopping=true; timer?.Stop();
         if(owner) {
+            capture?.Dispose();
             reminderDelivery?.Dispose();
             SystemEvents.UserPreferenceChanged-=PreferenceChanged;
             listener?.Unregister(null); mouse?.Dispose(); weatherRequest?.Cancel(); weather?.Dispose();

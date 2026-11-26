@@ -153,7 +153,7 @@ const CapturePreview = (function createPreview() {
     r && p.x >= r.x && p.y >= r.y && p.x <= r.x + r.w && p.y <= r.y + r.h;
   const overlaps = (a, b) =>
     a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
-  function paint(g, m) {
+  function paint(g, m, offset = { x: 0, y: 0 }) {
     const a = m.points[0],
       b = m.points.at(-1),
       r = rectangle(a, b);
@@ -184,7 +184,17 @@ const CapturePreview = (function createPreview() {
       const tmp = canvas(Math.ceil(r.w / 10), Math.ceil(r.h / 10));
       tmp
         .getContext("2d")
-        .drawImage(g.canvas, r.x, r.y, r.w, r.h, 0, 0, tmp.width, tmp.height);
+        .drawImage(
+          g.canvas,
+          r.x - offset.x,
+          r.y - offset.y,
+          r.w,
+          r.h,
+          0,
+          0,
+          tmp.width,
+          tmp.height,
+        );
       g.imageSmoothingEnabled = false;
       g.drawImage(tmp, r.x, r.y, r.w, r.h);
     }
@@ -196,7 +206,7 @@ const CapturePreview = (function createPreview() {
       g = image.getContext("2d");
     g.drawImage(ed.source.image, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h);
     g.translate(-r.x, -r.y);
-    ed.marks.forEach((m) => paint(g, m));
+    ed.marks.forEach((m) => paint(g, m, r));
     const masks = ed.marks
       .filter((m) => m.kind === "mosaic")
       .map((m) => rectangle(m.points[0], m.points.at(-1)));
@@ -261,7 +271,14 @@ const CapturePreview = (function createPreview() {
     info.style.left =
       clamp(r.x * scaleX, 2, ed.layer.clientWidth - info.offsetWidth - 2) +
       "px";
-    info.style.top = Math.max(2, r.y * scaleY - info.offsetHeight - 5) + "px";
+    let infoY = r.y * scaleY - info.offsetHeight - 5;
+    if (
+      infoY < 2 ||
+      (infoY < barY + bar.offsetHeight && infoY + info.offsetHeight > barY)
+    )
+      infoY = r.y * scaleY + 4;
+    info.style.top =
+      clamp(infoY, 2, ed.layer.clientHeight - info.offsetHeight - 2) + "px";
     bar.querySelectorAll("[data-shot]").forEach((el) => {
       if (names[el.dataset.shot])
         el.setAttribute("aria-pressed", String(ed.tool === el.dataset.shot));
@@ -664,7 +681,31 @@ const CapturePreview = (function createPreview() {
         "Ctrl+Z": "undo",
         "Ctrl+Y": "redo",
       }[chord];
-    if (pin && base === " ") id = "edit-pin";
+    if (editor && !editor.pin && base === "Enter" && !editor.sel) {
+      editor.sel = { ...editor.source.window };
+      draw();
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      return;
+    }
+    const offsets = {
+      ArrowLeft: [-1, 0],
+      ArrowRight: [1, 0],
+      ArrowUp: [0, -1],
+      ArrowDown: [0, 1],
+    };
+    if (editor?.sel && !editor.pin && offsets[chord]) {
+      const [dx, dy] = offsets[chord],
+        r = editor.sel;
+      r.x = clamp(r.x + dx, 0, editor.c.width - r.w);
+      r.y = clamp(r.y + dy, 0, editor.c.height - r.h);
+      draw();
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      return;
+    }
+    if (base === " " && (pin || editor?.pin))
+      id = editor?.pin ? "apply" : "edit-pin";
     if (id) {
       ev.preventDefault();
       ev.stopImmediatePropagation();

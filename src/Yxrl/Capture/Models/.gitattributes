@@ -1,0 +1,2 @@
+*.onnx binary
+ppocrv5_dict.txt text eol=lf

@@ -29,6 +29,7 @@ var directory = Directory.CreateTempSubdirectory("yxrl-check-");
 try
 {
     ReminderChecks.Verify(directory.FullName);
+    await CaptureChecks.Run(directory.FullName,args);
     if(args.Contains("--weather")) {
         using var service=new WeatherService(directory.FullName);
         using var time=new CancellationTokenSource(TimeSpan.FromSeconds(40));

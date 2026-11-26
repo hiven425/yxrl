@@ -19,6 +19,24 @@
 
 0.2.1 会跟随任务栏收放，并复用已经识别的原时钟位置。首次启动时，Windows 展开系统任务栏后会识别一次原时间控件。自定义可试用上行 `HH:mm:ss ddd {节日}`、下行 `M月d日 {农历} 第{周数}周`，任务栏按空格优先折行，内容越长会使用越小的字号。
 
+## 截图、贴图和文字翻译
+
+按 **Ctrl+1** 冻结桌面。拖出矩形，或单击一个窗口。选区上方显示位置和像素尺寸，拖动八个手柄调整边界。工具栏提供矩形、箭头、画笔、文字和马赛克。按 Ctrl+Z 撤销、Ctrl+Y 重做、Enter 复制，或点「保存」导出原尺寸 PNG。
+
+| 操作 | 默认快捷键 | 可以在哪里用 |
+| --- | --- | --- |
+| 开始截图 | Ctrl+1 | 桌面任意应用 |
+| 钉住剪贴板图片 | Ctrl+2 | 桌面任意应用，剪贴板中需有图片 |
+| 钉住当前截图 | Ctrl+T | 已选定的截图区域 |
+| 提取文字 | Shift+C | 截图选区或贴图 |
+| 打开翻译 | Ctrl+Q | 截图选区或贴图 |
+
+贴图可同时打开多张，拖动移动，滚轮缩放，空格切换标注，Esc 关闭当前图。月历底栏的「截图工具」也提供鼠标入口。到「设置 → 截图与翻译」可修改或逐项停用快捷键，关闭总开关会释放全局快捷键。点「应用设置」生效。
+
+文字提取使用随 EXE 提供的中英文 PP-OCRv5 mobile 小模型。首次使用会在当前用户的 Yxrl 数据目录解包模型，可离线识别。识别面板保留原图和可编辑的原文，马赛克区域在识别前会遮盖。
+
+要翻译，先在同一设置页填写 OpenAI 兼容服务的 API 基础地址和模型名。可选密钥存入当前用户的 Windows 凭据管理器。在原文中选择一段文字或保留全文，选择目标语言，点击「翻译」后发送这段文字。也可从月历的「截图工具 → 粘贴文字翻译」直接输入或粘贴原文。
+
 ## 右键日期创建提醒
 
 1. 在月历中右键目标日期，点「新建提醒…」。表单会带入该日期。
@@ -43,6 +61,12 @@ YXRL 在运行期间会按设定时间弹框，月历可以收起。同一时间
 <img src="screens/windows-clock-settings.png" width="730" alt="Windows 设置窗口中的九种双行时钟预设、示例日期切换和实际时间预览">
 
 ## 本机验收
+
+0.3.0 在 Windows 11 25H2 x64 上验证了月历的截图工具菜单、设置改键与停用、全局热键冲突回滚、原像素 PNG 回读，以及选区、置顶贴图和文字窗口。给 WPF 选区输入 560 × 130 的公开样例，随包 OCR 读出「项目会议 14:30」和「Room B Design review」。对 1314 × 1089 的 PixPin 参考图，OCR 返回 483 个字符，包含 screenshot 和 toolbar。临时本机 Qwen2.5-0.5B-Instruct 实际收到选中的英文句子，返回「会议从下午2点开始。」。11 月 26 日的感恩节、10 月 10 日的补班和离线原型回归均通过。
+
+发布目录内只有 Yxrl.exe。单文件从该目录启动并向已有实例转交设置请求，退出码为 0。从该 EXE 取出的应用、模型和推理库也在干净的临时目录通过了上述 OCR 和翻译用例。
+
+本次 Windows 会话锁屏，真实桌面取像、从系统剪贴板钉图和实际按下全局快捷键仍待解锁复验。负坐标和 100%／150% 缩放下的选区像素尺寸已用自动化用例验证，当前会话只枚举到一台显示器。
 
 0.2.7 用 Windows 最大化测试窗口复现了未固定月历被遮挡的问题。修复后，月历和日详情在测试窗口前方显示，取消固定后仍可操作，点击外部可一起收起。
 
@@ -85,11 +109,13 @@ Windows 11 25H2 x64（26200.7840），屏幕缩放 150%，任务栏自动隐藏�
 
 ```powershell
 .\.tools\dotnet\dotnet.exe run --project tests/Yxrl.Checks -c Release
+.\.tools\dotnet\dotnet.exe run --project tests/Yxrl.Checks -c Release -- --ocr --capture-ui
+.\.tools\dotnet\dotnet.exe run --project tests/Yxrl.Checks -c Release -- --capture-windows
 .\.tools\dotnet\dotnet.exe run --project tests/Yxrl.Checks -c Release -- --weather --direct
 node --test docs/prototype/tests/week-range.test.cjs tests/catalog-parity.test.cjs
 .\.tools\dotnet\dotnet.exe run --project tests/Yxrl.Checks -c Release -- --taskbar
 ```
 
-锁定的历法库、.NET 运行时和 WPF 的许可文本内嵌在 EXE，可在设置中的「开源许可」查看。
+设置中的「开源许可」可查看历法库、OCR 模型和推理组件、图像处理库、.NET 运行时及 WPF 的随包许可。
 
 检验双行样式时，先打开桌面版「任务栏时钟」设置，再运行 `./tests/check-clock-gallery.ps1`。脚本从 Windows 辅助功能树读取九张卡片，列出各自实际显示的上下行。

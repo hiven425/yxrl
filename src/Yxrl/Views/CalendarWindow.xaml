@@ -147,6 +147,17 @@
               <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center" Margin="8,0,0,0">
                 <Button x:Name="DetailToggleButton" Click="DetailToggleClick" Padding="7,4" MinHeight="28"
                         Foreground="{DynamicResource Accent}" FontSize="12" ToolTip="展开或收起当日详情" Margin="0,0,2,0"/>
+                <Button x:Name="CaptureEntry" AutomationProperties.Name="截图工具" ToolTip="截图工具" Width="30" Height="30"
+                        Click="CaptureMenuClick" Style="{StaticResource IconButton}" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Content="&#xE722;">
+                  <Button.ContextMenu>
+                    <ContextMenu>
+                      <MenuItem Header="开始截图" Tag="Start" Click="CaptureCommand"/>
+                      <MenuItem Header="钉住剪贴板图片" Tag="Clipboard" Click="CaptureCommand"/>
+                      <MenuItem Header="粘贴文字翻译" Tag="Translate" Click="CaptureCommand"/>
+                      <MenuItem Header="截图与翻译设置" Click="CaptureCommand"/>
+                    </ContextMenu>
+                  </Button.ContextMenu>
+                </Button>
                 <ToggleButton x:Name="PinButton" Width="30" Height="30" Margin="0,0,2,0"
                               AutomationProperties.AutomationId="CalendarPin" AutomationProperties.Name="固定月历"
                               Checked="PinChanged" Unchecked="PinChanged" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="15">

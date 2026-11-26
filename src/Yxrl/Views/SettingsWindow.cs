@@ -12,7 +12,7 @@ internal sealed class SettingsWindow : Window
     private bool micaEnabled;
     internal SettingsPanel Page { get; }
 
-    public SettingsWindow(SettingsStore store, CalendarService calendar, WeatherService weather,
+    public SettingsWindow(SettingsStore store, CalendarService calendar, WeatherService weather, Capture.CaptureTools capture,
         Action applied, Action back, Action quit)
     {
         Title = "YXRL 设置";
@@ -25,9 +25,9 @@ internal sealed class SettingsWindow : Window
         WindowStartupLocation = WindowStartupLocation.Manual;
 
         void ReturnToMonth() { Close(); back(); }
-        Page = new SettingsPanel(store, calendar, weather, () => { applied(); ReturnToMonth(); }, ReturnToMonth, quit);
+        Page = new SettingsPanel(store, calendar, weather, capture, () => { applied(); ReturnToMonth(); }, ReturnToMonth, quit);
         Content = Page;
-        Closed += (_, _) => Page.CancelSearch();
+        Closed += (_, _) => { Page.CancelSearch(); Page.StopRecording(); };
         KeyDown += (_, e) => {
             if (e.Key == Key.Escape && !e.Handled) { e.Handled = true; ReturnToMonth(); }
         };

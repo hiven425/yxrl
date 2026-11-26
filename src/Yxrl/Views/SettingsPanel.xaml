@@ -137,6 +137,7 @@
         <ListBoxItem AutomationProperties.Name="任务栏时钟"><StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource NavGlyph}" Text="&#xE917;"/><TextBlock Text="任务栏时钟"/></StackPanel></ListBoxItem>
         <ListBoxItem AutomationProperties.Name="日历设置"><StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource NavGlyph}" Text="&#xE787;"/><TextBlock Text="日历设置"/></StackPanel></ListBoxItem>
         <ListBoxItem AutomationProperties.Name="城市与天气"><StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource NavGlyph}" Text="&#xE753;"/><TextBlock Text="城市与天气"/></StackPanel></ListBoxItem>
+        <ListBoxItem AutomationProperties.Name="截图与翻译"><StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource NavGlyph}" Text="&#xE722;"/><TextBlock Text="截图与翻译"/></StackPanel></ListBoxItem>
         <ListBoxItem AutomationProperties.Name="关于"><StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource NavGlyph}" Text="&#xE946;"/><TextBlock Text="关于"/></StackPanel></ListBoxItem>
       </ListBox>
     </Border>
@@ -270,6 +271,7 @@
             </Border>
           </StackPanel>
 
+          <local:CaptureSettingsPage x:Name="CapturePage" Visibility="Collapsed"/>
           <StackPanel x:Name="AboutPage" Visibility="Collapsed">
             <Border Style="{StaticResource GroupCard}">
               <StackPanel>

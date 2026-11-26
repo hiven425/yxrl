@@ -11,7 +11,7 @@ internal partial class CalendarWindow
     private bool resizing;
 
     public bool IsPinned => PinButton.IsChecked == true;
-    private bool CanAutoDismiss => presented && IsVisible && !IsPinned && !resizing && !IsManagingReminder;
+    private bool CanAutoDismiss => presented && IsVisible && !IsPinned && !resizing && !IsManagingReminder && CaptureEntry.ContextMenu?.IsOpen != true;
 
     private void PinChanged(object sender, RoutedEventArgs e) => leaveTimeout.Reset();
 
