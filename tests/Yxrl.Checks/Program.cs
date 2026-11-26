@@ -15,6 +15,16 @@ static void Equal<T>(T expected, T actual)
     if (!EqualityComparer<T>.Default.Equals(expected,actual)) throw new Exception($"期望 {expected}，得到 {actual}");
 }
 TaskbarChecks.Verify();
+var timeout = new PointerLeaveTimeout();
+Equal(false, timeout.ShouldDismiss(100, outside: true));
+Equal(false, timeout.ShouldDismiss(5099, outside: true));
+Equal(true, timeout.ShouldDismiss(5100, outside: true));
+Equal(false, timeout.ShouldDismiss(5101, outside: false));
+Equal(false, timeout.ShouldDismiss(6200, outside: true));
+Equal(true, timeout.ShouldDismiss(11200, outside: true));
+timeout.Reset();
+Equal(false, timeout.ShouldDismiss(11201, outside: true));
+Console.WriteLine("通过：月历指针离开 5 秒边界与重新进入后计时重置。");
 var directory = Directory.CreateTempSubdirectory("yxrl-check-");
 try
 {

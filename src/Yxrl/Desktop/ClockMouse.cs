@@ -12,21 +12,28 @@ internal sealed class ClockMouse : IDisposable
     private readonly Thread thread;
     private readonly ManualResetEventSlim ready = new();
     private readonly Action<ClockAnchor> clicked;
+    private readonly Action<PixelPoint> desktopClick;
     private Dispatcher? pump;
     private nint hook;
     private int error;
     private ClockAnchor[] anchors = [];
     private ClockAnchor? pressed;
+    private bool observeOutsideClicks;
 
-    public ClockMouse(Action<ClockAnchor> clicked)
+    public ClockMouse(Action<ClockAnchor> clicked, Action<PixelPoint> desktopClick)
     {
         this.clicked = clicked;
+        this.desktopClick = desktopClick;
         callback = OnMouse;
         thread = new Thread(Run) { IsBackground = true, Name = "YXRL clock input" };
         thread.Start(); ready.Wait();
         if (hook == 0) { ready.Dispose(); throw new Win32Exception(error,"无法接收任务栏时钟点击"); }
     }
-    public void Update(ClockAnchor[] visible) => Volatile.Write(ref anchors,visible);
+    public void Update(ClockAnchor[] visible, bool observeClicks)
+    {
+        Volatile.Write(ref anchors,visible);
+        Volatile.Write(ref observeOutsideClicks,observeClicks);
+    }
     private void Run()
     {
         pump = Dispatcher.CurrentDispatcher;
@@ -39,23 +46,31 @@ internal sealed class ClockMouse : IDisposable
     }
     private nint OnMouse(int code, nint msg, nint data)
     {
-        if (code == 0 && (msg == 0x201 || msg == 0x202)) {
-            if (msg == 0x202 && pressed is null) return Native.CallNextHookEx(0,code,msg,data);
+        if (code != 0) return Native.CallNextHookEx(0,code,msg,data);
+        const int leftDown = 0x201, leftUp = 0x202, rightDown = 0x204, middleDown = 0x207, xDown = 0x20B;
+        var visible = Volatile.Read(ref anchors);
+        bool clockGesture = msg == leftDown && visible.Length > 0 || msg == leftUp && pressed is not null;
+        bool observe = Volatile.Read(ref observeOutsideClicks) && (msg == leftDown || msg == rightDown ||
+            msg == middleDown || msg == xDown);
+        if (clockGesture || observe) {
             var point = Marshal.PtrToStructure<PixelPoint>(data);
-            var hit = Array.Find(Volatile.Read(ref anchors), a => a.Bounds.Contains(point) && Native.OnTaskbar(a.Taskbar,point)
-                && Native.GetWindowRect(a.Taskbar,out var bar) && bar == a.Bar);
-            if (msg == 0x201 && hit is not null) { pressed = hit; return 1; }
-            if (msg == 0x202 && pressed is { } start) {
-                pressed = null;
-                if (hit?.Taskbar == start.Taskbar) clicked(hit);
-                return 1;
+            if (clockGesture) {
+                var hit = Array.Find(visible, a => a.Bounds.Contains(point) && Native.OnTaskbar(a.Taskbar,point)
+                    && Native.GetWindowRect(a.Taskbar,out var bar) && bar == a.Bar);
+                if (msg == leftDown && hit is not null) { pressed = hit; return 1; }
+                if (msg == leftUp && pressed is { } start) {
+                    pressed = null;
+                    if (hit?.Taskbar == start.Taskbar) clicked(hit);
+                    return 1;
+                }
             }
+            if (observe) desktopClick(point);
         }
         return Native.CallNextHookEx(0,code,msg,data);
     }
     public void Dispose()
     {
-        Update([]);
+        Update([],false);
         pump?.BeginInvokeShutdown(DispatcherPriority.Send);
         thread.Join(); ready.Dispose();
     }

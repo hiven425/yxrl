@@ -28,6 +28,7 @@ internal static class Native
     [DllImport("user32")] internal static extern bool EnumWindows(EnumProc callback, nint param);
     [DllImport("user32", CharSet=CharSet.Unicode)] internal static extern nint FindWindow(string name, string? title);
     [DllImport("user32")] internal static extern bool IsWindowVisible(nint hwnd);
+    [DllImport("user32")] internal static extern bool GetCursorPos(out PixelPoint point);
     [DllImport("user32")] internal static extern bool GetWindowRect(nint hwnd, out PixelRect rect);
     [DllImport("user32", CharSet=CharSet.Unicode)] private static extern int GetClassName(nint hwnd, StringBuilder output, int size);
     [DllImport("user32")] internal static extern nint GetAncestor(nint hwnd, uint flags);
