@@ -266,7 +266,8 @@
     showDialog(
       simpleDialog(
         "城市与天气",
-        `<label class="field">演示城市<select id="city">${cities}</select></label>${details}`,
+        `<label class="field">演示城市<select id="city">${cities}</select></label>
+        <label><input type="checkbox" id="direct-weather"${state.directWeatherConnection ? " checked" : ""}> 直连天气服务（演示）</label>${details}`,
       ),
     );
   }
@@ -763,6 +764,10 @@
     }
     if (el.id === "sound-tone") {
       state.general.tone = el.value;
+      return;
+    }
+    if (el.id === "direct-weather") {
+      state.directWeatherConnection = el.checked;
       return;
     }
     if (el.id === "city") {

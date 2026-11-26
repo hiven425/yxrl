@@ -165,12 +165,17 @@
           </StackPanel>
           <StackPanel x:Name="WeatherPage" Visibility="Collapsed">
             <TextBlock Text="天气城市" Style="{StaticResource GroupTitle}"/><TextBlock x:Name="CityLabel" TextWrapping="Wrap" Margin="0,5,0,12"/>
+            <CheckBox x:Name="DirectWeather" Content="直连天气服务" Margin="0,0,0,8"
+                      ToolTip="仅用于城市搜索、天气和空气质量查询。关闭时使用系统代理。" Checked="WeatherRouteChanged" Unchecked="WeatherRouteChanged"/>
             <DockPanel><Button DockPanel.Dock="Right" Content="搜索" Click="SearchClick" Background="{DynamicResource Card}" Margin="6,0,0,0"/>
-              <TextBox x:Name="Query" AutomationProperties.Name="搜索城市" MaxLength="80"/></DockPanel>
+              <TextBox x:Name="Query" AutomationProperties.Name="搜索城市" MaxLength="80" KeyDown="SearchKeyDown"/></DockPanel>
             <ListBox x:Name="Cities" AutomationProperties.Name="城市搜索结果" DisplayMemberPath="Label" SelectionChanged="CitySelected" MaxHeight="170" Visibility="Collapsed"/>
             <TextBlock x:Name="SearchStatus" Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,5"/>
             <Button HorizontalAlignment="Left" Content="清除城市" Click="ClearCity"/>
-            <TextBlock Text="天气、空气质量由 Open-Meteo 提供，城市数据来自 GeoNames。" TextWrapping="Wrap" Style="{StaticResource Subtle}" Margin="0,12"/>
+            <TextBlock x:Name="WeatherData" TextWrapping="Wrap" Margin="0,10,0,0"/>
+            <TextBlock TextWrapping="Wrap" Style="{StaticResource Subtle}" Margin="0,12">
+              <Run Text="城市来自 GeoNames。天气与美标 AQI 由 Open-Meteo（空气质量来自 CAMS）或 "/><local:WeatherAttributionLink/><Run Text=" 提供。"/>
+            </TextBlock>
           </StackPanel>
           <StackPanel x:Name="AboutPage" Visibility="Collapsed">
             <TextBlock Text="YXRL 个人日历" FontSize="17" FontWeight="SemiBold"/>

@@ -26,8 +26,10 @@ internal sealed record CalendarOptions(bool ShowLunar = true, bool ShowAdjustmen
 internal sealed record City(long Id, string Name, double Latitude, double Longitude, string Region = "", string Timezone = "")
 {
     public string Label => string.IsNullOrWhiteSpace(Region) ? Name : $"{Name} · {Region}";
+    internal bool HasValidLocation => !string.IsNullOrWhiteSpace(Name) && double.IsFinite(Latitude) && Math.Abs(Latitude) <= 90
+        && double.IsFinite(Longitude) && Math.Abs(Longitude) <= 180;
 }
-internal sealed record Preferences(ClockOptions Clock, CalendarOptions Calendar, City? City);
+internal sealed record Preferences(ClockOptions Clock, CalendarOptions Calendar, City? City, bool DirectWeatherConnection = false);
 internal sealed class SettingsStore(string directory)
 {
     internal static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true };
@@ -60,8 +62,7 @@ internal sealed class SettingsStore(string directory)
             ValidateCalendar(calendar);
             if (range is not null && calendar.From is null) throw new JsonException("周数范围缺少起止日期");
             var city = doc["weather"]?["location"]?.Deserialize<City>(Json);
-            if (city is not null && (string.IsNullOrWhiteSpace(city.Name) || !double.IsFinite(city.Latitude)
-                || !double.IsFinite(city.Longitude) || Math.Abs(city.Latitude) > 90 || Math.Abs(city.Longitude) > 180))
+            if (city is { HasValidLocation: false })
                 throw new JsonException("城市位置无效");
             _ = Bool(doc["general"], "closeOnBlur", true);
             var disabled = doc["festivals"]?["disabledIds"]?.Deserialize<string[]>() ?? [];
@@ -69,7 +70,7 @@ internal sealed class SettingsStore(string directory)
             if (custom.Any(x => x is null || !x.Valid)) throw new JsonException("自定义节日规则无效");
             Disabled = disabled.ToHashSet();
             CustomRules = custom;
-            Current = new(clock, calendar, city);
+            Current = new(clock, calendar, city, Bool(doc["weather"], "directConnection", false));
             original = doc;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException or FormatException)
@@ -101,7 +102,9 @@ internal sealed class SettingsStore(string directory)
         cal["showOutside"] = c.ShowOutside; cal["hour12"] = c.Hour12;
         cal["showWeeks"] = c.ShowWeeks; cal["weekStart"] = c.WeekStart;
         cal["weekRange"] = c.From is null ? null : JsonSerializer.SerializeToNode(new { from = c.From, to = c.To }, Json);
-        Section("weather")["location"] = JsonSerializer.SerializeToNode(next.City, Json);
+        var weather = Section("weather");
+        weather["location"] = JsonSerializer.SerializeToNode(next.City, Json);
+        weather["directConnection"] = next.DirectWeatherConnection;
         Directory.CreateDirectory(DirectoryPath);
         WriteAtomic(FilePath, doc.ToJsonString(Json));
         original = doc;

@@ -28,7 +28,7 @@ internal sealed class ClockStyleGallery
         // Opening a preview never changes the user's city or populates the weather cache.
         var calendar = new CalendarService();
         var date = new DateTime(2026, 11, 26, 12, 25, 31);
-        var stamp = new DateTimeOffset(date, TimeSpan.FromHours(8));
+        var stamp = DateTimeOffset.UtcNow;
         var city = new City(1795565, "深圳", 22.54, 114.05);
         var exampleWeather = new WeatherReading(
             new(23, 20, 26, "多云", "2026-11-26T12:00", stamp),

@@ -24,6 +24,7 @@
 | 节日倒数 | `clock.countdownFestivalId`，节日标识或 `null` | `spring` | 从启用的节日中选目标。关闭或删除目标后清空选择并提示重新选；节日当天显示「今天」。 |
 | 节日管理 | `festivals.disabledIds`，标识数组；`festivals.customRules`，规则数组 | 两个空数组 | 按稳定标识保存开关，立即重算月历、日详情和时钟。 |
 | 城市与天气 | `weather.location`，地点对象或 `null` | `null` | 用户选好城市后才请求。按地点标识取缓存；切换城市时旧请求结果只能写回原地点。 |
+| 直连天气服务 | `weather.directConnection`，布尔值 | `false` | 默认使用系统代理。勾选后，当前搜索及应用设置后的天气和空气质量查询使用 HTTPS 直连。 |
 | 事项编辑 | `repeat` 为 `none/daily/weekly`，`reminderMinutes` 为 `null/0/10/30` | 单次，无提醒 | 随事项保存。0 表示到点，正数为提前分钟数。 |
 | 全天事项 | `time`，`HH:mm` 字符串或 `null` | 选择全天后为 `null` | 全天显示在列表前面。开启全天提醒时以系统当地 09:00 为基准。 |
 
@@ -137,7 +138,7 @@
       { "id": "demo-reading", "kind": "dynamic", "name": "读书日", "alias": "阅读日", "month": 11, "nth": 4, "dayOfWeek": 4 }
     ]
   },
-  "weather": { "location": null }
+  "weather": { "location": null, "directConnection": false }
 }
 ```
 
@@ -168,16 +169,13 @@
 }
 ```
 
-**`weather-cache.json`** 按地点分别保存天气和空气质量。`observedAt` 是供应方时刻，`fetchedAt` 是本机取回时刻。两路更新相互独立，可显示气温，同时提示空气质量暂缺。
+**`weather-cache.json`** 以地点 ID 为键，分别保存天气和空气质量。`observedAt` 是地点当地的供应方时刻，`fetchedAt` 是本机取回时刻。每项记录自己的 `source`，旧缓存缺少该字段时按 Open-Meteo 读回。
 
 ```json
 {
-  "schemaVersion": 1,
-  "locations": {
-    "demo-sz": {
-      "weather": { "observedAt": "2026-11-26T02:15:00Z", "fetchedAt": "2026-11-26T02:25:00Z", "temperatureC": 23, "weatherCode": 2, "lowC": 20, "highC": 26 },
-      "air": { "observedAt": "2026-11-26T02:00:00Z", "fetchedAt": "2026-11-26T02:25:00Z", "usAqi": 42 }
-    }
+  "1795565": {
+    "current": { "observedAt": "2026-11-26T10:15", "fetchedAt": "2026-11-26T02:25:00Z", "temp": 23, "condition": "多云", "low": 20, "high": 26, "source": "Open-Meteo" },
+    "air": { "observedAt": "2026-11-26T10:00", "fetchedAt": "2026-11-26T02:25:00Z", "aqi": 42, "source": "Open-Meteo" }
   }
 }
 ```
@@ -193,5 +191,10 @@
 | 城市搜索 | `geocoding-api.open-meteo.com/v1/search`，`name`、`language=zh`；中文同名地点保留区分信息 | 用户提交后搜索。请求失败保留已选地点和查询文字。 |
 | 当前与当日天气 | `api.open-meteo.com/v1/forecast`，`current=temperature_2m,weather_code`、`daily=temperature_2m_min,temperature_2m_max`、`timezone=auto` | 新地点或缓存超过 30 分钟时后台更新。换月、切换时钟样式共用快照。 |
 | 空气质量 | `air-quality-api.open-meteo.com/v1/air-quality`，`current=us_aqi` | 独立缓存 60 分钟。界面显示「美标 AQI」和来源时间，0 是有效值。 |
+| 备用天气与空气质量 | Visual Crossing Timeline 的 `currentConditions`、当日 `days` 和数值 `aqius` | 匿名 HTTPS 请求使用 gzip。一轮刷新至多发送一次，只查询尚缺的维度。 |
 
-单次请求设 8 秒超时。只对临时网络故障安全重试一次，同一地点同类请求合并；用户切换地点时旧结果按原地点归档。离线有缓存时显示数据时间，无缓存时显示「天气暂不可用」。天气详情注明 Open-Meteo 和空气质量数据提供方；公开发布前按其归属要求保留来源。[城市查询](https://open-meteo.com/en/docs/geocoding-api) · [天气接口](https://open-meteo.com/en/docs) · [空气质量与数据归属](https://open-meteo.com/en/docs/air-quality-api)
+城市搜索先使用完整名称。以「市」结尾的名称查无结果时，再查询简称，例如「深圳市」和「深圳」。临时网络故障重试一次。单次 HTTP 请求超时为 8 秒。
+
+已知经纬度后，同时查询到期的气温和美标 AQI。主源出错或等待满 3 秒即并行查询备用源，每项采用最先返回的有效结果。已取得两项数据或已切换地点时取消剩余请求。离线时显示已有数值、缓存标记和数据时间。缺项会明确显示暂不可用。[城市查询](https://open-meteo.com/en/docs/geocoding-api) · [天气预报](https://open-meteo.com/en/docs) · [空气质量及归属](https://open-meteo.com/en/docs/air-quality-api) · [Visual Crossing 免密钥接口](https://www.visualcrossing.com/resources/documentation/weather-api/free-weather-api-no-key/)
+
+任务栏样式用到备用源数据时，下行附上 Visual Crossing Weather，空间不足时随其他信息轮显。月历中的来源名称可打开供应方网站。

@@ -56,6 +56,7 @@ internal partial class SettingsPanel : UserControl
         RangeFrom.SelectedDate = c.From?.ToDateTime(TimeOnly.MinValue);
         RangeTo.SelectedDate = c.To?.ToDateTime(TimeOnly.MinValue);
         city = s.City;
+        DirectWeather.IsChecked = s.DirectWeatherConnection;
         CityLabel.Text = city?.Label ?? "尚未选择城市";
         ExampleMode.IsChecked = true;
         Nav.SelectedIndex = 0;
@@ -78,7 +79,7 @@ internal partial class SettingsPanel : UserControl
         }
         var cal = new CalendarOptions(LunarBox.IsChecked == true, MarkBox.IsChecked == true, OutsideBox.IsChecked == true,
             Hour12.IsChecked == true, WeekBox.IsChecked == true, Math.Max(0, WeekStart.SelectedIndex), from, to);
-        return new(clock, cal, city);
+        return new(clock, cal, city, DirectWeather.IsChecked == true);
     }
 
     private void SectionChanged(object sender, SelectionChangedEventArgs e)
@@ -161,6 +162,10 @@ internal partial class SettingsPanel : UserControl
         if (loading) return;
         var draft = Draft(false);
         var reading = weather.Read(city);
+        if (WeatherPage.IsVisible) {
+            WeatherData.Text = city is null ? "" : city.Id != store.Current.City?.Id && reading is null
+                ? "应用设置后查询所选城市的天气。" : WeatherReading.Summary(city, reading);
+        }
         if (ClockPage.Visibility == Visibility.Visible) {
             bool current = CurrentMode.IsChecked == true;
             if (current) gallery.ShowCurrent(now, draft, calendar, reading);
@@ -193,6 +198,20 @@ internal partial class SettingsPanel : UserControl
             Tick(DateTime.Now);
         }
     }
+    private void WeatherRouteChanged(object sender, RoutedEventArgs e)
+    {
+        if (loading) return;
+        CancelSearch();
+        Cities.ItemsSource = null;
+        Cities.Visibility = Visibility.Collapsed;
+        SearchStatus.Text = "可重新搜索城市，应用设置后使用所选连接。";
+    }
+    private void SearchKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key != System.Windows.Input.Key.Enter) return;
+        e.Handled = true;
+        SearchClick(sender, e);
+    }
     private async void SearchClick(object sender,RoutedEventArgs e)
     {
         CancelSearch(); var query=Query.Text.Trim();
@@ -200,12 +219,17 @@ internal partial class SettingsPanel : UserControl
         if(query.Length < 2) { SearchStatus.Text="请输入至少两个字符的城市名。"; return; }
         using var source=new CancellationTokenSource(); search=source; SearchStatus.Text="正在搜索…";
         try {
-            var result=await weather.Search(query,source.Token);
+            var result=await weather.Search(query,source.Token, DirectWeather.IsChecked == true);
             if(source.IsCancellationRequested)return;
             Cities.ItemsSource=result; Cities.Visibility=result.Count>0?Visibility.Visible:Visibility.Collapsed;
             SearchStatus.Text=result.Count==0?"没有找到城市，试试拼音。":"选择城市后点击「应用设置」。";
         } catch(Exception ex) when(ex is HttpRequestException or OperationCanceledException or JsonException or KeyNotFoundException or InvalidOperationException or FormatException) {
-            if(!source.IsCancellationRequested) SearchStatus.Text="城市搜索暂时不可用，请稍后重试。";
+            if (!source.IsCancellationRequested) SearchStatus.Text = ex switch {
+                HttpRequestException { StatusCode: System.Net.HttpStatusCode.TooManyRequests } => "城市搜索请求过于频繁，请稍后重试。",
+                OperationCanceledException or HttpRequestException { StatusCode: null } => DirectWeather.IsChecked == true
+                    ? "无法连接城市服务。请检查网络，或关闭直连后重新搜索。" : "无法连接城市服务。请检查系统代理，或勾选「直连天气服务」后重新搜索。",
+                _ => "城市服务暂未返回有效结果，请稍后重试。"
+            };
         } finally { if(search==source)search=null; }
     }
     public void CancelSearch() { search?.Cancel(); search=null; }

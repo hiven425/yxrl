@@ -20,13 +20,19 @@ try
     if(args.Contains("--weather")) {
         using var service=new WeatherService(directory.FullName);
         using var time=new CancellationTokenSource(TimeSpan.FromSeconds(40));
-        var matches=await service.Search("Shenzhen",time.Token);
+        bool direct = args.Contains("--direct");
+        var timer = System.Diagnostics.Stopwatch.StartNew();
+        var matches=await service.Search("深圳市", time.Token, direct);
         var city=matches.First(x=>x.Latitude is > 22 and < 23 && x.Longitude is > 113 and < 115);
-        await service.Refresh(city,time.Token);
-        service.Load();
-        var data=service.Read(city);
+        Console.WriteLine($"找到{city.Label}，耗时 {timer.Elapsed.TotalSeconds:F1} 秒。");
+        timer.Restart();
+        await service.Refresh(city, time.Token, direct);
+        using var reopenedWeather = new WeatherService(directory.FullName);
+        reopenedWeather.Load();
+        var data=reopenedWeather.Read(city);
         if(data?.Current is null || data.Air is null) throw new Exception(service.Warning ?? "缺少天气或空气质量");
-        Console.WriteLine($"{city.Name} 天气 {data.Current.Temp}° {data.Current.ObservedAt}，美标 AQI {data.Air.Aqi} {data.Air.ObservedAt}");
+        Equal(service.Read(city), data);
+        Console.WriteLine($"{WeatherReading.Summary(city, data)}\n气温来源 {data.Current.Source}，空气质量来源 {data.Air.Source}。刷新并读回耗时 {timer.Elapsed.TotalSeconds:F1} 秒。");
         return;
     }
     var store=new SettingsStore(directory.FullName); store.Load();
@@ -72,6 +78,7 @@ try
     Equal(1,(int?)doc?["clock"]?["futureKey"]);
     File.WriteAllText(store.FilePath,"broken"); var broken=new SettingsStore(directory.FullName); broken.Load();
     try { broken.Save(pref); throw new Exception("损坏配置被覆盖"); } catch(IOException) { Equal("broken",File.ReadAllText(store.FilePath)); }
+    await WeatherChecks.Run(directory.FullName);
     Console.WriteLine("通过：离线历法、节日与休班、ISO 周边界、九种双行样式与示例切换、范围与配置读回。");
 }
 finally { directory.Delete(true); }

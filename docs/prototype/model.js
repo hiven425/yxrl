@@ -221,6 +221,7 @@ const CalendarModel = (() => {
       formats: ["HH:mm:ss", "M月d日 ddd"],
       rules: builtins.map((rule) => ({ ...rule })),
       city: "深圳",
+      directWeatherConnection: false,
       network: "online",
       width: "normal",
       theme: "system",
@@ -347,7 +348,7 @@ const CalendarModel = (() => {
       branch: "子丑寅卯辰巳午未申酉戌亥"[Math.floor((Number(hour) + 1) / 2) % 12] + "时",
       data,
       city: state.city,
-      weather: data ? data.condition + " " + data.temp + "°" : state.city ? "天气待更新" : "请选择城市",
+      weather: data ? data.condition + " " + data.temp + "°" : state.city ? "天气暂不可用" : "请选择城市",
       range: data ? data.low + "～" + data.high + "°" : "",
       air: data ? "美标AQI " + data.aqi : "",
       countdown:

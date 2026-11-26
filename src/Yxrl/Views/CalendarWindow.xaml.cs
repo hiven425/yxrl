@@ -79,11 +79,11 @@ internal partial class CalendarWindow : Window
         AutomationProperties.SetName(LiveTime,TimePart.Text+SecondsPart.Text);
         TodayLine.Text=$"{date:yyyy年M月d日}  {CalendarService.Weekday(date)}  {calendar.Get(date).LunarDate}";
         var place=store.Current.City;
-        if (place is null) { WeatherLine.Visibility=Visibility.Collapsed; return; }
         var w=weather.Read(place);
         WeatherLine.Visibility=Visibility.Visible;
-        WeatherLine.Text=w?.Current is { } reading ? $"{place.Name}  {reading.Condition} {reading.Temp:0}°  ·  {reading.ObservedAt.Replace('T',' ')}" : $"{place.Name}  天气待更新";
+        WeatherLine.Text=WeatherReading.Summary(place, w);
         WeatherLine.ToolTip=weather.Warning;
+        WeatherCredit.Visibility=w?.UsesVisualCrossing == true ? Visibility.Visible : Visibility.Collapsed;
     }
     private void PreviousClick(object sender,RoutedEventArgs e) => Move(-1);
     private void NextClick(object sender,RoutedEventArgs e) => Move(1);

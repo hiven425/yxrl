@@ -34,11 +34,12 @@ flowchart LR
     App --> Store["当前用户存储接口"]
     App --> Weather["城市天气接口"]
     Json["本地 JSON 适配器"] -->|实现| Store
-    Meteo["Open-Meteo 适配器"] -->|实现| Weather
+    Meteo["Open-Meteo 城市、天气及空气质量"] --> Weather
+    Timeline["Visual Crossing 天气及空气质量"] -->|补齐缺项| Weather
     Cal --> Lunar["lunar-csharp 与年度通知数据"]
 ```
 
-用例先取本地历法与事项，生成可显示的月历。天气缓存可读时一起显示；后台刷新完成后只更新天气区域。天气请求、文件写入和 UI Automation 控件枚举都在界面线程的关键点击路径之外。后台状态通过 WPF Dispatcher 回到视图。
+用例先取本地历法与事项，生成可显示的月历。天气缓存可读时一起显示。选定城市后，气温和美标 AQI 并行刷新，各自在取得有效结果时更新界面和缓存。主源失败或等待满 3 秒时，本轮尚缺的数据共用一次备用查询。切换城市会取消旧请求，已经取得的结果保留在原城市。
 
 WPF 源码中，`Desktop/ClockLocator.cs` 在后台识别 Explorer 控件，`Desktop/ClockMouse.cs` 在独立消息线程处理已确认时钟边界内的左键。Windows 11 25H2 的部分系统按钮共用 UIA 类名，识别时还会检查原始树中的时间和日期文本。任务栏收起时释放命中区域，重新展开后重新定位。`Views/ClockOverlay.cs` 用同一个格式器绘制两行，月历和日详情通过 `MonthViewModel` 与 `CalendarService` 查询日期。
 

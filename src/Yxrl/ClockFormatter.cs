@@ -58,9 +58,14 @@ internal static class ClockFormatter
         var holiday = string.Join(" ", new[] { day.Festivals, day.Lunar.JieQi }.Where(s => !string.IsNullOrEmpty(s)));
         var city = settings.City?.Name ?? "";
         var current = weather?.Current;
-        var weatherText = current is null ? city.Length == 0 ? "请选择城市" : "天气待更新" : $"{current.Condition} {current.Temp:0}°";
+        var weatherText = WeatherReading.CurrentText(settings.City, weather);
         var range = current is null ? "" : $"{current.Low:0}～{current.High:0}°";
-        var aqi = weather?.Air is { } air ? $"美标AQI {air.Aqi:0}" : "";
+        var aqi = weather?.Air is { } air ? $"美标AQI {air.Aqi:0}{(air.IsStale ? " 缓存" : "")}" : "";
+        var forecastCondition = current?.Condition + (current?.IsStale == true ? " 缓存" : "");
+        if (current is null && weather?.Air is not null) forecastCondition = weatherText;
+        var forecastAir = current is not null && weather?.Air is null
+            ? weather?.AirPending == true ? "美标AQI 查询中" : "美标AQI 暂不可用" : aqi;
+        var forecastDetails = string.Join(" ", new[] { range, forecastAir }.Where(x => x.Length > 0));
         var bottom = dateText + " " + week;
         string Value(string t) => t switch {
             "yyyy" or "YYYY" => date.Year.ToString(), "HH" or "hh" => now.ToString("HH"), "mm" or "ff" => now.ToString("mm"),
@@ -70,7 +75,7 @@ internal static class ClockFormatter
             "节日" => day.Festivals, "节气" => day.Lunar.JieQi, "周数" => iso?.ToString() ?? "", "时辰" => phase,
             "倒数" => calendar.Countdown(date,opt.Target), "城市" => city, "天气" => weatherText, "温度范围" => range,
             "美标AQI" => aqi, _ => throw new FormatException(t) };
-        return opt.Preset switch {
+        ClockText lines = opt.Preset switch {
             "simple" => new(time + " " + week, numeric, time),
             "dual" => new(time + " " + week, dateText + " " + day.LunarDate, time),
             "seconds" => new(stamp, bottom, stamp),
@@ -79,9 +84,21 @@ internal static class ClockFormatter
             "weather" => new(time + " " + weatherText, bottom, time),
             "hours" => new(Time(now,true,true) + " " + phase, bottom, Time(now,true,true)),
             "week" => new(iso.HasValue ? $"{stamp} 第{iso}周" : stamp, numeric + " " + week, stamp),
-            "forecast" => new($"{time} {city} {current?.Condition}".TrimEnd(), string.Join(" ",new[]{range,aqi}.Where(x=>x.Length>0)) is {Length:>0} details ? details : weatherText, time),
+            "forecast" => new($"{time} {city} {forecastCondition}".TrimEnd(), forecastDetails.Length > 0 ? forecastDetails : weatherText, time),
             "custom" => new(Format(opt.Top,Value),Format(opt.Bottom,Value), stamp),
             _ => throw new FormatException("未知时钟样式") };
+        if (weather?.UsesVisualCrossing == true) {
+            var fields = opt.Top + " " + opt.Bottom;
+            bool attributed = opt.Preset switch {
+                "forecast" => true,
+                "weather" => current?.Source == VisualCrossing.Name,
+                "custom" => current?.Source == VisualCrossing.Name && (fields.Contains("{天气}") || fields.Contains("{温度范围}"))
+                    || weather.Air?.Source == VisualCrossing.Name && fields.Contains("{美标AQI}"),
+                _ => false
+            };
+            if (attributed) return lines with { Lower = (lines.Lower + " " + VisualCrossing.Name).TrimStart() };
+        }
+        return lines;
     }
     private static readonly Regex ClockPattern = new(@"(?:上午|下午)?\d{1,2}:\d{2}(?::\d{2})?");
     public static (string Top, string Bottom) Fit(ClockText text, double width, Func<string,double> measure, long period)

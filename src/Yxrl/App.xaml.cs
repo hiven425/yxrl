@@ -32,6 +32,7 @@ public partial class App : Application
     private SettingsWindow? settingsWindow;
     private CancellationTokenSource? weatherRequest;
     private long? weatherCity;
+    private bool directWeatherConnection;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -80,9 +81,11 @@ public partial class App : Application
             catch(Win32Exception ex) { inputError=ex.Message; }
         } else if(!store.Current.Clock.Enabled && mouse is not null) { mouse.Dispose(); mouse=null; }
         nextScan=DateTime.MinValue;
+        nextWeather=DateTime.MinValue;
         lastRenderSecond=-1;
-        if(weatherCity!=store.Current.City?.Id) {
-            weatherCity=store.Current.City?.Id; weatherRequest?.Cancel(); nextWeather=DateTime.MinValue;
+        if(weatherCity!=store.Current.City?.Id || directWeatherConnection!=store.Current.DirectWeatherConnection) {
+            weatherCity=store.Current.City?.Id; directWeatherConnection=store.Current.DirectWeatherConnection;
+            weatherRequest?.Cancel();
         }
         UpdateStatus(); RefreshVisible();
     }
@@ -122,7 +125,7 @@ public partial class App : Application
     {
         var source=new CancellationTokenSource(); weatherRequest=source;
         nextWeather=DateTime.UtcNow.AddMinutes(10);
-        try { await weather.Refresh(city,source.Token); }
+        try { await weather.Refresh(city, source.Token, directWeatherConnection); }
         catch(OperationCanceledException) when(source.IsCancellationRequested) { }
         finally { source.Dispose(); if(weatherRequest==source) weatherRequest=null; }
     }
