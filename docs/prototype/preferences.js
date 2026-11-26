@@ -4,7 +4,8 @@ const SettingsPages = (function () {
   const categories = { default: "默认", work: "工作", personal: "个人" };
   const tones = { soft: "轻点", chime: "双音", clear: "清脆" };
   function toggle(group, key, title, value, extra = "") {
-    return `<div class="option-row"><span>${title}</span><div class="row-controls">${extra}<button type="button" role="switch" class="switch" data-pref="${group}.${key}" aria-label="${title}" aria-checked="${value}"><i></i></button></div></div>`;
+    const id = `pref-${group}-${key}`;
+    return `<div class="option-row"><label class="option-label" for="${id}">${title}</label><div class="row-controls">${extra}<button type="button" role="switch" class="switch" id="${id}" data-pref="${group}.${key}" aria-label="${title}" aria-checked="${value}"><i></i></button></div></div>`;
   }
   function link(action, label) {
     return `<button type="button" class="text-button" data-action="${action}">${label}</button>`;

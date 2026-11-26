@@ -51,7 +51,7 @@ const CalendarViews = (function () {
     const prefix =
       item.kind === "todo"
         ? `<input class="todo-check" type="checkbox" data-done="${e(item.id)}" aria-label="${e((done ? "恢复" : "完成") + "待办 " + item.title)}" ${done ? "checked" : ""}>`
-        : `<span class="event-stroke" aria-hidden="true"></span>`;
+        : "";
     return `<div class="occurrence ${done ? "completed" : ""} ${item.kind === "event" ? "appointment" : ""}" data-category="${e(item.category || "default")}">${prefix}<button type="button" data-edit="${e(item.id)}" class="item-edit" title="编辑${item.kind === "todo" ? "待办" : "日程"}"><span>${e(item.title)}</span><small>${item.repeat !== "none" ? e(repeats[item.repeat]) + " · " : ""}${e(M.timeLabel(item.time, cal.hour12) || "全天")}</small></button></div>`;
   }
   function emptyItems() {
@@ -106,7 +106,7 @@ const CalendarViews = (function () {
               .join("")
           : emptyItems()
       }</div>
-      <footer class="fly-foot"><button type="button" class="primary" data-action="add">${icon("plus", 16)} 添加事项</button>${button("settings", "打开日历设置", "settings")}</footer></section>`;
+      <footer class="fly-foot"><button type="button" class="primary" data-action="add">${icon("plus", 16)} 添加事项</button>${button("settings", "打开设置", "settings")}</footer></section>`;
   }
   function day(state) {
     const key = state.selected,
@@ -139,10 +139,10 @@ const CalendarViews = (function () {
       <div class="field-pair"><label class="field">时间<input type="time" name="time" value="${e(item.time || "09:00")}" ${item.time ? "required" : "disabled"}></label><label class="inline-check"><input type="checkbox" name="allDay" ${item.time ? "" : "checked"}> 全天</label></div>
       <div class="field-pair"><label class="field">重复<select name="repeat">${options(repeats, item.repeat)}</select></label><label class="field">提醒<select name="reminder">${options(reminders, item.reminder)}</select></label></div>
       <p class="muted form-hint" id="item-hint">${item.id && item.repeat !== "none" ? "编辑将应用于整个重复系列。" : "全天事项的提醒基准时间为 09:00。"}</p><p class="form-error" role="alert"></p>
-      <div class="form-actions">${item.id ? button("delete-item", "删除事项", "trash", "icon-button danger") : ""}<span class="spacer"></span><button type="button" class="secondary" data-action="cancel-item">取消</button><button type="submit" class="primary">保存事项</button></div></form></section>`;
+      <div class="form-actions">${item.id ? `<button type="button" class="text-button danger" data-action="delete-item">${icon("trash", 15)} 删除</button>` : ""}<span class="spacer"></span><button type="button" class="secondary" data-action="cancel-item">取消</button><button type="submit" class="primary">保存事项</button></div></form></section>`;
   }
   function settingsFrame(title, active, body) {
-    return `<section class="settings-window" aria-label="${title}窗口"><header class="settings-bar"><span>${icon("settings", 17)} 日历设置</span>${button("return", "关闭设置", "close")}</header><div class="settings-layout"><nav class="settings-nav" aria-label="设置页面">${[
+    return `<section class="settings-window" aria-label="${title}窗口"><header class="settings-bar"><span>${icon("settings", 17)} 设置</span>${button("return", "关闭设置", "close")}</header><div class="settings-layout"><nav class="settings-nav" aria-label="设置页面">${[
       ["general", "settings", "软件设置"],
       ["calendarSettings", "calendar", "日历设置"],
       ["styles", "sliders", "任务栏时钟"],
@@ -154,7 +154,7 @@ const CalendarViews = (function () {
       )
       .join(
         "",
-      )}<button type="button" data-action="weather">${icon("cloud", 17)}城市与天气</button></nav><div class="settings-body"><h2>${title}</h2>${body}</div></div></section>`;
+      )}<button type="button" class="nav-dialog" data-action="weather" aria-haspopup="dialog">${icon("cloud", 17)}城市与天气</button></nav><div class="settings-body"><h2>${title}</h2>${body}</div></div></section>`;
   }
   function styles(state, draft) {
     const p = M.partsFor({ ...state, target: draft.target }, "10:32:01");
