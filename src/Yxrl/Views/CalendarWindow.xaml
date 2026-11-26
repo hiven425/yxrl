@@ -50,23 +50,6 @@
             </StackPanel>
           </Border>
         </Grid>
-        <Viewbox x:Name="DayPage" Visibility="Collapsed" StretchDirection="DownOnly" HorizontalAlignment="Left" VerticalAlignment="Top">
-          <StackPanel Width="{Binding ActualWidth, ElementName=CalendarSurface}">
-            <DockPanel Margin="0,0,0,8"><Button Content="‹" FontSize="22" Width="32" Padding="0" Click="DayBack" AutomationProperties.Name="返回月历"/>
-              <TextBlock Text="日详情" FontSize="17" FontWeight="SemiBold" VerticalAlignment="Center" Margin="6,0"/></DockPanel>
-            <TextBlock x:Name="DayHeading" FontSize="31" FontWeight="SemiBold"/>
-            <TextBlock x:Name="DayWeek" Style="{StaticResource Subtle}"/>
-            <Border Background="{DynamicResource Card}" CornerRadius="8" Padding="13" Margin="0,14,0,12">
-              <StackPanel><TextBlock x:Name="DayLunarFull" FontSize="18" FontWeight="SemiBold"/>
-                <TextBlock x:Name="DayGanzhi" Margin="0,4,0,0" Style="{StaticResource Subtle}"/>
-                <TextBlock x:Name="DayEvents" Foreground="{DynamicResource Accent}" TextWrapping="Wrap"/></StackPanel>
-            </Border>
-            <TextBlock Text="宜" FontWeight="Bold" Foreground="{DynamicResource Positive}"/>
-            <TextBlock x:Name="DayYiFull" Margin="0,4,0,14" TextWrapping="Wrap"/>
-            <TextBlock Text="忌" FontWeight="Bold" Foreground="{DynamicResource Weekend}"/>
-            <TextBlock x:Name="DayJiFull" Margin="0,4" TextWrapping="Wrap"/>
-          </StackPanel>
-        </Viewbox>
       </Grid>
     </Border>
     <Path HorizontalAlignment="Left" VerticalAlignment="Top" Margin="4" Data="M 0,6 L 6,0 M 0,10 L 10,0"

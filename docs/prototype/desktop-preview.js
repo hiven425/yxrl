@@ -57,20 +57,46 @@ const DesktopPreview = (function () {
       },
     };
   }
-  function place(host, point, size) {
-    const panel = host.querySelector(".month-window,.detail-window");
-    if (!panel) return;
-    if (size) {
-      panel.style.width = size.width + "px";
-      panel.style.height = size.height + "px";
-    }
-    if (point) {
-      panel.style.position = "absolute";
-      panel.style.left = Math.max(0, Math.min(point.x, host.clientWidth - panel.offsetWidth)) + "px";
-      panel.style.top = Math.max(0, Math.min(point.y, host.clientHeight - panel.offsetHeight)) + "px";
-    }
-    const zoom = Math.min(panel.clientWidth / 418, panel.clientHeight / 618);
+  const detailGap = 8;
+  function detailWidth(host) {
+    return Math.min(340, Math.max(1, Math.floor((host.clientWidth - detailGap) / 2)));
+  }
+  function setZoom(panel, referenceWidth) {
+    const zoom = Math.min(panel.clientWidth / referenceWidth, panel.clientHeight / 618);
     if (zoom > 0) panel.style.setProperty("--calendar-zoom", zoom);
+  }
+  function place(host, point, size) {
+    const panel = host.querySelector(".month-window");
+    if (!panel) return;
+    const details = host.querySelector(".detail-window");
+    const side = details ? detailWidth(host) : 0;
+    const reserved = details ? side + detailGap : 0;
+    Object.assign(panel.style, {
+      width: size ? size.width + "px" : "",
+      height: size ? size.height + "px" : "",
+      maxWidth: details ? host.clientWidth - reserved + "px" : "",
+      position: "",
+      left: "",
+      top: "",
+    });
+    if (point || details) {
+      const natural = boundsInHost(host, panel);
+      const left = Math.max(reserved, Math.min(point?.x ?? natural.left, host.clientWidth - panel.offsetWidth));
+      const top = Math.max(0, Math.min(point?.y ?? natural.top, host.clientHeight - panel.offsetHeight));
+      panel.style.position = "absolute";
+      panel.style.left = left + "px";
+      panel.style.top = top + "px";
+      if (details) {
+        Object.assign(details.style, {
+          left: left - reserved + "px",
+          top: top + "px",
+          width: side + "px",
+          height: panel.offsetHeight + "px",
+        });
+        setZoom(details, 338);
+      }
+    }
+    setZoom(panel, 418);
   }
   function boundsInHost(host, panel) {
     const bounds = panel.getBoundingClientRect(),
@@ -89,7 +115,8 @@ const DesktopPreview = (function () {
       const minWidth = Math.min(340, right - left),
         minHeight = Math.min(450, bottom - top);
       if (edge === "start") {
-        left = Math.max(0, Math.min(left + dx, right - minWidth));
+        const limit = host.querySelector(".detail-window") ? detailWidth(host) + detailGap : 0;
+        left = Math.max(limit, Math.min(left + dx, right - minWidth));
         top = Math.max(0, Math.min(top + dy, bottom - minHeight));
       } else {
         right = Math.min(host.clientWidth, Math.max(right + dx, left + minWidth));
@@ -100,7 +127,7 @@ const DesktopPreview = (function () {
     host.addEventListener("pointerdown", (ev) => {
       if (ev.button !== 0 || active) return;
       const grip = ev.target.closest("[data-resize]");
-      const handle = grip || ev.target.closest(".month-hero,.detail-window .panel-head");
+      const handle = grip || ev.target.closest(".month-hero");
       if (!handle || (!grip && ev.target.closest("button,input,select"))) return;
       active = {
         id: ev.pointerId,

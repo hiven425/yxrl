@@ -82,7 +82,7 @@
     const screens = {
       clock: () => "",
       month: () => V.month(state),
-      day: () => V.day(state),
+      day: () => V.month(state, true) + V.day(state),
       editor: () => V.editor(draftItem),
       styles: () => V.styles(state, draft, tick().stamp),
       festivals: () => V.festivals(state, festivalKind, query),
@@ -90,7 +90,7 @@
       general: () => SettingsPages.general(state),
     };
     host.innerHTML = screens[page]();
-    if (page === "month") {
+    if (page === "month" || page === "day") {
       $('[data-action="prev"]').disabled = state.month === M.firstMonth;
       $('[data-action="next"]').disabled = state.month === M.lastMonth;
       const active =
@@ -120,7 +120,7 @@
       askPin("unlock");
       return;
     }
-    if (next !== "month") {
+    if (next !== "month" && next !== "day") {
       clearTimeout(scrollTimer);
       wheelDistance = 0;
     }
@@ -294,14 +294,17 @@
   }
   function selectDay(key, detail) {
     if (key.slice(0, 7) < M.firstMonth || key.slice(0, 7) > M.lastMonth) return;
+    const closeDetails = detail && page === "day" && key === state.selected;
     state.selected = key;
     state.month = key.slice(0, 7);
     state.scrollStart = null;
-    if (detail) go("day");
-    else {
-      render();
-      focusAfter(`[data-date="${key}"]`);
-    }
+    if (detail) go(closeDetails ? "month" : "day", { focus: false });
+    else render();
+    focusAfter(`[data-date="${key}"]`);
+  }
+  function closeDay() {
+    go("month", { focus: false });
+    focusAfter('.month-grid [tabindex="0"]');
   }
   function stepMonth(step) {
     const next = M.monthOffset(state.month, step);
@@ -510,7 +513,7 @@
     );
   }
   function scrollCalendar(event) {
-    if (page !== "month" || !event.target.closest(".month-grid") || event.ctrlKey || !event.deltaY)
+    if ((page !== "month" && page !== "day") || !event.target.closest(".month-grid") || event.ctrlKey || !event.deltaY)
       return;
     event.preventDefault();
     wheelDistance += event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 240 : 1);
@@ -529,7 +532,7 @@
     clearTimeout(scrollTimer);
     if (state.calendar.snapMonths)
       scrollTimer = setTimeout(() => {
-        if (page === "month") {
+        if (page === "month" || page === "day") {
           state.scrollStart = null;
           render();
         }
@@ -541,8 +544,7 @@
     showDialog(simpleDialog("命令行默认分类", body));
   }
   const actions = {
-    close: closeCalendar,
-    month: () => go("month"),
+    "close-day": closeDay,
     return: () => {
       otherWindow = null;
       go(returnFromSettings);
@@ -831,6 +833,7 @@
     if (event.key === "Escape") {
       if (page === "editor") go(returnFromEditor);
       else if (settingsIds.has(page)) actions.return();
+      else if (page === "day") closeDay();
       else if (page !== "clock") closeCalendar();
       return;
     }

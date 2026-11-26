@@ -45,6 +45,8 @@ WPF 源码中，`Desktop/ClockLocator.cs` 在后台识别 Explorer 控件，`Des
 
 ## 点击系统时间
 
+日详情是月历的附属窗，跟随月历左边缘定位。两窗共用选中日期。焦点在两窗之间切换时继续显示，离开后按失焦设置收起。
+
 ```mermaid
 sequenceDiagram
     actor U as 用户

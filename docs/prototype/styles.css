@@ -363,6 +363,9 @@ dialog {
   display: grid;
   grid-template-rows: minmax(0, 1fr);
 }
+.flyout.detail-window {
+  position: absolute;
+}
 .calendar-surface {
   display: grid;
   min-width: 0;
@@ -690,7 +693,7 @@ h3 {
   border-top: 1px solid var(--line);
   margin-top: 5px;
 }
-:is(.month-window, .detail-window) .fly-foot {
+.month-window .fly-foot {
   padding-right: max(18px, calc(24px / var(--calendar-zoom, 1)));
 }
 .primary,
@@ -731,9 +734,6 @@ h3 {
   justify-content: flex-start;
   padding: 12px 15px;
   border-bottom: 1px solid var(--line);
-}
-.detail-window .panel-head {
-  padding-left: max(15px, calc(24px / var(--calendar-zoom, 1)));
 }
 .panel-head h2 {
   font-size: 17px;
@@ -1343,8 +1343,7 @@ dialog::backdrop {
 .digital em:empty {
   display: none;
 }
-.month-hero,
-.detail-window .panel-head {
+.month-hero {
   cursor: move;
   touch-action: none;
   user-select: none;

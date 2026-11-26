@@ -57,7 +57,7 @@ const CalendarViews = (function () {
   function emptyItems() {
     return '<p class="empty-line">当天还没有安排</p>';
   }
-  function monthGrid(state) {
+  function monthGrid(state, detailOpen) {
     const cal = state.calendar,
       rows = M.weeksInView(state.month, cal.weekStart, state.scrollStart);
     const heads = Array.from({ length: 7 }, (_, i) => (i + cal.weekStart) % 7);
@@ -86,7 +86,8 @@ const CalendarViews = (function () {
                   [0, 6].includes(M.dateOf(key).getUTCDay()) ? "weekend" : "",
                 ].join(" ");
                 const disabled = key.slice(0, 7) < M.firstMonth || key.slice(0, 7) > M.lastMonth;
-                return `<button type="button" class="${cl}" data-date="${key}" ${disabled ? "disabled" : ""} ${key === M.today ? 'aria-current="date"' : ""} aria-label="${e(M.displayDate(key, true) + " 星期" + M.weekday(key) + " " + label + (mark ? " " + mark : ""))}"><span class="date-main">${Number(key.slice(-2))}</span><small class="${fest.length || l.term ? "observance" : ""}">${e(label)}</small>${mark ? `<span class="day-mark ${mark === "班" ? "work" : ""}">${mark}</span>` : ""}</button>`;
+                const expanded = detailOpen && key === state.selected;
+                return `<button type="button" class="${cl}" data-date="${key}" ${disabled ? "disabled" : ""} ${key === M.today ? 'aria-current="date"' : ""} aria-expanded="${expanded}"${expanded ? ' aria-controls="day-detail"' : ""} aria-label="${e(M.displayDate(key, true) + " 星期" + M.weekday(key) + " " + label + (mark ? " " + mark : ""))}"><span class="date-main">${Number(key.slice(-2))}</span><small class="${fest.length || l.term ? "observance" : ""}">${e(label)}</small>${mark ? `<span class="day-mark ${mark === "班" ? "work" : ""}">${mark}</span>` : ""}</button>`;
               })
               .join(""),
         )
@@ -99,12 +100,12 @@ const CalendarViews = (function () {
         aria-label="从${corner}调整窗口大小" title="拖动或按方向键调整窗口大小"></button>`;
     }).join("");
   }
-  function month(state) {
+  function month(state, detailOpen = false) {
     const entries = M.itemsOn(state.items, state.selected);
     return `<section class="flyout month-window" aria-label="月历弹窗"><div class="calendar-surface">
       <header class="month-hero"><div><div class="digital"><em data-period></em><span data-hour-minute></span><small data-seconds></small></div><p>${M.displayDate(M.today, true)}<span>星期${M.weekday(M.today)}</span></p></div>${state.calendar.showWeather ? weatherBadge(state) : ""}</header>
       <div class="month-tool"><h2>${Number(state.month.slice(0, 4))}<small> 年 </small>${Number(state.month.slice(5))}<small> 月</small></h2><div><button class="today-btn" type="button" data-action="today">今天</button>${button("prev", "上个月", "left")}${button("next", "下个月", "right")}</div></div>
-      ${monthGrid(state)}
+      ${monthGrid(state, detailOpen)}
       <div class="mini-agenda"><header><h3>${state.selected === M.today ? "今日安排" : M.displayDate(state.selected) + "安排"}</h3><button type="button" class="text-button" data-page="day">查看详情 ${icon("right", 14)}</button></header>${
         entries.length
           ? entries
@@ -123,12 +124,12 @@ const CalendarViews = (function () {
       mark = state.calendar.showAdjustments ? M.dayMark(key) : "",
       entries = M.itemsOn(state.items, key);
     const tag = (t) => `<span class="tag">${e(t)}</span>`;
-    return `<section class="flyout detail-window" aria-label="当日详情"><div class="calendar-surface"><header class="panel-head">${button("month", "返回月历", "back")}<h2>当日详情</h2>${button("close", "收起面板", "close")}</header>
+    return `<section id="day-detail" class="flyout detail-window" aria-label="当日详情"><div class="calendar-surface"><header class="panel-head"><h2>当日详情</h2>${button("close-day", "关闭日详情", "close")}</header>
       <div class="day-scroll"><div class="day-overview"><div class="date-tile"><small>${Number(key.slice(5, 7))}月</small><strong>${Number(key.slice(-2))}</strong></div><div><h3>${M.displayDate(key, true)}</h3><p>星期${M.weekday(key)}${M.weekForDate(key, state.calendar) === null ? "" : " · 第 " + M.weekForDate(key, state.calendar) + " 周"}</p><div class="tags">${festivals.map((f) => tag(f.name)).join("")}${l.term ? tag(l.term) : ""}${mark ? tag(mark === "班" ? "调休上班" : "放假") : ""}</div></div></div>
       <section class="detail-section almanac"><h3>农历${l.monthName}${l.dayName}</h3><p class="muted">${e(l.ganzhi)}</p><div class="auspice"><b>宜</b><span>${e(l.yi || "—")}</span></div><div class="auspice avoid"><b>忌</b><span>${e(l.ji || "—")}</span></div></section>
       <section class="detail-section"><header class="section-title"><h3>日程与待办</h3><span>${entries.length} 项</span></header>${entries.length ? entries.map((i) => occurrenceRow(i, key, state.calendar)).join("") : emptyItems()}</section></div>
-      <footer class="fly-foot"><button class="primary" type="button" data-action="add">${icon("plus", 16)} 添加事项</button><button type="button" class="text-button" data-page="month">回到月历</button></footer>
-      </div>${resizeGrips()}</section>`;
+      <footer class="fly-foot"><button class="primary" type="button" data-action="add">${icon("plus", 16)} 添加事项</button></footer>
+      </div></section>`;
   }
   function editor(item) {
     const isNew = !item.id;

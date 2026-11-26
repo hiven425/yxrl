@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Yxrl.Desktop;
 
 namespace Yxrl.Views;
@@ -25,6 +26,13 @@ internal partial class CalendarWindow : Window
     private Size preferredSize = DefaultSize;
     private PixelRect resizeArea;
     private PixelRect? resizeStart;
+    private DayDetailWindow? details;
+    private Button? selectedDayButton;
+    private int detailWidth, detailGap;
+    private PixelRect? boundsBeforeDetails;
+
+    private PixelRect CalendarArea => detailWidth == 0 ? resizeArea
+        : resizeArea with { Left = resizeArea.Left + detailWidth + detailGap };
 
     public CalendarWindow(SettingsStore store, CalendarService calendar, WeatherService weather, Action openSettings)
     {
@@ -33,7 +41,12 @@ internal partial class CalendarWindow : Window
         Height = DefaultSize.Height;
         (this.store,this.calendar,this.weather,this.openSettings)=(store,calendar,weather,openSettings);
         vm=new(calendar); vm.Select(DateOnly.FromDateTime(DateTime.Now));
-        Closing += (_,e) => { if (presented) { e.Cancel=true; Dismiss(); } };
+        Closing += (_, e) => {
+            if (!presented) return;
+            e.Cancel = true;
+            Dispatcher.InvokeAsync(Dismiss);
+        };
+        LocationChanged += (_, _) => PositionDetails();
     }
 
     protected override void OnSourceInitialized(EventArgs e)
@@ -44,10 +57,10 @@ internal partial class CalendarWindow : Window
 
     private nint ResizeMessage(nint hwnd, int message, nint wParam, nint lParam, ref bool handled)
     {
-        if (message == WmSizing && resizeArea.HasArea) {
+        if (message == WmSizing && CalendarArea.HasArea) {
             if (resizeStart is null && Native.GetWindowRect(hwnd, out var current)) resizeStart = current;
             var proposed = Marshal.PtrToStructure<PixelRect>(lParam);
-            var bounded = proposed.Intersect(resizeArea);
+            var bounded = proposed.Intersect(CalendarArea);
             if (bounded.HasArea && bounded != proposed) {
                 Marshal.StructureToPtr(bounded, lParam, false);
                 handled = true;
@@ -58,6 +71,7 @@ internal partial class CalendarWindow : Window
             if (Native.GetWindowRect(hwnd, out var end) && (end.Width != start.Width || end.Height != start.Height)) {
                 double scale = VisualTreeHelper.GetDpi(this).DpiScaleX;
                 preferredSize = new(end.Width / scale, end.Height / scale);
+                boundsBeforeDetails = null;
             }
         }
         return 0;
@@ -69,13 +83,16 @@ internal partial class CalendarWindow : Window
         if (scale <= 0) return;
         ContentScale.ScaleX = scale;
         ContentScale.ScaleY = scale;
+        PositionDetails();
     }
 
     public void Present(ClockAnchor? anchor, bool resetDate = true)
     {
         presented = false;
+        HideDetails();
         if (resetDate) vm.Select(DateOnly.FromDateTime(DateTime.Now));
-        ShowMonth();
+        RenderMonth();
+        Tick(DateTime.Now);
         var hwnd = new WindowInteropHelper(this).EnsureHandle();
         var bounds = Placement(anchor, hwnd);
         if (!bounds.HasArea) return;
@@ -117,10 +134,7 @@ internal partial class CalendarWindow : Window
         if (!available.HasArea) return default;
         gap = Math.Min(gap, (Math.Min(available.Width, available.Height) - 1) / 2);
         resizeArea = new(available.Left + gap, available.Top + gap, available.Right - gap, available.Bottom - gap);
-        MaxWidth = resizeArea.Width / scale;
-        MaxHeight = resizeArea.Height / scale;
-        MinWidth = Math.Min(MinimumSize.Width, MaxWidth);
-        MinHeight = Math.Min(MinimumSize.Height, MaxHeight);
+        SetSizeLimits(resizeArea, scale);
         int w = (int)Math.Round(Math.Clamp(preferredSize.Width, MinWidth, MaxWidth) * scale);
         int h = (int)Math.Round(Math.Clamp(preferredSize.Height, MinHeight, MaxHeight) * scale);
         int x = atLeft ? resizeArea.Left : resizeArea.Right - w;
@@ -131,18 +145,25 @@ internal partial class CalendarWindow : Window
         }
         return new(x, y, x + w, y + h);
     }
-    public void Dismiss() { presented=false; Hide(); }
-    public void Finish() { presented=false; Close(); }
+    private void SetSizeLimits(PixelRect area, double scale)
+    {
+        MinWidth = Math.Min(MinimumSize.Width, area.Width / scale);
+        MaxWidth = area.Width / scale;
+        MinHeight = Math.Min(MinimumSize.Height, area.Height / scale);
+        MaxHeight = area.Height / scale;
+    }
+
+    public void Dismiss() { presented=false; HideDetails(); Hide(); }
+    public void Finish() { presented=false; HideDetails(); Close(); }
     private void OnDeactivated(object? sender, EventArgs e)
     {
-        if (presented && store.CloseOnBlur) Dismiss();
+        if (!presented || !store.CloseOnBlur) return;
+        // Activation can move between the two windows before the dispatcher returns to idle.
+        Dispatcher.InvokeAsync(() => {
+            if (presented && store.CloseOnBlur && !IsActive && details?.IsActive != true) Dismiss();
+        }, DispatcherPriority.Background);
     }
     private void SettingsClick(object sender,RoutedEventArgs e) => openSettings();
-    private void ShowMonth()
-    {
-        Title="YXRL 月历"; MonthPage.Visibility=Visibility.Visible; DayPage.Visibility=Visibility.Collapsed;
-        RenderMonth(); Tick(DateTime.Now);
-    }
     public void Tick(DateTime now)
     {
         var date=DateOnly.FromDateTime(now);
@@ -162,24 +183,109 @@ internal partial class CalendarWindow : Window
     private void TodayClick(object sender,RoutedEventArgs e) => Select(DateOnly.FromDateTime(DateTime.Now));
     private void Move(int offset) { vm.Shift(offset); RenderMonth(); }
     private void Select(DateOnly day) { vm.Select(day); RenderMonth(); }
-    private void DayBack(object sender,RoutedEventArgs e) => ShowMonth();
-    private void ShowDay(DateOnly day)
+    private void ToggleDetails(DateOnly day)
     {
-        Select(day); var d=vm.Detail;
-        Title="YXRL 日详情"; MonthPage.Visibility=Visibility.Collapsed; DayPage.Visibility=Visibility.Visible;
-        DayHeading.Text=day.ToString("yyyy年M月d日");
-        DayWeek.Text=CalendarService.Weekday(day)+$"  ·  第{day.DayOfYear}天"+(store.Current.Calendar.Week(day) is int w?$"  ·  第{w}周":"");
-        DayLunarFull.Text=d.LunarDate; DayGanzhi.Text=d.Ganzhi; DayEvents.Text=DetailFest.Text;
-        DayYiFull.Text=string.Join("、",d.Lunar.DayYi); DayJiFull.Text=string.Join("、",d.Lunar.DayJi);
+        if (details?.IsVisible == true && day == vm.Selected) {
+            CloseDetails();
+            return;
+        }
+        if (day != vm.Selected) Select(day);
+        if (details?.IsVisible != true) OpenDetails();
+        selectedDayButton?.Focus();
+    }
+
+    private void OpenDetails()
+    {
+        if (!IsVisible || resizeArea.Width < 3 || !Native.GetWindowRect(new WindowInteropHelper(this).Handle, out var month))
+            return;
+        if (details is null) {
+            details = new(CloseDetails) { Owner = this };
+            details.Deactivated += OnDeactivated;
+            details.Closing += (_, e) => {
+                if (!presented) return;
+                e.Cancel = true;
+                Dispatcher.InvokeAsync(CloseDetails);
+            };
+        }
+        var scale = VisualTreeHelper.GetDpi(this).DpiScaleX;
+        detailGap = Math.Min((int)Math.Round(8 * scale), resizeArea.Width / 8);
+        detailWidth = Math.Min((int)Math.Round(DayDetailWindow.PreferredWidth * scale), (resizeArea.Width - detailGap) / 2);
+        var area = CalendarArea;
+        var fitted = FitWidth(month, area, scale);
+        if (fitted != month) boundsBeforeDetails = month;
+        SetSizeLimits(area, scale);
+        if (fitted != month) PlaceWindow(this, fitted);
+
+        UpdateDetails(vm.Detail, store.Current.Calendar.Week(vm.Selected));
+        PositionDetails();
+        details.Show();
+        PositionDetails();
+    }
+
+    private void UpdateDetails(DayInfo day, int? week)
+    {
+        details?.SetDate(day, week, DetailFest.Text);
+        if (selectedDayButton is not null) AutomationProperties.SetItemStatus(selectedDayButton, "日详情已展开");
+    }
+
+    private void PositionDetails()
+    {
+        if (detailWidth == 0 || details is null || !Native.GetWindowRect(new WindowInteropHelper(this).Handle, out var month))
+            return;
+        int right = month.Left - detailGap;
+        PlaceWindow(details, new(right - detailWidth, month.Top, right, month.Bottom));
+    }
+
+    private static void PlaceWindow(Window window, PixelRect bounds)
+    {
+        var hwnd = new WindowInteropHelper(window).EnsureHandle();
+        Native.SetWindowPos(hwnd, 0, bounds.Left, bounds.Top, bounds.Width, bounds.Height, Native.NoZOrder | Native.NoActivate);
+    }
+
+    private static PixelRect FitWidth(PixelRect month, PixelRect area, double scale)
+    {
+        int minimum = Math.Min((int)Math.Round(MinimumSize.Width * scale), area.Width);
+        int width = Math.Clamp(month.Width, minimum, area.Width);
+        int left = Math.Clamp(month.Left, area.Left, area.Right - width);
+        return month with { Left = left, Right = left + width };
+    }
+
+    private void CloseDetails()
+    {
+        bool detailHadFocus = details?.IsActive == true;
+        HideDetails();
+        if (detailHadFocus && IsVisible) Activate();
+        if (IsActive) selectedDayButton?.Focus();
+    }
+
+    private void HideDetails()
+    {
+        if (detailWidth == 0) return;
+        detailWidth = 0;
+        details?.Hide();
+        if (selectedDayButton is not null) AutomationProperties.SetItemStatus(selectedDayButton, "");
+        var restore = boundsBeforeDetails;
+        boundsBeforeDetails = null;
+        if (!presented || !IsVisible) return;
+        double scale = VisualTreeHelper.GetDpi(this).DpiScaleX;
+        bool located = Native.GetWindowRect(new WindowInteropHelper(this).Handle, out var current);
+        SetSizeLimits(resizeArea, scale);
+        if (!located) return;
+        var bounds = FitWidth(restore ?? current, resizeArea, scale);
+        if (bounds != current) PlaceWindow(this, bounds);
     }
     private void OnKey(object sender,KeyEventArgs e)
     {
-        if (e.Key==Key.Escape) { Dismiss(); e.Handled=true; return; }
-        if (DayPage.IsVisible) { if(e.Key==Key.Back){ShowMonth(); e.Handled=true;} return; }
+        if (e.Key == Key.Escape) {
+            if (details?.IsVisible == true) CloseDetails();
+            else Dismiss();
+            e.Handled = true;
+            return;
+        }
         switch(e.Key) {
             case Key.Enter: case Key.Space:
                 if(Keyboard.FocusedElement is Button btn && !AutomationProperties.GetAutomationId(btn).StartsWith("Day-")) return;
-                ShowDay(vm.Selected); break;
+                ToggleDetails(vm.Selected); break;
             case Key.Left: Select(vm.Selected.AddDays(-1)); break; case Key.Right: Select(vm.Selected.AddDays(1)); break;
             case Key.Up: Select(vm.Selected.AddDays(-7)); break; case Key.Down: Select(vm.Selected.AddDays(7)); break;
             case Key.PageUp: Move(-1); break; case Key.PageDown: Move(1); break;
@@ -190,6 +296,8 @@ internal partial class CalendarWindow : Window
     private Brush ColorOf(string key) => (Brush)FindResource(key);
     private void RenderMonth()
     {
+        bool restoreFocus = selectedDayButton?.IsKeyboardFocused == true;
+        selectedDayButton = null;
         var opt=store.Current.Calendar;
         MonthTitle.Text=vm.Month.ToString("yyyy年M月");
         Previous.IsEnabled=vm.Month>CalendarService.First;
@@ -229,7 +337,8 @@ internal partial class CalendarWindow : Window
                 if(cell.IsToday && cell.IsSelected) host.Children.Insert(0,new Border {BorderBrush=ColorOf("OnSelected"),BorderThickness=new Thickness(1),CornerRadius=new CornerRadius(5)});
                 AutomationProperties.SetName(button,$"{date:yyyy年M月d日} {info.Festivals} {info.Mark}".Trim());
                 AutomationProperties.SetAutomationId(button,$"Day-{date:yyyy-MM-dd}");
-                button.Click+=(_,_)=>ShowDay(date); Put(button,r,col+1);
+                if (cell.IsSelected) selectedDayButton = button;
+                button.Click+=(_,_)=>ToggleDetails(date); Put(button,r,col+1);
             }
         }
         var d=vm.Detail; var num=opt.Week(d.Date);
@@ -237,5 +346,7 @@ internal partial class CalendarWindow : Window
         DetailLunar.Text=d.LunarDate+"  "+d.Ganzhi;
         DetailFest.Text=string.Join("  ", new[]{d.Festivals,d.Lunar.JieQi,opt.ShowAdjustments&&d.Mark.Length>0?"调休安排 · "+d.Mark:""}.Where(x=>x.Length>0));
         DetailFest.Visibility=DetailFest.Text.Length>0?Visibility.Visible:Visibility.Collapsed;
+        if (details?.IsVisible == true) UpdateDetails(d, num);
+        if (restoreFocus) selectedDayButton?.Focus();
     }
 }
