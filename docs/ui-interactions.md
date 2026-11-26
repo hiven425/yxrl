@@ -1,5 +1,19 @@
 # 界面与交互
 
+## 截图工具
+
+从月历底栏的「截图工具」选「开始截图」。拖选或点选窗口后，可标注、复制、保存、钉住或识别。贴图可拖动、缩放或按空格继续标注。文字面板支持逐段校对、复制和翻译，手动粘贴可直接从菜单进入。快捷键和模型接口在「截图与翻译」设置中调整。
+
+![截图选区、信息条和工具栏](prototype/screens/12-capture.png)
+
+![桌面贴图](prototype/screens/13-image-pin.png)
+
+![原文校对与翻译面板](prototype/screens/14-capture-text.png)
+
+![截图快捷键与翻译设置](prototype/screens/15-capture-settings.png)
+
+原型使用离线示例画面和标明来源的演示文字。桌面版从实际屏幕、剪贴板和用户配置的模型读取结果。交互参考 [PixPin 截图](https://pixpin.com/docs/screenshot/basics)、[贴图](https://pixpin.com/docs/pin/basics)、[标注](https://pixpin.com/docs/annotation/basics) 与 [文字提取](https://pixpin.com/docs/recognition/text-recognition)。
+
 这套原型围绕一次桌面操作设计：点时间打开月历，选日期看当天事项，需要调整时再开设置窗口。以下八张图均由同一套离线 HTML 渲染。左侧原型导航和演示环境用于评审，正式桌面窗口采用图中实际面板的布局。[打开可点原型](prototype/index.html) · [模块配置](configuration.md)
 
 ## Windows 11 紧凑视觉规范

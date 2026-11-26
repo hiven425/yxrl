@@ -15,6 +15,7 @@ const CalendarViews = (function () {
     ["festivals", "flag", "节日管理"],
     ["calendarSettings", "calendar", "日历设置"],
     ["general", "settings", "软件设置"],
+    ["captureSettings", "capture", "截图与翻译"],
   ];
   const kindNames = { solar: "公历", lunar: "农历", dynamic: "动态" };
   const repeats = { none: "不重复", daily: "每天", weekly: "每周" };
@@ -39,7 +40,7 @@ const CalendarViews = (function () {
             `<button type="button" data-page="${id}">${icon(glyph)}<span>${label}</span></button>`,
         )
         .join("")}`;
-    return group("日历", 0, 4) + group("设置", 4, 8);
+    return group("日历", 0, 4) + group("设置", 4, screens.length);
   }
   function weatherGlyph(scene = "unknown") {
     return `<span class="weather-glass" data-weather-scene="${e(scene)}" aria-hidden="true">
@@ -140,7 +141,7 @@ const CalendarViews = (function () {
               .join("")
           : emptyItems()
       }</div>
-      <footer class="fly-foot"><button type="button" class="primary" data-action="add">${icon("plus", 16)} 添加事项</button><div class="month-actions"><button type="button" class="icon-button" data-action="calendar-pin" aria-label="固定月历" aria-pressed="${state.calendarPinned}" title="${state.calendarPinned ? "取消固定月历" : "钉住月历"}">${icon("pushpin", 17)}</button>${button("settings", "打开设置", "settings")}</div></footer>
+      <footer class="fly-foot"><button type="button" class="primary" data-action="add">${icon("plus", 16)} 添加事项</button><div class="month-actions"><button type="button" class="icon-button" data-shot="menu" aria-label="截图工具" title="截图工具">${icon("capture",17)}</button><button type="button" class="icon-button" data-action="calendar-pin" aria-label="固定月历" aria-pressed="${state.calendarPinned}" title="${state.calendarPinned ? "取消固定月历" : "钉住月历"}">${icon("pushpin", 17)}</button>${button("settings", "打开设置", "settings")}</div></footer>
       </div>${resizeGrips()}</section>`;
   }
   function day(state) {
@@ -183,6 +184,7 @@ const CalendarViews = (function () {
       ["calendarSettings", "calendar", "日历设置"],
       ["styles", "sliders", "任务栏时钟"],
       ["festivals", "flag", "节日管理"],
+      ["captureSettings", "capture", "截图与翻译"],
     ]
       .map(
         ([id, g, label]) =>

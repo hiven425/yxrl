@@ -13,6 +13,12 @@
 
 [.NET 自包含发布](https://learn.microsoft.com/en-us/dotnet/core/deploying/single-file/overview) · [锁定的历法包](https://www.nuget.org/packages/lunar-csharp/1.6.9)
 
+## 截图与翻译设置
+
+`capture.enabled` 默认开启。`capture.shortcuts` 包含 `start`、`clipboard`、`pin`、`ocr`、`translate`，默认依次为 `Ctrl+1`、`Ctrl+2`、`Ctrl+T`、`Shift+C`、`Ctrl+Q`。空字符串表示停用该绑定。只有前两项向 Windows 注册。旧配置省略整个分组时使用默认值。
+
+`translation.baseUrl` 为含版本前缀的 HTTP(S) 基础地址，例如 `http://localhost:11434/v1`。`translation.model` 为服务端模型名，两项默认留空。`translation.targetLanguage` 默认「简体中文」。可选 API 密钥按服务地址保存在 Windows 当前用户凭据管理器。点击翻译才调用基础地址下的 `chat/completions`，发送校对后的选段或全文。截图、识别文本和译文仅在会话内使用，用户可以主动复制或另存 PNG。
+
 ## 桌面设置字段
 
 | 设置入口 | 字段与类型 | 初始值 | 生效与反馈 |

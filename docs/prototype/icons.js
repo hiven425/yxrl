@@ -1,6 +1,7 @@
 /* 本地线形图标。只接受开发者维护的名称。 */
 const Icons = (() => {
   const shapes = {
+    capture: '<path d="M8 4H4v4m12-4h4v4M4 16v4h4m12-4v4h-4"/><rect x="7" y="8" width="10" height="8" rx="1"/>',
     calendar:
       '<rect x="3.5" y="5" width="17" height="15.5" rx="3"/><path d="M7.5 3v4m9-4v4M4 10h16m-12 4h2m4 0h2m-8 3h2"/>',
     clock: '<circle cx="12" cy="12" r="8.7"/><path d="M12 6.5v5.8l3.8 2.4"/>',

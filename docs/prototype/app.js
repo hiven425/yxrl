@@ -18,7 +18,7 @@
     query = "",
     festivalId = null,
     toastTimer;
-  const settingsIds = new Set(["general", "calendarSettings", "styles", "festivals"]);
+  const settingsIds = new Set(["general", "calendarSettings", "styles", "festivals", "captureSettings"]);
   const pinVault = DesktopPreview.sessionPin();
   let locked = false,
     pinMode = "",
@@ -46,7 +46,7 @@
 
   function canAutoDismiss() {
     return ["month", "day"].includes(page) && !state.calendarPinned && !draggingCalendar &&
-      !dialog.open && dateMenu.hidden;
+      !dialog.open && dateMenu.hidden && !CapturePreview.busy();
   }
   function isOverCalendar(target) {
     return !!target?.closest(".month-window,.detail-window");
@@ -121,6 +121,7 @@
       festivals: () => V.festivals(state, festivalKind, query),
       calendarSettings: () => SettingsPages.calendar(state),
       general: () => SettingsPages.general(state),
+      captureSettings: () => CapturePreview.settings(),
     };
     host.innerHTML = screens[page]();
     if (page === "month" || page === "day") {
@@ -510,6 +511,7 @@
   function resetDemo() {
     if (dialog.open) dialog.close();
     dateReminderPreview.reset();
+    CapturePreview.reset();
     clearTimeout(scrollTimer);
     locked = false;
     otherWindow = null;
@@ -886,6 +888,7 @@
     }
   });
 
+  CapturePreview.connect({ announce, go });
   $("#navigation").innerHTML = V.navbar();
   $("#mobile-page").innerHTML = V.screens
     .map(([id, , label]) => `<option value="${id}">${label}</option>`)
