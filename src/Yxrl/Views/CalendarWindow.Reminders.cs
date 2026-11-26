@@ -27,7 +27,7 @@ internal partial class CalendarWindow
         if (count > 0) {
             content.Children.Add(new Ellipse {
                 Width = 4, Height = 4, Fill = ColorOf(isToday ? "OnSelected" : "Accent"),
-                Margin = new Thickness(3,0,0,2), HorizontalAlignment = HorizontalAlignment.Left,
+                Margin = new Thickness(5,0,0,4), HorizontalAlignment = HorizontalAlignment.Left,
                 VerticalAlignment = VerticalAlignment.Bottom, IsHitTestVisible = false
             });
             button.ToolTip += $"\n{count} 条日期提醒";

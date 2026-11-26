@@ -97,7 +97,8 @@ internal static class WeatherChecks
         Check(reading?.Current?.Daylight?.Sunrise == new DateTimeOffset(2026, 11, 26, 6, 43, 0, TimeSpan.FromHours(8))
             && reading.Current.Daylight.Sunset?.Offset == TimeSpan.FromHours(8), "备用源日照时刻按错时区");
         var clock = ClockFormatter.Render(DateTime.Now, new(new(Preset: "forecast"), new(), Shenzhen), new CalendarService(), reading);
-        Check(clock.Lower.Contains(VisualCrossing.Name) && clock.Lower.Contains("美标AQI 0"), "任务栏天气详情未显示数据或来源");
+        Check(!clock.Lower.Contains(VisualCrossing.Name) && clock.Lower.Contains("16～20°") && clock.Lower.Contains("美标AQI 0"),
+            "任务栏天气详情应显示数据且不附带来源名称");
         await service.Refresh(Shenzhen, default);
         Check(calls == 3, "新鲜缓存不应再次联网");
         using var disk = new WeatherService(directory);

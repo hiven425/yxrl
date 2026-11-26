@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Media;
 
 namespace Yxrl.Views;
 
@@ -16,6 +17,7 @@ internal partial class SettingsPanel : UserControl
     private readonly ClockStyleGallery gallery = new();
     private City? city;
     private bool loading = true;
+    private bool micaEnabled;
     private string? saveError;
     private CancellationTokenSource? search;
     public string Status { get => StatusText.Text; set => StatusText.Text = value; }
@@ -36,7 +38,33 @@ internal partial class SettingsPanel : UserControl
         WeekStart.ItemsSource = "日一二三四五六".Select(x => "星期" + x).ToArray();
     }
 
-    public void LoadDraft()
+    internal void SetMicaEnabled(bool enabled)
+    {
+        micaEnabled = enabled;
+        if (enabled) {
+            Background = Brushes.Transparent;
+            Side.Background = Brushes.Transparent;
+        } else {
+            SetResourceReference(BackgroundProperty, "Surface");
+            Side.SetResourceReference(BackgroundProperty, "Card");
+        }
+    }
+
+    internal void RefreshTheme()
+    {
+        SetMicaEnabled(micaEnabled);
+        WeatherPreviewIcon.RefreshTheme();
+        Tick(DateTime.Now);
+    }
+
+    internal void SelectSection(int section)
+    {
+        Nav.SelectedIndex = Math.Clamp(section, 0, Nav.Items.Count - 1);
+        UpdateSection();
+        Tick(DateTime.Now);
+    }
+
+    public void LoadDraft(int section = 0)
     {
         loading = true;
         var s = store.Current;
@@ -59,7 +87,7 @@ internal partial class SettingsPanel : UserControl
         DirectWeather.IsChecked = s.DirectWeatherConnection;
         CityLabel.Text = city?.Label ?? "尚未选择城市";
         ExampleMode.IsChecked = true;
-        Nav.SelectedIndex = 0;
+        Nav.SelectedIndex = Math.Clamp(section, 0, Nav.Items.Count - 1);
         loading = false;
         UpdateSection();
         RefreshDraft();
@@ -106,10 +134,10 @@ internal partial class SettingsPanel : UserControl
         var width = e.NewSize.Width;
         bool compact = width < 690;
         DockPanel.SetDock(Side, compact ? Dock.Top : Dock.Left);
-        Side.Width = compact ? double.NaN : 140;
-        Side.Padding = compact ? new Thickness(5, 2, 5, 2) : new Thickness(6, 16, 6, 8);
+        Side.Width = compact ? double.NaN : 142;
+        Side.Padding = compact ? new Thickness(6, 4, 6, 4) : new Thickness(7, 15, 7, 8);
         Side.BorderThickness = compact ? new Thickness(0, 0, 0, 1) : new Thickness(0, 0, 1, 0);
-        Body.Margin = width < 450 ? new Thickness(12, 10, 12, 10) : new Thickness(21, 15, 21, 14);
+        Body.Margin = width < 450 ? new Thickness(12, 10, 12, 12) : new Thickness(20, 15, 20, 16);
         SetValue(NavigationColumnsProperty, compact ? width < 475 ? 2 : 4 : 1);
         FormatFields.Columns = width < 440 ? 1 : 2;
     }
@@ -163,8 +191,23 @@ internal partial class SettingsPanel : UserControl
         var draft = Draft(false);
         var reading = weather.Read(city);
         if (WeatherPage.IsVisible) {
-            WeatherData.Text = city is null ? "" : city.Id != store.Current.City?.Id && reading is null
-                ? "应用设置后查询所选城市的天气。" : WeatherReading.Summary(city, reading);
+            if (city is null) {
+                WeatherPreviewCard.Visibility = Visibility.Collapsed;
+            } else {
+                WeatherPreviewCard.Visibility = Visibility.Visible;
+                var offsetNow = new DateTimeOffset(now);
+                var current = reading?.Current;
+                var scene = WeatherAppearance.At(current, offsetNow);
+                WeatherPreviewIcon.SetScene(scene);
+                var label = WeatherAppearance.Label(scene, current);
+                WeatherPreviewTitle.Text = current is { } w
+                    ? $"{city.Name}  {w.Temp:0}°  {label}"
+                    : city.Name;
+                WeatherData.Text = city.Id != store.Current.City?.Id && reading is null
+                    ? "点击「应用设置」后获取该城市的实时天气和空气质量。"
+                    : string.Join('\n', WeatherReading.DetailTooltip(city, reading, label, offsetNow, weather.Warning)
+                        .Split('\n').Skip(1));
+            }
         }
         if (ClockPage.Visibility == Visibility.Visible) {
             bool current = CurrentMode.IsChecked == true;
@@ -212,39 +255,39 @@ internal partial class SettingsPanel : UserControl
         e.Handled = true;
         SearchClick(sender, e);
     }
-    private async void SearchClick(object sender,RoutedEventArgs e)
+    private async void SearchClick(object sender, RoutedEventArgs e)
     {
-        CancelSearch(); var query=Query.Text.Trim();
-        Cities.Visibility=Visibility.Collapsed;
-        if(query.Length < 2) { SearchStatus.Text="请输入至少两个字符的城市名。"; return; }
-        using var source=new CancellationTokenSource(); search=source; SearchStatus.Text="正在搜索…";
+        CancelSearch(); var query = Query.Text.Trim();
+        Cities.Visibility = Visibility.Collapsed;
+        if (query.Length < 2) { SearchStatus.Text = "请输入至少两个字符的城市名。"; return; }
+        using var source = new CancellationTokenSource(); search = source; SearchStatus.Text = "正在搜索…";
         try {
-            var result=await weather.Search(query,source.Token, DirectWeather.IsChecked == true);
-            if(source.IsCancellationRequested)return;
-            Cities.ItemsSource=result; Cities.Visibility=result.Count>0?Visibility.Visible:Visibility.Collapsed;
-            SearchStatus.Text=result.Count==0?"没有找到城市，试试拼音。":"选择城市后点击「应用设置」。";
-        } catch(Exception ex) when(ex is HttpRequestException or OperationCanceledException or JsonException or KeyNotFoundException or InvalidOperationException or FormatException) {
+            var result = await weather.Search(query, source.Token, DirectWeather.IsChecked == true);
+            if (source.IsCancellationRequested) return;
+            Cities.ItemsSource = result; Cities.Visibility = result.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+            SearchStatus.Text = result.Count == 0 ? "没有找到城市，试试拼音。" : "选择城市后点击「应用设置」。";
+        } catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or JsonException or KeyNotFoundException or InvalidOperationException or FormatException) {
             if (!source.IsCancellationRequested) SearchStatus.Text = ex switch {
                 HttpRequestException { StatusCode: System.Net.HttpStatusCode.TooManyRequests } => "城市搜索请求过于频繁，请稍后重试。",
                 OperationCanceledException or HttpRequestException { StatusCode: null } => DirectWeather.IsChecked == true
                     ? "无法连接城市服务。请检查网络，或关闭直连后重新搜索。" : "无法连接城市服务。请检查系统代理，或勾选「直连天气服务」后重新搜索。",
                 _ => "城市服务暂未返回有效结果，请稍后重试。"
             };
-        } finally { if(search==source)search=null; }
+        } finally { if (search == source) search = null; }
     }
-    public void CancelSearch() { search?.Cancel(); search=null; }
-    private void CitySelected(object sender,SelectionChangedEventArgs e) { if(Cities.SelectedItem is City choice) {city=choice; CityLabel.Text=choice.Label; Tick(DateTime.Now);} }
-    private void ClearCity(object sender,RoutedEventArgs e) { CancelSearch(); city=null; Cities.ItemsSource=null; Cities.Visibility=Visibility.Collapsed; SearchStatus.Text=""; CityLabel.Text="尚未选择城市"; Tick(DateTime.Now); }
-    private void GoBack(object sender,RoutedEventArgs e) { CancelSearch(); back(); }
-    private void ExitClick(object sender,RoutedEventArgs e) => quit();
-    private void ReadLicenses(object sender,RoutedEventArgs e)
+    public void CancelSearch() { search?.Cancel(); search = null; }
+    private void CitySelected(object sender, SelectionChangedEventArgs e) { if (Cities.SelectedItem is City choice) { city = choice; CityLabel.Text = choice.Label; Tick(DateTime.Now); } }
+    private void ClearCity(object sender, RoutedEventArgs e) { CancelSearch(); city = null; Cities.ItemsSource = null; Cities.Visibility = Visibility.Collapsed; SearchStatus.Text = ""; CityLabel.Text = "尚未选择城市"; Tick(DateTime.Now); }
+    private void GoBack(object sender, RoutedEventArgs e) { CancelSearch(); back(); }
+    private void ExitClick(object sender, RoutedEventArgs e) => quit();
+    private void ReadLicenses(object sender, RoutedEventArgs e)
     {
-        if(LicenseText.Text.Length!=0) return;
-        string[] resources=["License.Lunar","License.Wpf","License.Dotnet","License.Notices"];
-        LicenseText.Text=string.Join("\n\n",resources.Select(name=>{
-            using var stream=typeof(App).Assembly.GetManifestResourceStream(name)!;
-            using var reader=new StreamReader(stream);
-            return name+"\n"+reader.ReadToEnd();
+        if (LicenseText.Text.Length != 0) return;
+        string[] resources = ["License.Lunar", "License.Wpf", "License.Dotnet", "License.Notices"];
+        LicenseText.Text = string.Join("\n\n", resources.Select(name => {
+            using var stream = typeof(App).Assembly.GetManifestResourceStream(name)!;
+            using var reader = new StreamReader(stream);
+            return name + "\n" + reader.ReadToEnd();
         }));
     }
 }

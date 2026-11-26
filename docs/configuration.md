@@ -214,4 +214,4 @@
 
 已知经纬度后，同时查询到期的气温和美标 AQI。主源出错或等待满 3 秒即并行查询备用源，每项采用最先返回的有效结果。已取得两项数据或已切换地点时取消剩余请求。离线时显示已有数值、缓存标记和数据时间。缺项会明确显示暂不可用。[城市查询](https://open-meteo.com/en/docs/geocoding-api) · [天气预报](https://open-meteo.com/en/docs) · [空气质量及归属](https://open-meteo.com/en/docs/air-quality-api) · [Visual Crossing 免密钥接口](https://www.visualcrossing.com/resources/documentation/weather-api/free-weather-api-no-key/)
 
-任务栏样式用到备用源数据时，下行附上 Visual Crossing Weather，并与其他内容一起自适应排版。月历中的来源名称可打开供应方网站。
+界面与任务栏不显示天气供应方来源文案，点击月历右上角玻璃天气卡可直达「城市与天气」设置页。

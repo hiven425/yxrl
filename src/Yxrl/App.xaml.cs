@@ -51,9 +51,9 @@ public partial class App : Application
         store=new(directory); store.Load(); calendar=new(store); weather=new(directory); weather.Load();
         var reminders = new ReminderStore(directory);
         reminders.Load();
-        panel=new(store,calendar,weather,reminders,OpenSettings);
+        panel=new(store,calendar,weather,reminders,section=>OpenSettings(section));
         reminderDelivery = new(reminders, () => ActiveAnchor?.Taskbar ?? Native.FindWindow("Shell_TrayWnd", null));
-        listener=ThreadPool.RegisterWaitForSingleObject(openSignal,(_,_)=>Dispatcher.BeginInvoke(OpenSettings),null,Timeout.Infinite,false);
+        listener=ThreadPool.RegisterWaitForSingleObject(openSignal,(_,_)=>Dispatcher.BeginInvoke(()=>OpenSettings()),null,Timeout.Infinite,false);
         SystemEvents.UserPreferenceChanged+=PreferenceChanged;
         ApplySettings();
         timer=new DispatcherTimer {Interval=TimeSpan.FromMilliseconds(25)};
@@ -64,21 +64,23 @@ public partial class App : Application
         if(stopping) return;
         Theme.Apply();
         RefreshVisible(DateTime.Now,recolor:true);
+        panel.RefreshTheme();
+        settingsWindow?.RefreshTheme();
     });
     private ClockAnchor? ActiveAnchor => detected.FirstOrDefault(x=>x.Taskbar==lastBar) ?? detected.FirstOrDefault();
-    private void OpenSettings()
+    private void OpenSettings(int section = 0)
     {
         if(stopping) return;
         if(firstScan) { wantSettings=true; return; }
         if (panel.FocusReminderEditor()) return;
-        if (settingsWindow is not null) { settingsWindow.BringForward(); return; }
+        if (settingsWindow is not null) { settingsWindow.SelectSection(section); return; }
         bool resumeDate = panel.IsVisible;
         panel.Dismiss();
         settingsWindow = new SettingsWindow(store, calendar, weather, ApplySettings,
             () => panel.Present(ActiveAnchor, resetDate: !resumeDate), Shutdown);
         settingsWindow.Closed += (_, _) => settingsWindow = null;
         UpdateStatus();
-        settingsWindow.Present(ActiveAnchor);
+        settingsWindow.Present(ActiveAnchor, section);
     }
     private void ApplySettings()
     {

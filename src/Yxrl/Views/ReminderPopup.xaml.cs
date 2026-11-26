@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Interop;
+using System.Windows.Media;
 using Yxrl.Desktop;
 
 namespace Yxrl.Views;
@@ -15,6 +16,15 @@ internal partial class ReminderPopup : Window
     {
         InitializeComponent();
         Notices.ItemsSource = entries;
+    }
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        if (Theme.ApplyWindowChrome(this, Native.BackdropKind.Mica))
+            Background = Brushes.Transparent;
+        else
+            SetResourceReference(BackgroundProperty, "Surface");
     }
 
     public void Append(IEnumerable<ReminderNotice> notices, nint taskbar)

@@ -19,12 +19,17 @@ internal readonly record struct PixelRect(int Left, int Top, int Right, int Bott
 }
 [StructLayout(LayoutKind.Sequential)]
 internal struct MonitorInfo { public int Size; public PixelRect Monitor, Work; public uint Flags; }
+[StructLayout(LayoutKind.Sequential)]
+internal struct Margins { public int Left, Right, Top, Bottom; }
 internal static class Native
 {
+    internal enum BackdropKind { None = 0, Mica = 2, Acrylic = 3, Tabbed = 4 }
     internal delegate bool EnumProc(nint hwnd, nint param);
     internal delegate nint MouseProc(int code, nint message, nint data);
     internal static readonly nint Topmost = -1;
     internal const uint NoSize = 1, NoMove = 2, NoActivate = 0x10, NoZOrder = 4, Show = 0x40, NoOwnerZOrder = 0x200;
+    private const int DwmwaExtendedFrameBounds = 9, DwmwaUseImmersiveDarkMode = 20, DwmwaWindowCornerPreference = 33,
+        DwmwaBorderColor = 34, DwmwaSystemBackdropType = 38, DwmwcpRound = 2;
     [DllImport("user32")] internal static extern bool EnumWindows(EnumProc callback, nint param);
     [DllImport("user32", CharSet=CharSet.Unicode)] internal static extern nint FindWindow(string name, string? title);
     [DllImport("user32")] internal static extern bool IsWindowVisible(nint hwnd);
@@ -51,7 +56,33 @@ internal static class Native
     [DllImport("gdi32")] internal static extern uint GetPixel(nint dc, int x, int y);
     [DllImport("gdi32")] private static extern nint CreateRectRgn(int left, int top, int right, int bottom);
     [DllImport("gdi32")] private static extern bool DeleteObject(nint handle);
+    [DllImport("dwmapi")] private static extern int DwmSetWindowAttribute(nint hwnd, int attribute, ref int value, int size);
+    [DllImport("dwmapi")] private static extern int DwmGetWindowAttribute(nint hwnd, int attribute, out PixelRect value, int size);
+    [DllImport("dwmapi")] private static extern int DwmExtendFrameIntoClientArea(nint hwnd, ref Margins margins);
     internal static string ClassOf(nint hwnd) { var text = new StringBuilder(160); GetClassName(hwnd,text,text.Capacity); return text.ToString(); }
+    internal static PixelRect VisibleRect(nint hwnd)
+    {
+        if (hwnd != 0 && DwmGetWindowAttribute(hwnd, DwmwaExtendedFrameBounds, out var rect, Marshal.SizeOf<PixelRect>()) == 0 && rect.HasArea)
+            return rect;
+        return hwnd != 0 && GetWindowRect(hwnd, out var fallback) ? fallback : default;
+    }
+    internal static bool ApplyDwmStyle(nint hwnd, bool dark, BackdropKind backdrop, uint? borderBgr = null)
+    {
+        if (hwnd == 0) return false;
+        int darkMode = dark ? 1 : 0;
+        DwmSetWindowAttribute(hwnd, DwmwaUseImmersiveDarkMode, ref darkMode, sizeof(int));
+        int corner = DwmwcpRound;
+        DwmSetWindowAttribute(hwnd, DwmwaWindowCornerPreference, ref corner, sizeof(int));
+        if (borderBgr is { } bgr) {
+            int color = unchecked((int)bgr);
+            DwmSetWindowAttribute(hwnd, DwmwaBorderColor, ref color, sizeof(int));
+        }
+        if (backdrop == BackdropKind.None) return false;
+        var margins = new Margins { Left = -1, Right = -1, Top = -1, Bottom = -1 };
+        if (DwmExtendFrameIntoClientArea(hwnd, ref margins) != 0) return false;
+        int kind = (int)backdrop;
+        return DwmSetWindowAttribute(hwnd, DwmwaSystemBackdropType, ref kind, sizeof(int)) == 0;
+    }
     internal static MonitorInfo MonitorOf(nint hwnd)
     {
         var info = new MonitorInfo { Size = Marshal.SizeOf<MonitorInfo>() };

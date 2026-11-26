@@ -86,17 +86,6 @@ internal static class ClockFormatter
             "forecast" => new($"{time} {city} {forecastCondition}".TrimEnd(), forecastDetails.Length > 0 ? forecastDetails : weatherText, time),
             "custom" => new(Format(opt.Top,Value),Format(opt.Bottom,Value), stamp),
             _ => throw new FormatException("未知时钟样式") };
-        if (weather?.UsesVisualCrossing == true) {
-            var fields = opt.Top + " " + opt.Bottom;
-            bool attributed = opt.Preset switch {
-                "forecast" => true,
-                "weather" => current?.Source == VisualCrossing.Name,
-                "custom" => current?.Source == VisualCrossing.Name && (fields.Contains("{天气}") || fields.Contains("{温度范围}"))
-                    || weather.Air?.Source == VisualCrossing.Name && fields.Contains("{美标AQI}"),
-                _ => false
-            };
-            if (attributed) return lines with { Lower = (lines.Lower + " " + VisualCrossing.Name).TrimStart() };
-        }
         return lines;
     }
 }

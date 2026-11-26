@@ -3,6 +3,8 @@ using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Markup;
+using System.Windows.Media;
+using Yxrl.Desktop;
 
 namespace Yxrl.Views;
 
@@ -47,6 +49,15 @@ internal partial class ReminderEditorWindow : Window
         loading = false;
         RefreshPreview();
         Loaded += (_, _) => TitleField.Focus();
+    }
+
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        if (Theme.ApplyWindowChrome(this, Native.BackdropKind.Mica))
+            Background = Brushes.Transparent;
+        else
+            SetResourceReference(BackgroundProperty, "Surface");
     }
 
     private DateReminder ReadDraft(string title)

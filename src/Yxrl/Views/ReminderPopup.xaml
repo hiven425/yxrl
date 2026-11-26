@@ -3,17 +3,19 @@
         Title="YXRL 日期提醒" AutomationProperties.AutomationId="YxrlReminderPopup" Width="344" Height="166"
         WindowStyle="ToolWindow" ResizeMode="NoResize" WindowStartupLocation="Manual" ShowInTaskbar="False"
         Topmost="True" ShowActivated="False" UseLayoutRounding="True"
-        FontFamily="Segoe UI, Microsoft YaHei UI" FontSize="13" Background="{DynamicResource Surface}">
-  <DockPanel Margin="13,10">
-    <Button DockPanel.Dock="Bottom" Content="知道了" Click="Dismiss" HorizontalAlignment="Right" Margin="0,7,0,0" Padding="12,4"/>
+        FontFamily="Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI" FontSize="13" Background="{DynamicResource Surface}">
+  <DockPanel Margin="14,12">
+    <Button DockPanel.Dock="Bottom" Style="{StaticResource SecondaryButton}" Content="知道了" Click="Dismiss"
+            HorizontalAlignment="Right" Margin="0,9,0,0" MinHeight="28" Padding="14,4"/>
     <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
       <ItemsControl x:Name="Notices">
         <ItemsControl.ItemTemplate>
           <DataTemplate>
-            <Border Background="{DynamicResource Card}" CornerRadius="7" Padding="9,7" Margin="0,0,0,4">
+            <Border Background="{DynamicResource Paper}" BorderBrush="{DynamicResource Line}" BorderThickness="1"
+                    CornerRadius="8" Padding="11,8" Margin="0,0,0,5">
               <StackPanel>
-                <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                <TextBlock Text="{Binding Details}" Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,3,0,0"/>
+                <TextBlock Text="{Binding Title}" FontSize="14.5" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                <TextBlock Text="{Binding Details}" Style="{StaticResource Subtle}" FontSize="12" TextWrapping="Wrap" Margin="0,3,0,0" Typography.NumeralAlignment="Tabular"/>
               </StackPanel>
             </Border>
           </DataTemplate>

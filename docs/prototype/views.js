@@ -48,20 +48,26 @@ const CalendarViews = (function () {
       <span class="glass-twilight"><i class="glass-orb"></i></span>
       <span class="glass-horizon"></span>
       <span class="glass-cloud"></span>
-      <span class="glass-rain"><i></i><i></i><i></i></span>
-      <span class="glass-snow"><i>✧</i><i>✧</i><i>✧</i></span>
+      <span class="glass-rain"><i></i><i></i><i></i><i></i></span>
+      <span class="glass-snow"><i>❄</i><i>❄</i><i>❄</i></span>
       <span class="glass-bolt"></span>
       <span class="glass-fog"></span>
       <span class="glass-wind"></span>
-      <span class="glass-unknown">–</span>
+      <span class="glass-unknown"></span>
     </span>`;
   }
   function weatherBadge(state) {
     const w = state.network === "empty" ? null : M.weatherSamples[state.city];
-    const status = state.network === "cached" ? "缓存 · 10:25" : w?.condition;
+    const scene = M.weatherScene(state, "10:32:01");
+    const status = state.network === "cached" ? "缓存 10:25" : "";
     const preview = w && state.weatherAnimation !== "auto" && state.network !== "cached"
-      ? "图标演示 · " + M.weatherAnimations[state.weatherAnimation] : "";
-    return `<button class="weather-badge" type="button" data-action="weather" aria-label="城市与天气设置">${weatherGlyph()}<span><strong>${w ? w.temp + "°" : "—"}</strong><small>${preview ? e(preview) : e(state.city || "选择城市") + (status ? " · " + e(status) : " · 暂无数据")}</small></span></button>`;
+      ? M.weatherAnimations[state.weatherAnimation] : "";
+    const meta = !w
+      ? e(state.city || "选择城市") + " · 暂无数据"
+      : preview
+        ? e(preview)
+        : e(state.city) + (status ? " · " + status : "");
+    return `<button class="weather-badge" type="button" data-action="weather" aria-label="城市与天气设置">${weatherGlyph(scene)}<span><span class="weather-badge-head"><strong>${w ? w.temp + "°" : "—"}</strong>${w ? `<em>${e(w.condition)}</em>` : ""}</span><small>${meta}</small></span></button>`;
   }
   function occurrenceRow(item, date, cal) {
     const done = item.done.includes(date);

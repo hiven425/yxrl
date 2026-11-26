@@ -1,32 +1,37 @@
 /* Windows 桌面与纸面式月历，共用明暗语义色。 */
 :root {
   color-scheme: light;
-  --text: #192b38;
-  --muted: #506675;
-  --faint: #566b7a;
-  --accent: #075d9d;
+  --text: #182430;
+  --muted: #4f6373;
+  --faint: #5a6f80;
+  --accent: #005fb8;
+  --accent-hover: #0052a0;
   --on-accent: #fff;
-  --accent-fill: #e3f1ff;
-  --surface: #fbfdff;
+  --accent-fill: #e6f2ff;
+  --surface: #f9fbfd;
+  --surface-glass: rgb(249 251 253 / 93%);
   --paper: #fff;
-  --subtle: #f0f5f8;
-  --line: #d9e3e9;
-  --rail: #f7fafc;
-  --panel-border: #b9c9d3;
-  --danger: #a13a40;
-  --rest: #a24239;
-  --positive: #106a57;
-  --rest-bg: #ffebe5;
-  --positive-bg: #e4f4ee;
-  --shadow: 0 12px 40px #1a344222, 0 2px 8px #0d2c4814;
+  --subtle: #e6eef5;
+  --line: #dce4ec;
+  --rail: #f4f7fa;
+  --panel-border: #c2d0dc;
+  --danger: #b42d37;
+  --rest: #b83232;
+  --positive: #0e6f54;
+  --rest-bg: #ffe9e7;
+  --positive-bg: #e3f5ee;
+  --glass-fill: rgb(255 255 255 / 80%);
+  --glass-hover: rgb(255 255 255 / 92%);
+  --glass-border: rgb(214 231 245 / 75%);
+  --shadow: 0 12px 38px #152b3b24, 0 2px 8px #0d2c4814;
   --sky: #e4eff4;
   --sky-fade: #c4d9e4;
   --ridge-1: #bfd7e1;
   --ridge-2: #a6c5d4;
   --ridge-3: #88adbf;
   --ridge-4: #789bad;
-  --bar: #f4f8fbea;
-  --ring: #0067b7;
+  --bar: #f4f8fbe6;
+  --ring: #005fb8;
   --round: 12px;
   --control: 6px;
   --space: 8px;
@@ -34,32 +39,37 @@
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --text: #edf4f8;
-  --muted: #afc2ce;
-  --faint: #9bafbd;
-  --accent: #89c9ff;
-  --on-accent: #082b47;
-  --accent-fill: #213f55;
-  --surface: #202c35;
-  --paper: #25333d;
-  --subtle: #293b46;
-  --line: #3d515d;
-  --rail: #19252d;
-  --panel-border: #536977;
-  --danger: #ffb0ad;
-  --rest: #ffb1a6;
-  --positive: #8adbc0;
-  --rest-bg: #493332;
-  --positive-bg: #223e37;
-  --shadow: 0 14px 44px #01080c66, 0 2px 10px #0004;
+  --text: #eef4f9;
+  --muted: #a9bccb;
+  --faint: #96aab9;
+  --accent: #76c7ff;
+  --accent-hover: #8fd2ff;
+  --on-accent: #07243d;
+  --accent-fill: #1e3b52;
+  --surface: #1d2730;
+  --surface-glass: rgb(29 39 48 / 91%);
+  --paper: #24313c;
+  --subtle: #2e3f4d;
+  --line: #374957;
+  --rail: #172028;
+  --panel-border: #4e6474;
+  --danger: #ff9492;
+  --rest: #ff8f8a;
+  --positive: #7cdcc0;
+  --rest-bg: #4a2b2c;
+  --positive-bg: #1e3d34;
+  --glass-fill: rgb(52 71 87 / 35%);
+  --glass-hover: rgb(62 84 102 / 52%);
+  --glass-border: rgb(158 197 226 / 32%);
+  --shadow: 0 14px 44px #01080c6b, 0 2px 10px #0005;
   --sky: #182b38;
   --sky-fade: #233f4d;
   --ridge-1: #2b4756;
   --ridge-2: #355765;
   --ridge-3: #365f6d;
   --ridge-4: #416c79;
-  --bar: #1e303aef;
-  --ring: #99d7ff;
+  --bar: #1d2a35e6;
+  --ring: #8fd2ff;
 }
 * {
   box-sizing: border-box;
@@ -342,7 +352,8 @@ body[data-page="editor"] .window-host {
 .flyout,
 .settings-window,
 dialog {
-  background: var(--surface);
+  background: var(--surface-glass);
+  backdrop-filter: blur(22px) saturate(145%);
   border: 1px solid var(--panel-border);
   border-radius: var(--round);
   box-shadow: var(--shadow);
@@ -403,7 +414,7 @@ dialog {
   width: 11px;
   height: 11px;
   background: linear-gradient(135deg, transparent 29%, currentColor 30% 38%, transparent 39% 53%, currentColor 54% 62%, transparent 63%);
-  opacity: 0.65;
+  opacity: 0.32;
 }
 .calendar-grip[data-resize="start"] {
   top: 0;
@@ -430,27 +441,27 @@ dialog {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 18px 20px 17px;
+  padding: 16px 18px 14px;
   border-bottom: 1px solid var(--line);
 }
 .digital {
-  font-size: 46px;
-  line-height: 1.08;
+  font-size: 44px;
+  line-height: 1.06;
   font-weight: 620;
-  letter-spacing: -2px;
+  letter-spacing: -1.8px;
   font-variant-numeric: tabular-nums;
 }
 .digital small {
-  font-size: 26px;
+  font-size: 24px;
   color: var(--muted);
-  letter-spacing: -0.5px;
-  font-weight: 470;
+  letter-spacing: -0.4px;
+  font-weight: 450;
 }
 .month-hero p,
 .day-overview p {
   color: var(--muted);
-  font-size: 13px;
-  margin-top: 5px;
+  font-size: 12.5px;
+  margin-top: 4px;
 }
 .month-hero p span {
   margin-left: 6px;
@@ -458,26 +469,41 @@ dialog {
 .weather-badge {
   display: flex;
   align-items: center;
-  gap: 7px;
-  border-radius: var(--control);
-  padding: 5px;
+  gap: 8px;
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  padding: 5px 10px 5px 6px;
   text-align: left;
+  backdrop-filter: blur(12px);
+  box-shadow: inset 0 1px 0 #ffffff5c, 0 2px 6px #0f26380a;
 }
 .weather-badge:hover {
-  background: var(--subtle);
+  background: var(--glass-hover);
+  border-color: var(--accent);
+}
+.weather-badge-head {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
 }
 .weather-badge strong {
-  font-size: 22px;
+  font-size: 20px;
   line-height: 1.1;
   font-weight: 620;
-  display: block;
+  font-variant-numeric: tabular-nums;
+}
+.weather-badge-head em {
+  font-style: normal;
+  font-size: 11.5px;
+  color: var(--muted);
 }
 .weather-badge small,
 .weather-detail small {
   display: block;
   color: var(--muted);
-  font-size: 11px;
-  margin-top: 3px;
+  font-size: 10.5px;
+  margin-top: 2px;
 }
 .month-tool,
 .section-title,
@@ -495,7 +521,7 @@ dialog {
   gap: 8px;
 }
 .month-tool {
-  padding: 12px 16px 5px 20px;
+  padding: 10px 16px 4px 18px;
 }
 .month-tool div,
 .panel-head,
@@ -608,7 +634,7 @@ dialog {
   color: var(--on-accent);
 }
 .date-cell.today.selected {
-  box-shadow: inset 0 0 0 2px var(--surface);
+  box-shadow: inset 0 0 0 1.5px var(--surface);
 }
 .date-cell.today small {
   color: var(--on-accent);
@@ -714,7 +740,7 @@ h3 {
   background: var(--accent);
 }
 .primary:hover {
-  filter: brightness(0.94);
+  background: var(--accent-hover);
 }
 .secondary {
   background: var(--paper);
@@ -821,6 +847,7 @@ h3 {
   justify-content: center;
   align-items: center;
   background: var(--bar);
+  backdrop-filter: blur(20px) saturate(135%);
   border-top: 1px solid var(--panel-border);
 }
 .taskbar-apps,
@@ -1009,10 +1036,11 @@ body:not([data-page="clock"]) .taskbar-calendar::after {
 .date-reminder-popup {
   position: fixed;
   z-index: 8;
-  border: 1px solid var(--line);
+  border: 1px solid var(--panel-border);
   border-radius: 8px;
-  background: var(--surface);
-  box-shadow: 0 8px 22px rgb(0 0 0 / 16%);
+  background: var(--surface-glass);
+  backdrop-filter: blur(20px) saturate(140%);
+  box-shadow: var(--shadow);
 }
 .date-reminder-menu {
   display: grid;
@@ -1367,8 +1395,12 @@ dialog::backdrop {
 .weather-detail {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin: 17px 0 6px;
+  gap: 12px;
+  margin: 14px 0 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--glass-fill);
+  border: 1px solid var(--glass-border);
 }
 .weather-detail strong {
   font-size: 31px;
@@ -1740,6 +1772,7 @@ dialog::backdrop {
   *::after {
     scroll-behavior: auto !important;
     transition: none !important;
+    animation: none !important;
   }
 }
 @media (forced-colors: active) {

@@ -1,25 +1,30 @@
 <Window x:Class="Yxrl.Views.ClockFormatGuide" x:ClassModifier="internal"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="时钟格式说明" AutomationProperties.AutomationId="ClockFormatGuide" WindowStartupLocation="CenterOwner"
-        Width="476" Height="440" MinWidth="300" MinHeight="200" ShowInTaskbar="False" FontFamily="Segoe UI, Microsoft YaHei UI" FontSize="13"
+        Width="476" Height="440" MinWidth="300" MinHeight="200" ShowInTaskbar="False"
+        FontFamily="Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI" FontSize="13"
         Background="{DynamicResource Surface}" UseLayoutRounding="True">
-  <DockPanel Margin="18,12">
-    <Button DockPanel.Dock="Bottom" AutomationProperties.Name="关闭" IsCancel="True" HorizontalAlignment="Right" Margin="0,10,0,0"
-            Background="{DynamicResource Selected}" Padding="20,6"><TextBlock Text="关闭" Foreground="{DynamicResource OnSelected}"/></Button>
+  <DockPanel Margin="20,14">
+    <Button DockPanel.Dock="Bottom" Style="{StaticResource PrimaryButton}" AutomationProperties.Name="关闭"
+            IsCancel="True" HorizontalAlignment="Right" Margin="0,12,0,0" Padding="22,6" Content="关闭"/>
     <ScrollViewer VerticalScrollBarVisibility="Auto">
       <StackPanel>
-        <TextBlock Text="两行格式示例" FontSize="18" FontWeight="SemiBold"/>
-        <Border Background="{DynamicResource Card}" CornerRadius="7" Padding="10" Margin="0,8">
-          <StackPanel><TextBlock Text="上行　HH:mm:ss　→　12:25:31"/><TextBlock Text="下行　ddd {农历}　→　周四 十月十八"/></StackPanel>
+        <TextBlock Text="两行格式示例" FontSize="17" FontWeight="SemiBold"/>
+        <Border Background="{DynamicResource Paper}" BorderBrush="{DynamicResource Line}" BorderThickness="1"
+                CornerRadius="8" Padding="12,9" Margin="0,8,0,4">
+          <StackPanel>
+            <TextBlock Text="上行　HH:mm:ss　→　12:25:31" Typography.NumeralAlignment="Tabular"/>
+            <TextBlock Text="下行　ddd {农历}　→　周四 十月十八" Margin="0,3,0,0"/>
+          </StackPanel>
         </Border>
         <TextBlock Text="时间与星期" Style="{StaticResource Section}"/>
-        <TextBlock Text="HH、mm、ss 分别为两位小时、分钟、秒。tt h 显示上午或下午及 12 小时制小时。ddd 显示周四，W 显示四。" TextWrapping="Wrap"/>
+        <TextBlock Text="HH、mm、ss 分别为两位小时、分钟、秒。tt h 显示上午或下午及 12 小时制小时。ddd 显示周四，W 显示四。" TextWrapping="Wrap" LineHeight="20"/>
         <TextBlock Text="日期与节日" Style="{StaticResource Section}"/>
-        <TextBlock Text="yyyy、M、d 显示年月日，MM、dd 补零。可加入 {农历}、{节日}、{节气}、{周数}、{时辰}、{倒数}。" TextWrapping="Wrap"/>
+        <TextBlock Text="yyyy、M、d 显示年月日，MM、dd 补零。可加入 {农历}、{节日}、{节气}、{周数}、{时辰}、{倒数}。" TextWrapping="Wrap" LineHeight="20"/>
         <TextBlock Text="城市与天气" Style="{StaticResource Section}"/>
-        <TextBlock Text="{}{城市}、{天气}、{温度范围}、{美标AQI} 使用所选城市的数据。" TextWrapping="Wrap"/>
+        <TextBlock Text="{}{城市}、{天气}、{温度范围}、{美标AQI} 使用所选城市的数据。" TextWrapping="Wrap" LineHeight="20"/>
         <TextBlock Text="兼容写法" Style="{StaticResource Section}"/>
-        <TextBlock Text="hh:ff:ss 星期W JJ　→　12:25:31 星期四 感恩节" TextWrapping="Wrap"/>
+        <TextBlock Text="hh:ff:ss 星期W JJ　→　12:25:31 星期四 感恩节" TextWrapping="Wrap" LineHeight="20"/>
       </StackPanel>
     </ScrollViewer>
   </DockPanel>

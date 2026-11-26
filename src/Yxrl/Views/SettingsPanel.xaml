@@ -4,27 +4,41 @@
   <UserControl.Resources>
     <Style x:Key="NavItem" TargetType="ListBoxItem">
       <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Foreground" Value="{DynamicResource Ink}"/>
+      <Setter Property="FontSize" Value="13"/>
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem">
-        <Border x:Name="NavBox" CornerRadius="6" BorderThickness="1" BorderBrush="Transparent" Background="Transparent" Margin="2">
-          <Grid MinHeight="37">
-            <Border x:Name="Rail" Width="3" Height="16" HorizontalAlignment="Left" VerticalAlignment="Center" Background="{DynamicResource Accent}" CornerRadius="2" Visibility="Collapsed"/>
-            <ContentPresenter Margin="11,0,5,0" VerticalAlignment="Center"/>
+        <Border x:Name="NavBox" CornerRadius="6" BorderThickness="1" BorderBrush="Transparent" Background="Transparent" Margin="2,1.5">
+          <Grid MinHeight="36">
+            <Border x:Name="Rail" Width="3" Height="16" HorizontalAlignment="Left" VerticalAlignment="Center"
+                    Background="{DynamicResource Accent}" CornerRadius="2" Visibility="Collapsed"/>
+            <ContentPresenter Margin="11,0,8,0" VerticalAlignment="Center" TextElement.Foreground="{TemplateBinding Foreground}"/>
           </Grid>
         </Border>
         <ControlTemplate.Triggers>
-          <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="NavBox" Property="Background" Value="{DynamicResource Surface}"/></Trigger>
-          <Trigger Property="IsSelected" Value="True"><Setter TargetName="NavBox" Property="Background" Value="{DynamicResource Hot}"/><Setter TargetName="Rail" Property="Visibility" Value="Visible"/></Trigger>
+          <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="NavBox" Property="Background" Value="{DynamicResource HoverFill}"/></Trigger>
+          <Trigger Property="IsSelected" Value="True">
+            <Setter TargetName="NavBox" Property="Background" Value="{DynamicResource Hot}"/>
+            <Setter TargetName="Rail" Property="Visibility" Value="Visible"/>
+            <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+          </Trigger>
           <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="NavBox" Property="BorderBrush" Value="{DynamicResource Accent}"/></Trigger>
         </ControlTemplate.Triggers>
       </ControlTemplate></Setter.Value></Setter>
     </Style>
-    <Style x:Key="NavGlyph" TargetType="TextBlock"><Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets"/><Setter Property="FontSize" Value="15"/><Setter Property="Margin" Value="0,0,8,0"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="Foreground" Value="{DynamicResource Ink}"/></Style>
+    <Style x:Key="NavGlyph" TargetType="TextBlock">
+      <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets"/>
+      <Setter Property="FontSize" Value="15"/>
+      <Setter Property="Margin" Value="0,0,9,0"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
     <Style x:Key="CardItem" TargetType="ListBoxItem">
       <Setter Property="AutomationProperties.Name" Value="{Binding Name}"/>
       <Setter Property="AutomationProperties.AutomationId" Value="{Binding Id, StringFormat=Preset-{0}}"/>
       <Setter Property="Cursor" Value="Hand"/>
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem">
-        <Border x:Name="Tile" Background="{DynamicResource Card}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="7" Margin="3" Padding="6,7">
+        <Border x:Name="Tile" Background="{DynamicResource Paper}" BorderBrush="{DynamicResource Line}" BorderThickness="1"
+                CornerRadius="8" Margin="3.5" Padding="7,8">
           <Grid MinHeight="58">
             <ContentPresenter VerticalAlignment="Center"/>
             <Border x:Name="Check" Visibility="Collapsed" Width="15" Height="15" CornerRadius="8" Background="{DynamicResource Selected}"
@@ -35,62 +49,90 @@
           </Grid>
         </Border>
         <ControlTemplate.Triggers>
-          <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Tile" Property="BorderBrush" Value="{DynamicResource Muted}"/></Trigger>
+          <Trigger Property="IsMouseOver" Value="True">
+            <Setter TargetName="Tile" Property="BorderBrush" Value="{DynamicResource PanelBorder}"/>
+            <Setter TargetName="Tile" Property="Background" Value="{DynamicResource HoverFill}"/>
+          </Trigger>
           <Trigger Property="IsSelected" Value="True">
-            <Setter TargetName="Tile" Property="BorderBrush" Value="{DynamicResource Accent}"/><Setter TargetName="Tile" Property="Background" Value="{DynamicResource Hot}"/>
+            <Setter TargetName="Tile" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+            <Setter TargetName="Tile" Property="BorderThickness" Value="1.5"/>
+            <Setter TargetName="Tile" Property="Padding" Value="6.5,7.5"/>
+            <Setter TargetName="Tile" Property="Background" Value="{DynamicResource Hot}"/>
             <Setter TargetName="Check" Property="Visibility" Value="Visible"/>
           </Trigger>
-          <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Tile" Property="BorderBrush" Value="{DynamicResource Accent}"/><Setter TargetName="Tile" Property="BorderThickness" Value="2"/><Setter TargetName="Tile" Property="Padding" Value="5,6"/></Trigger>
+          <Trigger Property="IsKeyboardFocused" Value="True">
+            <Setter TargetName="Tile" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+            <Setter TargetName="Tile" Property="BorderThickness" Value="2"/>
+            <Setter TargetName="Tile" Property="Padding" Value="6,7"/>
+          </Trigger>
         </ControlTemplate.Triggers>
       </ControlTemplate></Setter.Value></Setter>
     </Style>
     <Style x:Key="Segment" TargetType="RadioButton">
       <Setter Property="Cursor" Value="Hand"/><Setter Property="FontSize" Value="12"/>
       <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="RadioButton">
-        <Border x:Name="SegmentBox" Background="Transparent" BorderBrush="Transparent" CornerRadius="4" BorderThickness="1" Padding="8,3">
+        <Border x:Name="SegmentBox" Background="Transparent" BorderBrush="Transparent" CornerRadius="5" BorderThickness="1" Padding="10,3.5">
           <TextBlock x:Name="Label" Text="{TemplateBinding Content}" Foreground="{DynamicResource Muted}"/>
         </Border>
         <ControlTemplate.Triggers>
-          <Trigger Property="IsChecked" Value="True"><Setter TargetName="SegmentBox" Property="Background" Value="{DynamicResource Surface}"/><Setter TargetName="SegmentBox" Property="BorderBrush" Value="{DynamicResource Line}"/><Setter TargetName="Label" Property="Foreground" Value="{DynamicResource Accent}"/></Trigger>
-          <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="SegmentBox" Property="BorderBrush" Value="{DynamicResource Accent}"/></Trigger>
+          <Trigger Property="IsMouseOver" Value="True">
+            <Setter TargetName="Label" Property="Foreground" Value="{DynamicResource Ink}"/>
+          </Trigger>
+          <Trigger Property="IsChecked" Value="True">
+            <Setter TargetName="SegmentBox" Property="Background" Value="{DynamicResource Paper}"/>
+            <Setter TargetName="SegmentBox" Property="BorderBrush" Value="{DynamicResource Line}"/>
+            <Setter TargetName="Label" Property="Foreground" Value="{DynamicResource Accent}"/>
+            <Setter TargetName="Label" Property="FontWeight" Value="SemiBold"/>
+          </Trigger>
+          <Trigger Property="IsKeyboardFocused" Value="True">
+            <Setter TargetName="SegmentBox" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+          </Trigger>
         </ControlTemplate.Triggers>
       </ControlTemplate></Setter.Value></Setter>
     </Style>
     <Style x:Key="Switch" TargetType="CheckBox">
-      <Setter Property="Cursor" Value="Hand"/><Setter Property="Template"><Setter.Value><ControlTemplate TargetType="CheckBox">
-        <Border x:Name="FocusBox" BorderBrush="Transparent" BorderThickness="1" CornerRadius="12" Padding="2">
-          <Border x:Name="Track" Width="36" Height="20" Background="{DynamicResource Muted}" CornerRadius="10" Padding="3">
-            <Ellipse x:Name="Thumb" Width="14" Height="14" HorizontalAlignment="Left" Fill="{DynamicResource Surface}"/>
+      <Setter Property="Cursor" Value="Hand"/>
+      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="CheckBox">
+        <Border x:Name="FocusBox" BorderBrush="Transparent" BorderThickness="1.5" CornerRadius="13" Padding="2">
+          <Border x:Name="Track" Width="38" Height="20" Background="{DynamicResource Faint}" CornerRadius="10" Padding="3">
+            <Ellipse x:Name="Thumb" Width="14" Height="14" HorizontalAlignment="Left" Fill="{DynamicResource Paper}"/>
           </Border>
         </Border>
         <ControlTemplate.Triggers>
-          <Trigger Property="IsChecked" Value="True"><Setter TargetName="Track" Property="Background" Value="{DynamicResource Selected}"/><Setter TargetName="Thumb" Property="Fill" Value="{DynamicResource OnSelected}"/><Setter TargetName="Thumb" Property="HorizontalAlignment" Value="Right"/></Trigger>
-          <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="FocusBox" Property="BorderBrush" Value="{DynamicResource Accent}"/></Trigger>
+          <Trigger Property="IsMouseOver" Value="True">
+            <Setter TargetName="Track" Property="Background" Value="{DynamicResource Muted}"/>
+          </Trigger>
+          <Trigger Property="IsChecked" Value="True">
+            <Setter TargetName="Track" Property="Background" Value="{DynamicResource Selected}"/>
+            <Setter TargetName="Thumb" Property="Fill" Value="{DynamicResource OnSelected}"/>
+            <Setter TargetName="Thumb" Property="HorizontalAlignment" Value="Right"/>
+          </Trigger>
+          <Trigger Property="IsKeyboardFocused" Value="True">
+            <Setter TargetName="FocusBox" Property="BorderBrush" Value="{DynamicResource Accent}"/>
+          </Trigger>
         </ControlTemplate.Triggers>
       </ControlTemplate></Setter.Value></Setter>
     </Style>
-    <Style x:Key="FormatBox" TargetType="TextBox" BasedOn="{StaticResource {x:Type TextBox}}">
-      <Setter Property="Background" Value="{DynamicResource Surface}"/><Setter Property="Foreground" Value="{DynamicResource Ink}"/>
-      <Setter Property="CaretBrush" Value="{DynamicResource Ink}"/><Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
-      <Setter Property="MinHeight" Value="34"/><Setter Property="Padding" Value="8,5"/>
-      <Setter Property="VerticalContentAlignment" Value="Center"/>
-      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="TextBox">
-        <Border x:Name="Outline" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1"
-                CornerRadius="5" Padding="{TemplateBinding Padding}">
-          <ScrollViewer x:Name="PART_ContentHost" VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
-        </Border>
-        <ControlTemplate.Triggers>
-          <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Outline" Property="BorderBrush" Value="{DynamicResource Muted}"/></Trigger>
-          <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Outline" Property="BorderBrush" Value="{DynamicResource Accent}"/></Trigger>
-        </ControlTemplate.Triggers>
-      </ControlTemplate></Setter.Value></Setter>
+    <Style x:Key="GroupCard" TargetType="Border">
+      <Setter Property="Background" Value="{DynamicResource Paper}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Line}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="CornerRadius" Value="8"/>
+      <Setter Property="Padding" Value="14,11"/>
     </Style>
-    <Style x:Key="GroupTitle" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}"><Setter Property="FontSize" Value="15"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="VerticalAlignment" Value="Center"/></Style>
+    <Style x:Key="GroupTitle" TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}">
+      <Setter Property="FontSize" Value="14.5"/>
+      <Setter Property="FontWeight" Value="SemiBold"/>
+      <Setter Property="VerticalAlignment" Value="Center"/>
+    </Style>
   </UserControl.Resources>
+
   <DockPanel>
-    <Border x:Name="Side" DockPanel.Dock="Left" Width="140" Background="{DynamicResource Card}" BorderBrush="{DynamicResource Line}" BorderThickness="0,0,1,0" Padding="6,16,6,8">
-      <ListBox x:Name="Nav" VerticalAlignment="Top" SelectionChanged="SectionChanged" AutomationProperties.Name="设置分类" ItemContainerStyle="{StaticResource NavItem}"
-               BorderThickness="0" Background="Transparent" ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled">
+    <Border x:Name="Side" DockPanel.Dock="Left" Width="142" Background="{DynamicResource Card}"
+            BorderBrush="{DynamicResource Line}" BorderThickness="0,0,1,0" Padding="7,15,7,8">
+      <ListBox x:Name="Nav" VerticalAlignment="Top" SelectionChanged="SectionChanged" AutomationProperties.Name="设置分类"
+               ItemContainerStyle="{StaticResource NavItem}" BorderThickness="0" Background="Transparent"
+               ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled">
         <ListBox.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="{Binding NavigationColumns, RelativeSource={RelativeSource AncestorType={x:Type local:SettingsPanel}}}"/></ItemsPanelTemplate></ListBox.ItemsPanel>
         <ListBoxItem AutomationProperties.Name="任务栏时钟"><StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource NavGlyph}" Text="&#xE917;"/><TextBlock Text="任务栏时钟"/></StackPanel></ListBoxItem>
         <ListBoxItem AutomationProperties.Name="日历设置"><StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource NavGlyph}" Text="&#xE787;"/><TextBlock Text="日历设置"/></StackPanel></ListBoxItem>
@@ -98,21 +140,27 @@
         <ListBoxItem AutomationProperties.Name="关于"><StackPanel Orientation="Horizontal"><TextBlock Style="{StaticResource NavGlyph}" Text="&#xE946;"/><TextBlock Text="关于"/></StackPanel></ListBoxItem>
       </ListBox>
     </Border>
+
     <Grid>
       <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
       <ScrollViewer x:Name="BodyScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Focusable="False">
-        <StackPanel x:Name="Body" Margin="21,15,21,14">
-          <TextBlock x:Name="PageTitle" Text="任务栏时钟" FontSize="24" FontWeight="SemiBold" Margin="0,0,0,12"/>
+        <StackPanel x:Name="Body" Margin="20,15,20,16">
+          <TextBlock x:Name="PageTitle" Text="任务栏时钟" FontSize="22" FontWeight="SemiBold" Margin="0,0,0,12"/>
+
           <StackPanel x:Name="ClockPage">
-            <Border CornerRadius="7" BorderThickness="1" BorderBrush="{DynamicResource Line}" Padding="12,8">
+            <Border Style="{StaticResource GroupCard}" Padding="14,10">
               <DockPanel>
                 <CheckBox x:Name="EnabledClock" DockPanel.Dock="Right" Style="{StaticResource Switch}" VerticalAlignment="Center"
-                          AutomationProperties.Name="在任务栏原时间位置显示时钟" Margin="9,0,0,0"/>
-                <StackPanel><TextBlock Text="自定义任务栏时钟" FontWeight="SemiBold"/><TextBlock x:Name="StatusText" Style="{StaticResource Subtle}" FontSize="12" Margin="0,2,0,0" TextWrapping="Wrap"/></StackPanel>
+                          AutomationProperties.Name="在任务栏原时间位置显示时钟" Margin="10,0,0,0"/>
+                <StackPanel VerticalAlignment="Center">
+                  <TextBlock Text="自定义任务栏时钟" FontWeight="SemiBold"/>
+                  <TextBlock x:Name="StatusText" Style="{StaticResource Subtle}" FontSize="12" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                </StackPanel>
               </DockPanel>
             </Border>
-            <DockPanel Margin="0,15,0,5">
-              <Border DockPanel.Dock="Right" Background="{DynamicResource Card}" CornerRadius="5" Padding="2">
+
+            <DockPanel Margin="0,14,0,6">
+              <Border DockPanel.Dock="Right" Background="{DynamicResource Card}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="6" Padding="2">
                 <StackPanel Orientation="Horizontal">
                   <RadioButton x:Name="ExampleMode" Content="示例日期" GroupName="GalleryMode" Style="{StaticResource Segment}" IsChecked="True" Checked="ModeChanged"/>
                   <RadioButton x:Name="CurrentMode" Content="当前时间" GroupName="GalleryMode" Style="{StaticResource Segment}" Checked="ModeChanged"/>
@@ -120,90 +168,144 @@
               </Border>
               <TextBlock Text="时钟样式" Style="{StaticResource GroupTitle}"/>
             </DockPanel>
+
             <ListBox x:Name="Preset" AutomationProperties.Name="九种时钟样式" SelectionChanged="PresetChanged" SizeChanged="GalleryResized"
-                     Background="Transparent" BorderThickness="0" Padding="0" Margin="-3,0" ItemContainerStyle="{StaticResource CardItem}"
+                     Background="Transparent" BorderThickness="0" Padding="0" Margin="-3.5,0" ItemContainerStyle="{StaticResource CardItem}"
                      ScrollViewer.HorizontalScrollBarVisibility="Disabled" ScrollViewer.VerticalScrollBarVisibility="Disabled">
               <ListBox.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="{Binding GalleryColumns, RelativeSource={RelativeSource AncestorType={x:Type local:SettingsPanel}}}"/></ItemsPanelTemplate></ListBox.ItemsPanel>
               <ListBox.ItemTemplate><DataTemplate>
                 <StackPanel>
-                  <TextBlock Text="{Binding Name}" FontSize="12" Foreground="{DynamicResource Muted}" TextAlignment="Center" Margin="15,0,15,3"/>
-                  <TextBlock Text="{Binding Lines.Upper}" FontSize="15" FontWeight="Medium" TextAlignment="Center" TextWrapping="Wrap" Typography.NumeralAlignment="Tabular"/>
-                  <TextBlock Text="{Binding Lines.Lower}" FontSize="13" TextAlignment="Center" TextWrapping="Wrap" Typography.NumeralAlignment="Tabular" Margin="0,1,0,0"/>
+                  <TextBlock Text="{Binding Name}" FontSize="11.5" Foreground="{DynamicResource Muted}" TextAlignment="Center" Margin="14,0,14,3"/>
+                  <TextBlock Text="{Binding Lines.Upper}" FontSize="14.5" FontWeight="SemiBold" TextAlignment="Center" TextWrapping="Wrap" Typography.NumeralAlignment="Tabular"/>
+                  <TextBlock Text="{Binding Lines.Lower}" FontSize="12.5" Foreground="{DynamicResource Muted}" TextAlignment="Center" TextWrapping="Wrap" Typography.NumeralAlignment="Tabular" Margin="0,1,0,0"/>
                 </StackPanel>
               </DataTemplate></ListBox.ItemTemplate>
             </ListBox>
-            <TextBlock x:Name="GalleryNote" Style="{StaticResource Subtle}" FontSize="12" Margin="0,4,0,0" TextWrapping="Wrap"/>
-            <Border Height="1" Background="{DynamicResource Line}" Margin="0,13,0,8"/>
-            <DockPanel Margin="0,0,0,6">
-              <Button DockPanel.Dock="Right" AutomationProperties.Name="格式说明" Click="ShowFormatGuide" BorderBrush="{DynamicResource Line}" Padding="8,3">
-                <TextBlock Text="格式说明" Foreground="{DynamicResource Accent}"/>
-              </Button>
-              <RadioButton x:Name="CustomPick" Content="自定义格式" AutomationProperties.Name="自定义两行格式" VerticalAlignment="Center"
-                           FontSize="15" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" Checked="ChooseCustom"/>
-            </DockPanel>
-            <UniformGrid x:Name="FormatFields" Columns="2">
-              <StackPanel Margin="0,0,5,4"><TextBlock Text="上行格式" Style="{StaticResource Subtle}" FontSize="12" Margin="0,0,0,4"/>
-                <TextBox x:Name="Upper" AutomationProperties.Name="上行格式" Style="{StaticResource FormatBox}" MaxLength="64" TextChanged="FormatEdited"/></StackPanel>
-              <StackPanel Margin="0,0,0,4"><TextBlock Text="下行格式" Style="{StaticResource Subtle}" FontSize="12" Margin="0,0,0,4"/>
-                <TextBox x:Name="Lower" AutomationProperties.Name="下行格式" Style="{StaticResource FormatBox}" MaxLength="64" TextChanged="FormatEdited"/></StackPanel>
-            </UniformGrid>
-            <TextBlock Text="任务栏原位空间不足时，会缩小文字并折行。" Style="{StaticResource Subtle}" FontSize="12" Margin="0,3,0,0" TextWrapping="Wrap"/>
-            <StackPanel x:Name="CountdownGroup" Margin="0,6,0,0"><TextBlock Text="倒数节日" Style="{StaticResource Subtle}" FontSize="12" Margin="0,0,0,4"/>
-              <ComboBox x:Name="Target" AutomationProperties.Name="倒数节日" SelectionChanged="DraftChanged" MaxWidth="285" HorizontalAlignment="Left" MinWidth="160"/></StackPanel>
+            <TextBlock x:Name="GalleryNote" Style="{StaticResource Subtle}" FontSize="12" Margin="0,5,0,0" TextWrapping="Wrap"/>
+
+            <Border Style="{StaticResource GroupCard}" Margin="0,13,0,0">
+              <StackPanel>
+                <DockPanel Margin="0,0,0,8">
+                  <Button DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" AutomationProperties.Name="格式说明"
+                          Click="ShowFormatGuide" MinHeight="27" Padding="10,3" FontSize="12" Foreground="{DynamicResource Accent}" Content="格式说明"/>
+                  <RadioButton x:Name="CustomPick" Content="自定义格式" AutomationProperties.Name="自定义两行格式" VerticalAlignment="Center"
+                               FontSize="14.5" FontWeight="SemiBold" Foreground="{DynamicResource Ink}" Checked="ChooseCustom"/>
+                </DockPanel>
+                <UniformGrid x:Name="FormatFields" Columns="2">
+                  <StackPanel Margin="0,0,6,4">
+                    <TextBlock Text="上行格式" Style="{StaticResource Subtle}" FontSize="12" Margin="0,0,0,4"/>
+                    <TextBox x:Name="Upper" AutomationProperties.Name="上行格式" MaxLength="64" TextChanged="FormatEdited"/>
+                  </StackPanel>
+                  <StackPanel Margin="0,0,0,4">
+                    <TextBlock Text="下行格式" Style="{StaticResource Subtle}" FontSize="12" Margin="0,0,0,4"/>
+                    <TextBox x:Name="Lower" AutomationProperties.Name="下行格式" MaxLength="64" TextChanged="FormatEdited"/>
+                  </StackPanel>
+                </UniformGrid>
+                <TextBlock Text="任务栏原位空间不足时，会缩小文字并折行。" Style="{StaticResource Subtle}" FontSize="12" Margin="0,3,0,0" TextWrapping="Wrap"/>
+                <StackPanel x:Name="CountdownGroup" Margin="0,8,0,0">
+                  <TextBlock Text="倒数节日" Style="{StaticResource Subtle}" FontSize="12" Margin="0,0,0,4"/>
+                  <ComboBox x:Name="Target" AutomationProperties.Name="倒数节日" SelectionChanged="DraftChanged" MaxWidth="285" HorizontalAlignment="Left" MinWidth="160"/>
+                </StackPanel>
+              </StackPanel>
+            </Border>
           </StackPanel>
+
           <StackPanel x:Name="CalendarPage" Visibility="Collapsed">
-            <TextBlock Text="日期与月历内容" Style="{StaticResource GroupTitle}" Margin="0,2,0,9"/>
-            <CheckBox x:Name="LunarBox" Content="显示农历、节气和节日"/><CheckBox x:Name="MarkBox" Content="显示调休安排"/>
-            <CheckBox x:Name="OutsideBox" Content="显示非当前月日期"/>
-            <CheckBox x:Name="Hour12" Content="使用 12 小时制" Checked="DraftChanged" Unchecked="DraftChanged"/>
-            <Border Height="1" Background="{DynamicResource Line}" Margin="0,14,0,12"/>
-            <TextBlock Text="星期与周数" Style="{StaticResource GroupTitle}" Margin="0,0,0,7"/>
-            <CheckBox x:Name="WeekBox" Content="显示 ISO 周数" Checked="DraftChanged" Unchecked="DraftChanged"/>
-            <CheckBox x:Name="RangeBox" Content="仅在指定起止日期内显示周数" Checked="DraftChanged" Unchecked="DraftChanged"/>
-            <WrapPanel x:Name="RangeGroup" Margin="0,4"><DatePicker x:Name="RangeFrom" Width="138" AutomationProperties.Name="周数开始日期" SelectedDateChanged="DraftChanged"/>
-              <TextBlock Text="至" VerticalAlignment="Center" Margin="7,0"/><DatePicker x:Name="RangeTo" Width="138" AutomationProperties.Name="周数结束日期" SelectedDateChanged="DraftChanged"/></WrapPanel>
-            <TextBlock Text="一周开始于" Margin="0,10,0,4"/><ComboBox x:Name="WeekStart" AutomationProperties.Name="一周开始于" Width="170" HorizontalAlignment="Left"/>
+            <Border Style="{StaticResource GroupCard}">
+              <StackPanel>
+                <TextBlock Text="日期与月历内容" Style="{StaticResource GroupTitle}" Margin="0,0,0,8"/>
+                <CheckBox x:Name="LunarBox" Content="显示农历、节气和节日"/>
+                <CheckBox x:Name="MarkBox" Content="显示调休安排"/>
+                <CheckBox x:Name="OutsideBox" Content="显示非当前月日期"/>
+                <CheckBox x:Name="Hour12" Content="使用 12 小时制" Checked="DraftChanged" Unchecked="DraftChanged"/>
+              </StackPanel>
+            </Border>
+            <Border Style="{StaticResource GroupCard}" Margin="0,10,0,0">
+              <StackPanel>
+                <TextBlock Text="星期与周数" Style="{StaticResource GroupTitle}" Margin="0,0,0,8"/>
+                <CheckBox x:Name="WeekBox" Content="显示 ISO 周数" Checked="DraftChanged" Unchecked="DraftChanged"/>
+                <CheckBox x:Name="RangeBox" Content="仅在指定起止日期内显示周数" Checked="DraftChanged" Unchecked="DraftChanged"/>
+                <WrapPanel x:Name="RangeGroup" Margin="25,4,0,4">
+                  <DatePicker x:Name="RangeFrom" Width="138" AutomationProperties.Name="周数开始日期" SelectedDateChanged="DraftChanged"/>
+                  <TextBlock Text="至" VerticalAlignment="Center" Margin="8,0"/>
+                  <DatePicker x:Name="RangeTo" Width="138" AutomationProperties.Name="周数结束日期" SelectedDateChanged="DraftChanged"/>
+                </WrapPanel>
+                <TextBlock Text="一周开始于" Style="{StaticResource Subtle}" FontSize="12" Margin="0,10,0,4"/>
+                <ComboBox x:Name="WeekStart" AutomationProperties.Name="一周开始于" Width="170" HorizontalAlignment="Left"/>
+              </StackPanel>
+            </Border>
           </StackPanel>
+
           <StackPanel x:Name="WeatherPage" Visibility="Collapsed">
-            <TextBlock Text="天气城市" Style="{StaticResource GroupTitle}"/><TextBlock x:Name="CityLabel" TextWrapping="Wrap" Margin="0,5,0,12"/>
-            <CheckBox x:Name="DirectWeather" Content="直连天气服务" Margin="0,0,0,8"
-                      ToolTip="仅用于城市搜索、天气和空气质量查询。关闭时使用系统代理。" Checked="WeatherRouteChanged" Unchecked="WeatherRouteChanged"/>
-            <DockPanel><Button DockPanel.Dock="Right" Content="搜索" Click="SearchClick" Background="{DynamicResource Card}" Margin="6,0,0,0"/>
-              <TextBox x:Name="Query" AutomationProperties.Name="搜索城市" MaxLength="80" KeyDown="SearchKeyDown"/></DockPanel>
-            <ListBox x:Name="Cities" AutomationProperties.Name="城市搜索结果" DisplayMemberPath="Label" SelectionChanged="CitySelected" MaxHeight="170" Visibility="Collapsed"/>
-            <TextBlock x:Name="SearchStatus" Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,5"/>
-            <Button HorizontalAlignment="Left" Content="清除城市" Click="ClearCity"/>
-            <TextBlock x:Name="WeatherData" TextWrapping="Wrap" Margin="0,10,0,0"/>
-            <TextBlock TextWrapping="Wrap" Style="{StaticResource Subtle}" Margin="0,12">
-              <Run Text="城市来自 GeoNames。天气与美标 AQI 由 Open-Meteo（空气质量来自 CAMS）或 "/><local:WeatherAttributionLink/><Run Text=" 提供。"/>
-            </TextBlock>
+            <Border Style="{StaticResource GroupCard}">
+              <StackPanel>
+                <DockPanel Margin="0,0,0,8">
+                  <Button DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Content="清除城市" MinHeight="27" Padding="10,3" FontSize="12" Click="ClearCity"/>
+                  <StackPanel>
+                    <TextBlock Text="当前城市" Style="{StaticResource Subtle}" FontSize="12"/>
+                    <TextBlock x:Name="CityLabel" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,2,0,0"/>
+                  </StackPanel>
+                </DockPanel>
+                <CheckBox x:Name="DirectWeather" Content="直连天气服务" Margin="0,2,0,10"
+                          ToolTip="仅用于城市搜索、天气和空气质量查询。关闭时使用系统代理。" Checked="WeatherRouteChanged" Unchecked="WeatherRouteChanged"/>
+                <DockPanel>
+                  <Button DockPanel.Dock="Right" Style="{StaticResource SecondaryButton}" Content="搜索" Click="SearchClick" Margin="7,0,0,0" Padding="14,5"/>
+                  <TextBox x:Name="Query" AutomationProperties.Name="搜索城市" MaxLength="80" KeyDown="SearchKeyDown"/>
+                </DockPanel>
+                <ListBox x:Name="Cities" AutomationProperties.Name="城市搜索结果" DisplayMemberPath="Label" SelectionChanged="CitySelected"
+                         MaxHeight="170" Margin="0,8,0,0" Visibility="Collapsed"
+                         Background="{DynamicResource Surface}" BorderBrush="{DynamicResource Line}" Foreground="{DynamicResource Ink}"/>
+                <TextBlock x:Name="SearchStatus" Style="{StaticResource Subtle}" FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0"/>
+              </StackPanel>
+            </Border>
+
+            <Border x:Name="WeatherPreviewCard" Style="{StaticResource GroupCard}" Margin="0,10,0,0" Visibility="Collapsed">
+              <DockPanel>
+                <local:WeatherGlyph x:Name="WeatherPreviewIcon" DockPanel.Dock="Left" Width="56" Height="46" Margin="0,0,12,0" VerticalAlignment="Center"/>
+                <StackPanel VerticalAlignment="Center">
+                  <TextBlock x:Name="WeatherPreviewTitle" FontSize="16" FontWeight="SemiBold" Typography.NumeralAlignment="Tabular"/>
+                  <TextBlock x:Name="WeatherData" Style="{StaticResource Subtle}" FontSize="12.5" TextWrapping="Wrap" Margin="0,3,0,0" Typography.NumeralAlignment="Tabular"/>
+                </StackPanel>
+              </DockPanel>
+            </Border>
           </StackPanel>
+
           <StackPanel x:Name="AboutPage" Visibility="Collapsed">
-            <TextBlock Text="YXRL 个人日历" FontSize="17" FontWeight="SemiBold"/>
-            <Expander Header="开源许可" Margin="0,12" Expanded="ReadLicenses" Foreground="{DynamicResource Ink}">
-              <TextBox x:Name="LicenseText" AutomationProperties.Name="开源许可" IsReadOnly="True" MinHeight="110" MaxHeight="230"
-                       TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontSize="12"/>
-            </Expander>
-            <Button Content="退出日历" HorizontalAlignment="Left" Background="{DynamicResource Card}" BorderBrush="{DynamicResource Line}" Click="ExitClick" Padding="13,5"/>
+            <Border Style="{StaticResource GroupCard}">
+              <StackPanel>
+                <TextBlock Text="YXRL 个人日历" FontSize="17" FontWeight="SemiBold"/>
+                <TextBlock Text="Windows 11 任务栏时钟、中文月历与日期提醒" Style="{StaticResource Subtle}" FontSize="12.5" Margin="0,3,0,0"/>
+                <Expander Header="开源许可" Margin="0,14,0,12" Expanded="ReadLicenses" Foreground="{DynamicResource Ink}">
+                  <TextBox x:Name="LicenseText" AutomationProperties.Name="开源许可" IsReadOnly="True" MinHeight="110" MaxHeight="230"
+                           TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top" FontSize="12" Margin="0,6,0,0"/>
+                </Expander>
+                <Button Style="{StaticResource SecondaryButton}" Content="退出日历" HorizontalAlignment="Left" Click="ExitClick" Padding="14,5"/>
+              </StackPanel>
+            </Border>
           </StackPanel>
         </StackPanel>
       </ScrollViewer>
-      <Border Grid.Row="1" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Background="{DynamicResource Card}" Padding="14,8">
+
+      <Border Grid.Row="1" BorderBrush="{DynamicResource Line}" BorderThickness="0,1,0,0" Background="{DynamicResource Card}" Padding="16,10">
         <StackPanel>
-          <TextBlock x:Name="ErrorLine" Foreground="{DynamicResource Weekend}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"/>
+          <TextBlock x:Name="ErrorLine" Foreground="{DynamicResource Danger}" FontSize="12" TextWrapping="Wrap"
+                     Margin="0,0,0,6" AutomationProperties.LiveSetting="Polite"/>
           <DockPanel>
             <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center">
-              <Button Content="返回月历" AutomationProperties.Name="返回月历" Click="GoBack" Margin="0,0,5,0"/>
-              <Button x:Name="ApplyButton" Click="SaveClick" AutomationProperties.Name="应用设置" AutomationProperties.AutomationId="ApplyClock"
-                      Background="{DynamicResource Selected}" Padding="16,7">
-                <TextBlock Text="应用设置" Foreground="{DynamicResource OnSelected}"/>
-              </Button>
+              <Button Content="返回月历" Style="{StaticResource SecondaryButton}" AutomationProperties.Name="返回月历"
+                      Click="GoBack" Margin="0,0,8,0"/>
+              <Button x:Name="ApplyButton" Style="{StaticResource PrimaryButton}" Click="SaveClick"
+                      AutomationProperties.Name="应用设置" AutomationProperties.AutomationId="ApplyClock"
+                      Content="应用设置" Padding="16,6"/>
             </StackPanel>
-            <StackPanel x:Name="LivePreview" VerticalAlignment="Center">
-              <TextBlock Text="实际时间预览" Foreground="{DynamicResource Muted}" FontSize="11"/>
-              <TextBlock x:Name="PreviewTop" FontSize="14" FontWeight="SemiBold" TextWrapping="Wrap" Typography.NumeralAlignment="Tabular"/>
-              <TextBlock x:Name="PreviewBottom" FontSize="12" TextWrapping="Wrap" Typography.NumeralAlignment="Tabular"/>
-            </StackPanel>
+            <Border x:Name="LivePreview" Background="{DynamicResource Paper}" BorderBrush="{DynamicResource Line}" BorderThickness="1"
+                    CornerRadius="6" Padding="10,5" HorizontalAlignment="Left" VerticalAlignment="Center">
+              <StackPanel>
+                <TextBlock Text="实际时间预览" Foreground="{DynamicResource Muted}" FontSize="10.5"/>
+                <TextBlock x:Name="PreviewTop" FontSize="13.5" FontWeight="SemiBold" TextWrapping="Wrap" Typography.NumeralAlignment="Tabular"/>
+                <TextBlock x:Name="PreviewBottom" FontSize="11.5" Foreground="{DynamicResource Muted}" TextWrapping="Wrap" Typography.NumeralAlignment="Tabular"/>
+              </StackPanel>
+            </Border>
           </DockPanel>
         </StackPanel>
       </Border>

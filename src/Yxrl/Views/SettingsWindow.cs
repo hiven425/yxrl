@@ -9,6 +9,7 @@ namespace Yxrl.Views;
 
 internal sealed class SettingsWindow : Window
 {
+    private bool micaEnabled;
     internal SettingsPanel Page { get; }
 
     public SettingsWindow(SettingsStore store, CalendarService calendar, WeatherService weather,
@@ -16,7 +17,7 @@ internal sealed class SettingsWindow : Window
     {
         Title = "YXRL 设置";
         AutomationProperties.SetAutomationId(this, "YxrlSettingsWindow");
-        FontFamily = new FontFamily("Segoe UI, Microsoft YaHei UI");
+        FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI");
         FontSize = 13;
         UseLayoutRounding = true;
         SnapsToDevicePixels = true;
@@ -32,7 +33,27 @@ internal sealed class SettingsWindow : Window
         };
     }
 
-    public void Present(ClockAnchor? anchor)
+    protected override void OnSourceInitialized(EventArgs e)
+    {
+        base.OnSourceInitialized(e);
+        ApplyChrome();
+    }
+
+    internal void RefreshTheme()
+    {
+        ApplyChrome();
+        Page.RefreshTheme();
+    }
+
+    private void ApplyChrome()
+    {
+        micaEnabled = Theme.ApplyWindowChrome(this, Native.BackdropKind.Mica);
+        if (micaEnabled) Background = Brushes.Transparent;
+        else SetResourceReference(BackgroundProperty, "Surface");
+        Page.SetMicaEnabled(micaEnabled);
+    }
+
+    public void Present(ClockAnchor? anchor, int section = 0)
     {
         var hwnd = new WindowInteropHelper(this).EnsureHandle();
         var taskbar = anchor?.Taskbar ?? Native.FindWindow("Shell_TrayWnd", null);
@@ -46,9 +67,15 @@ internal sealed class SettingsWindow : Window
         MinHeight = Math.Min(320, height / scale);
         int left = work.Left + (work.Width - width) / 2, top = work.Top + (work.Height - height) / 2;
         Native.SetWindowPos(hwnd, 0, left, top, width, height, Native.NoZOrder | Native.NoActivate);
-        Page.LoadDraft();
+        Page.LoadDraft(section);
         Show();
         Native.SetWindowPos(hwnd, 0, left, top, width, height, Native.NoZOrder);
+        BringForward();
+    }
+
+    public void SelectSection(int section)
+    {
+        Page.SelectSection(section);
         BringForward();
     }
 

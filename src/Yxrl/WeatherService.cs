@@ -32,13 +32,22 @@ internal sealed record WeatherReading(WeatherPart? Current = null, AirPart? Air 
     internal static readonly WeatherReading Unavailable = new();
     internal bool WeatherPending { get; init; }
     internal bool AirPending { get; init; }
-    internal bool UsesVisualCrossing => Current?.Source == VisualCrossing.Name || Air?.Source == VisualCrossing.Name;
-    internal bool UsesOpenMeteo => Current?.Source == "Open-Meteo" || Air?.Source == "Open-Meteo";
     internal WeatherReading ValidParts() => new(Current is { IsValid: true } ? Current : null, Air is { IsValid: true } ? Air : null);
 
     internal static string CurrentText(City? city, WeatherReading? reading) => reading?.Current is { } part
         ? $"{part.Condition} {part.Temp:0}°{(part.IsStale ? " 缓存" : "")}"
         : city is null ? "请选择城市" : reading is null or { WeatherPending: true } ? "天气待更新" : "天气暂不可用";
+
+    internal static string ShortObservedTime(string? observedAt, DateOnly? today = null)
+    {
+        if (string.IsNullOrWhiteSpace(observedAt)) return "";
+        if (DateTime.TryParseExact(observedAt, "yyyy-MM-ddTHH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed)) {
+            if (today is { } current && DateOnly.FromDateTime(parsed) != current)
+                return parsed.ToString("M/d HH:mm", CultureInfo.InvariantCulture);
+            return parsed.ToString("HH:mm", CultureInfo.InvariantCulture);
+        }
+        return observedAt.Replace('T', ' ');
+    }
 
     internal static string Summary(City? city, WeatherReading? reading)
     {
@@ -50,6 +59,30 @@ internal sealed record WeatherReading(WeatherPart? Current = null, AirPart? Air 
             ? $"美标 AQI {a.Aqi:0}{(a.IsStale ? " 缓存" : "")} · {a.ObservedAt.Replace('T', ' ')}"
             : reading.AirPending ? "美标 AQI 查询中" : "美标 AQI 暂不可用";
         return current + "\n" + air;
+    }
+
+    internal static string DetailTooltip(City? city, WeatherReading? reading, string? sceneLabel, DateTimeOffset now, string? warning)
+    {
+        if (city is null) return "点击选择城市并开启天气显示";
+        var lines = new List<string> { city.Label };
+        if (reading?.Current is { } w) {
+            var state = string.IsNullOrWhiteSpace(sceneLabel) ? w.Condition : sceneLabel;
+            lines.Add($"{state} {w.Temp:0}°（{w.Low:0}～{w.High:0}°）{(w.IsStale ? " · 缓存" : "")} · {w.ObservedAt.Replace('T', ' ')}");
+            if (w.Daylight is { } light) {
+                var solar = new List<string>();
+                if (light.Sunrise is { } rise && rise.Date == now.ToOffset(rise.Offset).Date) solar.Add($"日出 {rise:HH:mm}");
+                if (light.Sunset is { } set && set.Date == now.ToOffset(set.Offset).Date) solar.Add($"日落 {set:HH:mm}");
+                if (solar.Count > 0) lines.Add(string.Join(" · ", solar));
+            }
+        } else {
+            lines.Add(reading is null or { WeatherPending: true } ? "天气待更新" : "天气暂不可用");
+        }
+        if (reading?.Air is { } a)
+            lines.Add($"美标 AQI {a.Aqi:0}{(a.IsStale ? " 缓存" : "")} · {a.ObservedAt.Replace('T', ' ')}");
+        else if (reading is not null)
+            lines.Add(reading.AirPending ? "美标 AQI 查询中" : "美标 AQI 暂不可用");
+        if (!string.IsNullOrWhiteSpace(warning)) lines.Add(warning);
+        return string.Join("\n", lines);
     }
 }
 
