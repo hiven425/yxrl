@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <SelfContained>true</SelfContained>
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>app.ico</ApplicationIcon>
+    <Version>0.1.0</Version>
+    <Product>YXRL 个人日历</Product>
+    <Description>任务栏时钟与中文月历</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="lunar-csharp" Version="[1.6.9]" />
+    <InternalsVisibleTo Include="Yxrl.Checks" />
+    <EmbeddedResource Include="Calendar/CalendarData.json" />
+    <EmbeddedResource Include="$(NuGetPackageRoot)/lunar-csharp/1.6.9/LICENSE" LogicalName="License.Lunar" />
+    <EmbeddedResource Include="$(NuGetPackageRoot)/microsoft.windowsdesktop.app.runtime.win-x64/$(BundledNETCoreAppPackageVersion)/LICENSE" LogicalName="License.Wpf" />
+    <EmbeddedResource Include="$(NuGetPackageRoot)/microsoft.netcore.app.runtime.win-x64/$(BundledNETCoreAppPackageVersion)/LICENSE.TXT" LogicalName="License.Dotnet" />
+    <EmbeddedResource Include="$(NuGetPackageRoot)/microsoft.netcore.app.runtime.win-x64/$(BundledNETCoreAppPackageVersion)/THIRD-PARTY-NOTICES.TXT" LogicalName="License.Notices" />
+  </ItemGroup>
+</Project>

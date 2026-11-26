@@ -1,0 +1,86 @@
+<UserControl x:Class="Yxrl.Views.SettingsPanel" x:ClassModifier="internal" xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <DockPanel>
+    <DockPanel DockPanel.Dock="Top" Margin="0,0,0,8">
+      <Button DockPanel.Dock="Left" Content="‹" FontSize="20" Width="30" Padding="0" ToolTip="返回月历" AutomationProperties.Name="返回月历" Click="GoBack"/>
+      <TextBlock Text="时钟设置" FontSize="19" FontWeight="SemiBold" VerticalAlignment="Center" Margin="7,0"/>
+    </DockPanel>
+    <StackPanel DockPanel.Dock="Bottom">
+      <TextBlock x:Name="ErrorLine" Foreground="{DynamicResource Weekend}" TextWrapping="Wrap"/>
+      <Grid Margin="0,8,0,0">
+        <Button HorizontalAlignment="Left" Content="退出日历" Click="ExitClick"/>
+        <Button HorizontalAlignment="Right" Content="应用设置" Click="SaveClick" AutomationProperties.AutomationId="ApplyClock"
+             Foreground="{DynamicResource OnSelected}" Background="{DynamicResource Selected}" Padding="18,6"/>
+      </Grid>
+    </StackPanel>
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+      <StackPanel Margin="2,0,8,0">
+        <CheckBox x:Name="EnabledClock" Content="在任务栏原时间位置显示时钟"/>
+        <TextBlock x:Name="StatusText" Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,1,0,7"/>
+        <TextBlock Text="时钟样式" Style="{StaticResource Section}"/>
+        <ListBox x:Name="Preset" AutomationProperties.Name="时钟样式" SelectionChanged="DraftChanged"
+                 Background="Transparent" BorderThickness="0" Padding="0" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+          <ListBox.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="3"/></ItemsPanelTemplate></ListBox.ItemsPanel>
+          <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem">
+            <Setter Property="AutomationProperties.Name" Value="{Binding Name}"/>
+            <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem">
+              <Border x:Name="Tile" Background="{DynamicResource Card}" BorderBrush="Transparent" BorderThickness="1" CornerRadius="6" Margin="2" Padding="3,6">
+                <ContentPresenter/>
+              </Border>
+              <ControlTemplate.Triggers>
+                <Trigger Property="IsSelected" Value="True"><Setter TargetName="Tile" Property="BorderBrush" Value="{DynamicResource Accent}"/><Setter TargetName="Tile" Property="Background" Value="{DynamicResource Hot}"/></Trigger>
+                <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Tile" Property="BorderBrush" Value="{DynamicResource Accent}"/></Trigger>
+                <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="Tile" Property="BorderBrush" Value="{DynamicResource Accent}"/></Trigger>
+              </ControlTemplate.Triggers>
+            </ControlTemplate></Setter.Value></Setter>
+          </Style></ListBox.ItemContainerStyle>
+          <ListBox.ItemTemplate><DataTemplate><StackPanel>
+            <TextBlock Text="{Binding Name}" HorizontalAlignment="Center" FontWeight="SemiBold"/>
+            <TextBlock Text="{Binding Sample}" Style="{StaticResource Subtle}" FontSize="10" TextAlignment="Center" TextTrimming="CharacterEllipsis"/>
+          </StackPanel></DataTemplate></ListBox.ItemTemplate>
+        </ListBox>
+        <Button x:Name="CustomPick" Content="自定义两行格式" HorizontalAlignment="Stretch" Margin="2,4" Click="ChooseCustom"/>
+        <Border Background="{DynamicResource Card}" CornerRadius="8" Padding="10,8" Margin="0,8,0,2">
+          <StackPanel><TextBlock x:Name="PreviewTop" HorizontalAlignment="Center" FontSize="15" FontWeight="SemiBold"/>
+            <TextBlock x:Name="PreviewBottom" HorizontalAlignment="Center" FontSize="13"/></StackPanel>
+        </Border>
+        <StackPanel x:Name="CustomGroup">
+          <TextBlock Text="上行格式" Style="{StaticResource Section}"/><TextBox x:Name="Upper" AutomationProperties.Name="上行格式" MaxLength="64" TextChanged="DraftChanged"/>
+          <TextBlock Text="下行格式" Margin="0,6,0,4"/><TextBox x:Name="Lower" AutomationProperties.Name="下行格式" MaxLength="64" TextChanged="DraftChanged"/>
+          <TextBlock Text="HH:mm:ss　M月d日 ddd　{农历}　{节日}　{节气}　{周数}　{时辰}　{倒数}　{城市}　{天气}　{温度范围}　{美标AQI}"
+                Style="{StaticResource Subtle}" TextWrapping="Wrap" Margin="0,5"/>
+        </StackPanel>
+        <StackPanel x:Name="CountdownGroup"><TextBlock Text="倒数节日" Style="{StaticResource Section}"/><ComboBox x:Name="Target" AutomationProperties.Name="倒数节日" SelectionChanged="DraftChanged"/></StackPanel>
+        <Expander x:Name="CityExpander" Header="天气城市" Margin="0,12,0,0" Foreground="{DynamicResource Ink}">
+          <StackPanel Margin="4,6"><TextBlock x:Name="CityLabel" TextWrapping="Wrap"/>
+            <DockPanel Margin="0,5,0,0"><Button DockPanel.Dock="Right" Content="搜索" Click="SearchClick" Background="{DynamicResource Card}"/>
+              <TextBox x:Name="Query" AutomationProperties.Name="搜索城市" Margin="0,0,5,0" MaxLength="80"/></DockPanel>
+            <ListBox x:Name="Cities" AutomationProperties.Name="城市搜索结果" DisplayMemberPath="Label" SelectionChanged="CitySelected" MaxHeight="100" Visibility="Collapsed"/>
+            <TextBlock x:Name="SearchStatus" Style="{StaticResource Subtle}" TextWrapping="Wrap"/>
+            <Button HorizontalAlignment="Left" Content="清除城市" Click="ClearCity"/>
+            <TextBlock Text="天气、空气质量由 Open-Meteo 提供，城市数据来自 GeoNames。" TextWrapping="Wrap" Style="{StaticResource Subtle}"/>
+          </StackPanel>
+        </Expander>
+        <Expander x:Name="CalExpander" Header="月历显示" Margin="0,10,0,0" Foreground="{DynamicResource Ink}">
+          <StackPanel Margin="4,6">
+            <CheckBox x:Name="LunarBox" Content="显示农历、节气和节日"/>
+            <CheckBox x:Name="MarkBox" Content="显示调休安排"/>
+            <CheckBox x:Name="OutsideBox" Content="显示非当前月日期"/>
+            <CheckBox x:Name="Hour12" Content="使用 12 小时制" Checked="DraftChanged" Unchecked="DraftChanged"/>
+            <CheckBox x:Name="WeekBox" Content="显示 ISO 周数" Checked="DraftChanged" Unchecked="DraftChanged"/>
+            <CheckBox x:Name="RangeBox" Content="仅在指定起止日期内显示周数" Checked="DraftChanged" Unchecked="DraftChanged"/>
+            <StackPanel x:Name="RangeGroup" Orientation="Horizontal" Margin="0,4">
+              <DatePicker x:Name="RangeFrom" Width="137" AutomationProperties.Name="周数开始日期"/>
+              <TextBlock Text="至" VerticalAlignment="Center" Margin="5,0"/>
+              <DatePicker x:Name="RangeTo" Width="137" AutomationProperties.Name="周数结束日期"/>
+            </StackPanel>
+            <TextBlock Text="一周开始于" Margin="0,6,0,4"/><ComboBox x:Name="WeekStart" AutomationProperties.Name="一周开始于"/>
+          </StackPanel>
+        </Expander>
+        <Expander Header="开源许可" Margin="0,10,0,0" Expanded="ReadLicenses" Foreground="{DynamicResource Ink}">
+          <TextBox x:Name="LicenseText" AutomationProperties.Name="开源许可" IsReadOnly="True" Height="130" Margin="0,5,0,0"
+                   TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" FontSize="11"/>
+        </Expander>
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
+</UserControl>

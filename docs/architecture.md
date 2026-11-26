@@ -1,6 +1,6 @@
 # 项目架构
 
-YXRL 的桌面版本按单进程 Windows 应用设计。平时只需要时钟和到点提醒工作，点击任务栏时间才创建或显示月历。浏览器原型实现页面交互和可复算的日期示例；本页同时给出后续 WPF 实现应遵循的边界。[可交互原型](prototype/index.html) · [字段与默认值](configuration.md)
+YXRL 的桌面版本按单进程 Windows 应用设计。平时只需要时钟和到点提醒工作，点击任务栏时间才创建或显示月历。浏览器原型实现页面交互和可复算的日期示例；首个 WPF 试用版已实现时钟、月历、配置和 Windows 适配层。[桌面试用与源码构建](windows.md)。[可交互原型](prototype/index.html) · [字段与默认值](configuration.md)
 
 ## 模块与数据归属
 
@@ -39,6 +39,8 @@ flowchart LR
 ```
 
 用例先取本地历法与事项，生成可显示的月历。天气缓存可读时一起显示；后台刷新完成后只更新天气区域。天气请求、文件写入和 UI Automation 控件枚举都在界面线程的关键点击路径之外。后台状态通过 WPF Dispatcher 回到视图。
+
+WPF 源码中，`Desktop/ClockLocator.cs` 在后台识别 Explorer 控件，`Desktop/ClockMouse.cs` 在独立消息线程处理已确认时钟边界内的左键。Windows 11 25H2 的部分系统按钮共用 UIA 类名，识别时还会检查原始树中的时间和日期文本。任务栏收起时释放命中区域，重新展开后重新定位。`Views/ClockOverlay.cs` 用同一个格式器绘制两行，月历和日详情通过 `MonthViewModel` 与 `CalendarService` 查询日期。
 
 ## 点击系统时间
 
