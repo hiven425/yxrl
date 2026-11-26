@@ -30,6 +30,7 @@ internal partial class CalendarWindow : Window
     private Button? selectedDayButton;
     private int detailWidth, detailGap;
     private PixelRect? boundsBeforeDetails;
+    private Uri? weatherSourceLink;
 
     private PixelRect CalendarArea => detailWidth == 0 ? resizeArea
         : resizeArea with { Left = resizeArea.Left + detailWidth + detailGap };
@@ -175,10 +176,37 @@ internal partial class CalendarWindow : Window
         TodayLine.Text=$"{date:yyyy年M月d日}  {CalendarService.Weekday(date)}  {calendar.Get(date).LunarDate}";
         var place=store.Current.City;
         var w=weather.Read(place);
-        WeatherLine.Visibility=Visibility.Visible;
-        WeatherLine.Text=WeatherReading.Summary(place, w);
-        WeatherLine.ToolTip=weather.Warning is { } warning ? $"{WeatherLine.Text}\n{warning}" : WeatherLine.Text;
-        WeatherCredit.Visibility=w?.UsesVisualCrossing == true ? Visibility.Visible : Visibility.Collapsed;
+        RenderWeather(place, w, new DateTimeOffset(now));
+    }
+    private void RenderWeather(City? place, WeatherReading? reading, DateTimeOffset now)
+    {
+        WeatherLine.Text = WeatherReading.Summary(place, reading);
+        WeatherLine.ToolTip = weather.Warning is { } warning ? $"{WeatherLine.Text}\n{warning}" : WeatherLine.Text;
+        bool openMeteo = reading?.UsesOpenMeteo == true;
+        bool visualCrossing = reading?.UsesVisualCrossing == true;
+        weatherSourceLink = openMeteo ? WeatherAttributionLink.OpenMeteoUri
+            : visualCrossing ? WeatherAttributionLink.VisualCrossingUri : null;
+        WeatherAdornment.Visibility = weatherSourceLink is null ? Visibility.Collapsed : Visibility.Visible;
+        WeatherCredit.Visibility = visualCrossing ? Visibility.Visible : Visibility.Collapsed;
+        if (weatherSourceLink is null) return;
+
+        var current = reading?.Current;
+        var scene = WeatherAppearance.At(current, now);
+        WeatherIcon.SetScene(scene);
+        var label = WeatherAppearance.Label(scene, current);
+        var credit = openMeteo ? "Open-Meteo" : VisualCrossing.Name;
+        if (reading?.Air?.Source == "Open-Meteo") credit += " · CAMS";
+        AutomationProperties.SetName(WeatherBadge, $"{label}，打开 {credit}");
+        var tooltip = new List<string> { label };
+        if (current?.Daylight is { } light) {
+            if (light.Sunrise is { } rise && rise.Date == now.ToOffset(rise.Offset).Date) tooltip.Add($"日出 {rise:HH:mm}");
+            if (light.Sunset is { } set && set.Date == now.ToOffset(set.Offset).Date) tooltip.Add($"日落 {set:HH:mm}");
+        }
+        WeatherBadge.ToolTip = string.Join(" · ", tooltip) + $"\n打开 {credit}";
+    }
+    private void WeatherBadgeClick(object sender, RoutedEventArgs e)
+    {
+        if (weatherSourceLink is { } uri) WeatherAttributionLink.Open(uri);
     }
     private void PreviousClick(object sender,RoutedEventArgs e) => Move(-1);
     private void NextClick(object sender,RoutedEventArgs e) => Move(1);

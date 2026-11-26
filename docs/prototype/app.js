@@ -217,6 +217,10 @@
         : stamp.slice(0, 5);
       $("[data-seconds]").textContent = ":" + p.second;
     }
+    const scene = M.weatherScene(state, stamp);
+    document.querySelectorAll("[data-weather-scene]").forEach((glyph) => {
+      if (glyph.dataset.weatherScene !== scene) glyph.dataset.weatherScene = scene;
+    });
     if (page === "styles") updatePreview(stamp);
   }
   function updatePreview(stamp = tick().stamp) {
@@ -260,13 +264,14 @@
     const w = state.network === "empty" ? null : M.weatherSamples[state.city];
     const status = state.network === "cached" ? "离线缓存" : "演示天气";
     const details = w
-      ? `<div class="weather-detail">${V.icon(w.condition === "晴" ? "sun" : w.condition === "阴" ? "cloud" : "partly", 45)}<strong>${w.temp}°</strong><div>${w.condition}<small>${w.low}° ～ ${w.high}°</small></div></div><p>美标 AQI ${w.aqi} · ${w.quality}</p><p class="muted">${status} · 11月26日 10:25</p>`
+      ? `<div class="weather-detail">${V.weatherGlyph(M.weatherScene(state, tick().stamp))}<strong>${w.temp}°</strong><div>${w.condition}<small>${w.low}° ～ ${w.high}°</small></div></div><p>美标 AQI ${w.aqi} · ${w.quality}</p><p class="muted">日出 ${w.sunrise} · 日落 ${w.sunset}</p><p class="muted">${status} · 11月26日 10:25</p>`
       : `<p class="empty-line">${state.city ? "天气暂不可用，尚无该城市的缓存。" : "选择演示城市后可以查看天气。"}</p>`;
     const cities = V.options({ "": "未设置", 深圳: "深圳", 北京: "北京", 杭州: "杭州" }, state.city);
     showDialog(
       simpleDialog(
         "城市与天气",
         `<label class="field">演示城市<select id="city">${cities}</select></label>
+        <label class="field">图标演示<select id="weather-animation">${V.options(M.weatherAnimations, state.weatherAnimation)}</select></label>
         <label><input type="checkbox" id="direct-weather"${state.directWeatherConnection ? " checked" : ""}> 直连天气服务（演示）</label>${details}`,
       ),
     );
@@ -774,12 +779,13 @@
       state.directWeatherConnection = el.checked;
       return;
     }
-    if (el.id === "city") {
-      state.city = el.value;
+    if (el.id === "city" || el.id === "weather-animation") {
+      if (el.id === "city") state.city = el.value;
+      else state.weatherAnimation = el.value;
       if (page === "editor") updateClock();
       else render();
       showWeather();
-      $("#city").focus();
+      focusAfter("#" + el.id);
       return;
     }
     if (el.id === "custom-style") {

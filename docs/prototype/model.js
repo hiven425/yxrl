@@ -207,10 +207,28 @@ const CalendarModel = (() => {
   }
 
   const weatherSamples = {
-    深圳: { temp: 23, low: 20, high: 26, condition: "多云", aqi: 42, quality: "优" },
-    北京: { temp: 6, low: 0, high: 12, condition: "晴", aqi: 76, quality: "良" },
-    杭州: { temp: 14, low: 9, high: 17, condition: "阴", aqi: 55, quality: "良" },
+    深圳: { temp: 23, low: 20, high: 26, condition: "多云", aqi: 42, quality: "优", sunrise: "06:43", sunset: "17:40" },
+    北京: { temp: 6, low: 0, high: 12, condition: "晴", aqi: 76, quality: "良", sunrise: "07:12", sunset: "16:50" },
+    杭州: { temp: 14, low: 9, high: 17, condition: "阴", aqi: 55, quality: "良", sunrise: "06:34", sunset: "16:59" },
   };
+  const weatherAnimations = {
+    auto: "跟随城市与时间", sun: "晴天", sunrise: "日出", sunset: "日落", night: "晴夜",
+    "partly-cloudy": "多云", "cloudy-night": "夜间多云", cloud: "阴天", rain: "下雨",
+    snow: "下雪", thunder: "雷雨", fog: "雾", wind: "大风",
+  };
+
+  function weatherScene(state, stamp) {
+    const sample = state.network === "empty" ? null : weatherSamples[state.city];
+    if (!sample) return "unknown";
+    if (state.weatherAnimation !== "auto") return state.weatherAnimation;
+    if (sample.condition === "阴") return "cloud";
+    const minutes = (time) => Number(time.slice(0, 2)) * 60 + Number(time.slice(3, 5));
+    const now = minutes(stamp), rise = minutes(sample.sunrise), set = minutes(sample.sunset);
+    if (Math.abs(now - rise) <= 30) return "sunrise";
+    if (Math.abs(now - set) <= 30) return "sunset";
+    const night = now < rise || now >= set;
+    return sample.condition === "晴" ? (night ? "night" : "sun") : (night ? "cloudy-night" : "partly-cloudy");
+  }
 
   function initialState() {
     return {
@@ -221,6 +239,7 @@ const CalendarModel = (() => {
       formats: ["HH:mm:ss", "M月d日 ddd"],
       rules: builtins.map((rule) => ({ ...rule })),
       city: "深圳",
+      weatherAnimation: "auto",
       directWeatherConnection: false,
       network: "online",
       width: "normal",
@@ -462,6 +481,8 @@ const CalendarModel = (() => {
     ruleText,
     dayMark,
     weatherSamples,
+    weatherAnimations,
+    weatherScene,
     initialState,
     itemsOn,
     occurs,

@@ -35,6 +35,8 @@ try
         if(data?.Current is null || data.Air is null) throw new Exception(service.Warning ?? "缺少天气或空气质量");
         Equal(service.Read(city), data);
         Console.WriteLine($"{WeatherReading.Summary(city, data)}\n气温来源 {data.Current.Source}，空气质量来源 {data.Air.Source}。刷新并读回耗时 {timer.Elapsed.TotalSeconds:F1} 秒。");
+        if (data.Current.Daylight is { } daylight)
+            Console.WriteLine($"地点日出 {daylight.Sunrise:HH:mm}，日落 {daylight.Sunset:HH:mm}。");
         return;
     }
     var store=new SettingsStore(directory.FullName); store.Load();

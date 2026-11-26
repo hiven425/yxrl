@@ -41,10 +41,27 @@ const CalendarViews = (function () {
         .join("")}`;
     return group("日历", 0, 4) + group("设置", 4, 8);
   }
+  function weatherGlyph(scene = "unknown") {
+    return `<span class="weather-glass" data-weather-scene="${e(scene)}" aria-hidden="true">
+      <span class="glass-sun"><i class="glass-rays"></i><i class="glass-orb"></i></span>
+      <span class="glass-moon"><i></i><i></i></span>
+      <span class="glass-twilight"><i class="glass-orb"></i></span>
+      <span class="glass-horizon"></span>
+      <span class="glass-cloud"></span>
+      <span class="glass-rain"><i></i><i></i><i></i></span>
+      <span class="glass-snow"><i>✧</i><i>✧</i><i>✧</i></span>
+      <span class="glass-bolt"></span>
+      <span class="glass-fog"></span>
+      <span class="glass-wind"></span>
+      <span class="glass-unknown">–</span>
+    </span>`;
+  }
   function weatherBadge(state) {
     const w = state.network === "empty" ? null : M.weatherSamples[state.city];
     const status = state.network === "cached" ? "缓存 · 10:25" : w?.condition;
-    return `<button class="weather-badge" type="button" data-action="weather" aria-label="城市与天气设置">${icon(w?.condition === "晴" ? "sun" : w?.condition === "阴" ? "cloud" : w ? "partly" : "cloud", 34)}<span><strong>${w ? w.temp + "°" : "—"}</strong><small>${e(state.city || "选择城市")}${status ? " · " + e(status) : w ? "" : " · 暂无数据"}</small></span></button>`;
+    const preview = w && state.weatherAnimation !== "auto" && state.network !== "cached"
+      ? "图标演示 · " + M.weatherAnimations[state.weatherAnimation] : "";
+    return `<button class="weather-badge" type="button" data-action="weather" aria-label="城市与天气设置">${weatherGlyph()}<span><strong>${w ? w.temp + "°" : "—"}</strong><small>${preview ? e(preview) : e(state.city || "选择城市") + (status ? " · " + e(status) : " · 暂无数据")}</small></span></button>`;
   }
   function occurrenceRow(item, date, cal) {
     const done = item.done.includes(date);
@@ -236,6 +253,7 @@ const CalendarViews = (function () {
     options,
     button,
     navbar,
+    weatherGlyph,
     month,
     day,
     editor,

@@ -186,7 +186,7 @@
 }
 ```
 
-**`weather-cache.json`** 以地点 ID 为键，分别保存天气和空气质量。`observedAt` 是地点当地的供应方时刻，`fetchedAt` 是本机取回时刻。每项记录自己的 `source`，旧缓存缺少该字段时按 Open-Meteo 读回。
+**`weather-cache.json`** 以地点 ID 为键，分别保存天气和空气质量。`observedAt` 是地点当地的供应方时刻，`fetchedAt` 是本机取回时刻。每项记录自己的 `source`，旧缓存缺少该字段时按 Open-Meteo 读回。`current.daylight` 可保存昼夜标记和当地日出日落的带偏移时间，早期缓存仍可读回。
 
 ```json
 {
@@ -206,9 +206,9 @@
 | 用途 | 接口和字段 | 刷新与错误 |
 | --- | --- | --- |
 | 城市搜索 | `geocoding-api.open-meteo.com/v1/search`，`name`、`language=zh`；中文同名地点保留区分信息 | 用户提交后搜索。请求失败保留已选地点和查询文字。 |
-| 当前与当日天气 | `api.open-meteo.com/v1/forecast`，`current=temperature_2m,weather_code`、`daily=temperature_2m_min,temperature_2m_max`、`timezone=auto` | 新地点或缓存超过 30 分钟时后台更新。换月、切换时钟样式共用快照。 |
+| 当前与当日天气 | `api.open-meteo.com/v1/forecast`，`current=temperature_2m,weather_code,is_day`、`daily=temperature_2m_min,temperature_2m_max,sunrise,sunset`、`timezone=auto` | 新地点、缓存超过 30 分钟或旧缓存缺少日照字段时后台更新。换月、切换时钟样式共用快照。 |
 | 空气质量 | `air-quality-api.open-meteo.com/v1/air-quality`，`current=us_aqi` | 独立缓存 60 分钟。界面显示「美标 AQI」和来源时间，0 是有效值。 |
-| 备用天气与空气质量 | Visual Crossing Timeline 的 `currentConditions`、当日 `days` 和数值 `aqius` | 匿名 HTTPS 请求使用 gzip。一轮刷新至多发送一次，只查询尚缺的维度。 |
+| 备用天气与空气质量 | Visual Crossing Timeline 的 `currentConditions`、当日 `days`、`sunriseEpoch`、`sunsetEpoch` 和数值 `aqius` | 匿名 HTTPS 请求使用 gzip。一轮刷新至多发送一次，只查询尚缺的维度。 |
 
 城市搜索先使用完整名称。以「市」结尾的名称查无结果时，再查询简称，例如「深圳市」和「深圳」。临时网络故障重试一次。单次 HTTP 请求超时为 8 秒。
 

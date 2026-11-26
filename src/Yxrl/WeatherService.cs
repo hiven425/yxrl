@@ -1,14 +1,21 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Yxrl;
+
+internal sealed record WeatherDaylight(bool? IsDay, DateTimeOffset? Sunrise, DateTimeOffset? Sunset);
 
 internal sealed record WeatherPart(double Temp, double Low, double High, string Condition, string ObservedAt,
     DateTimeOffset FetchedAt, string Source = "Open-Meteo")
 {
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public WeatherDaylight? Daylight { get; init; }
+
     internal bool IsStale => DateTimeOffset.UtcNow - FetchedAt >= TimeSpan.FromMinutes(30);
     internal bool IsValid => double.IsFinite(Temp) && double.IsFinite(Low) && double.IsFinite(High) && Low <= High
         && !string.IsNullOrWhiteSpace(Condition) && !string.IsNullOrWhiteSpace(ObservedAt) && FetchedAt != default;
@@ -26,6 +33,7 @@ internal sealed record WeatherReading(WeatherPart? Current = null, AirPart? Air 
     internal bool WeatherPending { get; init; }
     internal bool AirPending { get; init; }
     internal bool UsesVisualCrossing => Current?.Source == VisualCrossing.Name || Air?.Source == VisualCrossing.Name;
+    internal bool UsesOpenMeteo => Current?.Source == "Open-Meteo" || Air?.Source == "Open-Meteo";
     internal WeatherReading ValidParts() => new(Current is { IsValid: true } ? Current : null, Air is { IsValid: true } ? Air : null);
 
     internal static string CurrentText(City? city, WeatherReading? reading) => reading?.Current is { } part
@@ -111,12 +119,32 @@ internal sealed class WeatherService(string directory, HttpMessageHandler? syste
     private static async Task<WeatherReading> Forecast(HttpClient client, string query, CancellationToken token)
     {
         using var doc = JsonDocument.Parse(await client.GetStringAsync("https://api.open-meteo.com/v1/forecast?" + query +
-            "&current=temperature_2m,weather_code&daily=temperature_2m_min,temperature_2m_max&forecast_days=1", token));
-        var now = doc.RootElement.GetProperty("current"); var day = doc.RootElement.GetProperty("daily");
-        return new(Current: new(now.GetProperty("temperature_2m").GetDouble(), day.GetProperty("temperature_2m_min")[0].GetDouble(),
+            "&current=temperature_2m,weather_code,is_day&daily=temperature_2m_min,temperature_2m_max,sunrise,sunset&forecast_days=1", token));
+        var root = doc.RootElement;
+        var now = root.GetProperty("current");
+        var day = root.GetProperty("daily");
+        bool? isDay = now.TryGetProperty("is_day", out var daylight) && daylight.ValueKind == JsonValueKind.Number
+            && daylight.TryGetInt32(out var flag) && flag is 0 or 1 ? flag == 1 : null;
+        TimeSpan? offset = root.TryGetProperty("utc_offset_seconds", out var utcOffset) && utcOffset.ValueKind == JsonValueKind.Number
+            && utcOffset.TryGetInt32(out var seconds) && seconds is >= -50400 and <= 50400 && seconds % 60 == 0
+            ? TimeSpan.FromSeconds(seconds) : null;
+        return new(Current: new WeatherPart(now.GetProperty("temperature_2m").GetDouble(), day.GetProperty("temperature_2m_min")[0].GetDouble(),
             day.GetProperty("temperature_2m_max")[0].GetDouble(), Condition(now.GetProperty("weather_code").GetInt32()),
-            ObservationTime(now), DateTimeOffset.UtcNow));
+            ObservationTime(now), DateTimeOffset.UtcNow) {
+            Daylight = new(isDay, SolarTime(day, "sunrise", offset), SolarTime(day, "sunset", offset))
+        });
     }
+
+    private static DateTimeOffset? SolarTime(JsonElement day, string field, TimeSpan? offset)
+    {
+        if (offset is not { } zone || !day.TryGetProperty(field, out var times) || times.ValueKind != JsonValueKind.Array
+            || times.GetArrayLength() == 0 || times[0].ValueKind != JsonValueKind.String
+            || !DateTime.TryParseExact(times[0].GetString(), "yyyy-MM-ddTHH:mm", CultureInfo.InvariantCulture,
+                DateTimeStyles.None, out var local)) return null;
+        try { return new DateTimeOffset(local, zone); }
+        catch (ArgumentException) { return null; }
+    }
+
     private static async Task<WeatherReading> Air(HttpClient client, string query, CancellationToken token)
     {
         using var doc = JsonDocument.Parse(await client.GetStringAsync("https://air-quality-api.open-meteo.com/v1/air-quality?" + query + "&current=us_aqi", token));
@@ -150,7 +178,7 @@ internal sealed class WeatherService(string directory, HttpMessageHandler? syste
     {
         token.ThrowIfCancellationRequested();
         var previous = cache.GetValueOrDefault(city.Id);
-        bool needWeather = previous?.Current is not { IsStale: false };
+        bool needWeather = previous?.Current is not { IsStale: false, Daylight: not null };
         bool needAir = previous?.Air is not { IsStale: false };
         if (!needWeather && !needAir) return;
         var client = directConnection ? direct : system;

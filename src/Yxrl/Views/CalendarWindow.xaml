@@ -26,10 +26,17 @@
                 <TextBlock x:Name="TodayLine" Style="{StaticResource Subtle}"/>
               </StackPanel>
             </DockPanel>
-            <TextBlock x:Name="WeatherLine" Margin="0,4,0,0" Style="{StaticResource Subtle}" Visibility="Collapsed" TextTrimming="CharacterEllipsis"/>
-            <TextBlock x:Name="WeatherCredit" Style="{StaticResource Subtle}" Visibility="Collapsed">
-              <Run Text="数据来源 "/><local:WeatherAttributionLink/>
-            </TextBlock>
+            <DockPanel Margin="0,4,0,0">
+              <StackPanel x:Name="WeatherAdornment" DockPanel.Dock="Right" Margin="8,0,0,0" Visibility="Collapsed">
+                <Button x:Name="WeatherBadge" HorizontalAlignment="Right" Width="57" Height="41" Padding="0" Click="WeatherBadgeClick">
+                  <local:WeatherGlyph x:Name="WeatherIcon" Width="54" Height="39"/>
+                </Button>
+                <TextBlock x:Name="WeatherCredit" Style="{StaticResource Subtle}" FontSize="10" HorizontalAlignment="Right" Visibility="Collapsed">
+                  <local:WeatherAttributionLink Foreground="{DynamicResource Accent}"/>
+                </TextBlock>
+              </StackPanel>
+              <TextBlock x:Name="WeatherLine" VerticalAlignment="Center" Style="{StaticResource Subtle}" TextTrimming="CharacterEllipsis"/>
+            </DockPanel>
             <Border Height="1" Background="{DynamicResource Line}" Margin="0,12,0,8"/>
             <DockPanel Margin="0,0,0,5">
               <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
