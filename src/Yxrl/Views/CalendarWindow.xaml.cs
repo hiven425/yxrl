@@ -69,7 +69,7 @@ internal partial class CalendarWindow : Window
     {
         var menu = CaptureEntry.ContextMenu;
         foreach (MenuItem item in menu.Items)
-            item.IsEnabled = item.Tag is null || captureTools.Options.Enabled;
+            item.IsEnabled = item.Tag is null || (captureTools.Options.Enabled && (!Equals(item.Tag, "RestorePin") || captureTools.HasClosedPins));
         menu.PlacementTarget = CaptureEntry;
         menu.Placement = PlacementMode.Top;
         menu.IsOpen = true;

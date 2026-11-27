@@ -21,8 +21,10 @@
   touch-action: none;
 }
 .shot-editor [hidden],
-.shot-recorder [hidden] {
-  display: none;
+.shot-recorder [hidden],
+.shot-panel [hidden],
+.shot-pin [hidden] {
+  display: none !important;
 }
 .shot-bar,
 .shot-info,
@@ -31,9 +33,10 @@
 .shot-recorder,
 .shot-label,
 .shot-pin-actions {
-  background: var(--paper);
+  background: var(--surface-glass, var(--paper));
+  backdrop-filter: blur(14px);
   border: 1px solid var(--panel-border);
-  border-radius: 8px;
+  border-radius: 10px;
   box-shadow: var(--shadow);
 }
 .shot-bar,
@@ -42,7 +45,11 @@
   position: absolute;
 }
 .shot-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   padding: 4px 9px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
 .shot-tool-buttons,
@@ -50,21 +57,56 @@
 .shot-video-options,
 .shot-video-trim,
 .shot-row,
-.shot-pin-actions {
+.shot-pin-actions,
+.shot-layout-bar {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 3px;
+  gap: 4px;
 }
 .shot-bar {
   display: grid;
-  padding: 4px;
+  padding: 5px;
   max-width: calc(100% - 4px);
+}
+.shot-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--line);
+  margin: 0 2px;
 }
 .shot-style-options {
   border-top: 1px solid var(--line);
-  gap: 8px;
-  padding: 5px 4px 1px;
+  gap: 6px 8px;
+  padding: 6px 4px 2px;
+  margin-top: 4px;
+}
+.shot-swatches {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.shot-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  padding: 2px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  background: transparent;
+}
+.shot-swatch[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-fill);
+}
+.shot-swatch i {
+  display: block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid rgb(120 135 150 / 45%);
 }
 .shot-style-options input[type="number"],
 .shot-video-trim input[type="number"] {
@@ -84,10 +126,10 @@
 .shot-btn {
   font: inherit;
   cursor: pointer;
-  min-height: 30px;
+  min-height: 28px;
   padding: 3px 8px;
   border: 1px solid transparent;
-  border-radius: 5px;
+  border-radius: 6px;
   color: var(--text);
   background: transparent;
 }
@@ -96,9 +138,23 @@
   background: var(--accent-fill);
   color: var(--accent);
 }
+.shot-btn[aria-pressed="true"] {
+  border-color: var(--accent);
+}
 .shot-btn:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
+}
+.shot-btn.secondary {
+  background: var(--paper);
+  border-color: var(--panel-border);
+}
+.shot-btn.secondary:hover {
+  border-color: var(--accent);
+}
+.shot-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
 }
 .shot-menu {
   display: grid;
@@ -111,30 +167,61 @@
 .shot-pin {
   outline: 1px solid var(--accent);
   box-shadow: var(--shadow);
+  border-radius: 4px;
 }
-.shot-pin img {
+.shot-pin[data-topmost="false"] {
+  z-index: 12;
+  outline-color: var(--panel-border);
+}
+.shot-pin[data-passthrough="true"] {
+  outline-style: dashed;
+}
+.shot-pin[data-passthrough="true"] canvas {
+  pointer-events: none;
+}
+.shot-pin canvas {
   display: block;
   width: 100%;
   touch-action: none;
   cursor: move;
 }
+.shot-pin-hud {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgb(22 30 38 / 86%);
+  color: #fff;
+  font-size: 11.5px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
 .shot-pin-actions {
   position: relative;
-  padding: 2px 4px;
+  padding: 3px 5px;
+  margin-top: 4px;
+  gap: 2px;
 }
 .shot-pin-actions button {
-  font-size: 12px;
+  font-size: 11.5px;
+  min-height: 24px;
+  padding: 2px 5px;
 }
 .shot-panel,
 .shot-recorder {
   z-index: 57;
-  top: 15%;
+  top: 10%;
   left: 50%;
   transform: translateX(-50%);
-  width: min(670px, 96%);
-  padding: 15px;
-  max-height: 82%;
+  width: min(740px, 96%);
+  padding: 14px;
+  max-height: 86%;
   overflow: auto;
+  background: var(--surface);
+}
+.shot-panel[data-pinned="true"] {
+  z-index: 62;
 }
 .shot-panel header,
 .shot-recorder header,
@@ -147,8 +234,24 @@
 .shot-panel header,
 .shot-recorder header {
   border-bottom: 1px solid var(--line);
-  padding-bottom: 7px;
-  font-size: 16px;
+  padding-bottom: 8px;
+  font-size: 15.5px;
+}
+.shot-layout-bar {
+  margin-top: 10px;
+  padding: 7px 10px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  gap: 6px 10px;
+  font-size: 12.5px;
+}
+.shot-layout-bar select {
+  padding: 3px 6px;
+  border-radius: 5px;
+  border: 1px solid var(--panel-border);
+  background: var(--surface);
+  color: var(--text);
 }
 .shot-recorder {
   width: min(568px, 96%);
@@ -260,45 +363,105 @@
 }
 .shot-columns {
   display: flex;
-  gap: 16px;
-  margin-top: 12px;
+  gap: 12px;
+  margin-top: 10px;
+}
+.shot-original,
+.shot-fields {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
 }
 .shot-original {
   flex: 1;
   min-width: 0;
 }
-.shot-original img {
+.shot-original h3,
+.shot-fields .field {
+  font-size: 13px;
+}
+.shot-original-stage {
+  position: relative;
+  display: inline-block;
+  margin-top: 6px;
+  max-width: 100%;
+}
+.shot-original-stage img {
+  display: block;
   max-width: 100%;
   max-height: 250px;
 }
+.shot-original-stage canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+}
 .shot-fields {
-  flex: 1.2;
+  flex: 1.15;
   min-width: 0;
 }
 .shot-fields textarea {
   width: 100%;
   resize: vertical;
+  margin-top: 4px;
 }
+.shot-fields textarea.size-small { font-size: 12px; }
+.shot-fields textarea.size-medium { font-size: 13.5px; }
+.shot-fields textarea.size-large { font-size: 15.5px; }
 .shot-row {
   margin: 8px 0;
 }
 .shot-row input {
-  width: 82px;
+  width: 96px;
 }
 .shot-status,
 .shot-setting-row small {
   display: block;
   color: var(--muted);
 }
+.option-label.shot-enable-label {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  padding: 7px 0;
+}
+.option-label.shot-enable-label .shot-status {
+  font-size: 12px;
+}
 .shot-setting-row {
   border-bottom: 1px solid var(--line);
-  padding: 6px 0;
+  padding: 7px 0;
 }
-.shot-setting-row span {
+.shot-setting-row:last-of-type {
+  border-bottom: 0;
+}
+.shot-setting-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
   margin-right: auto;
 }
+.shot-scope {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--card, var(--subtle));
+  color: var(--muted);
+}
+.shot-scope[data-global="true"] {
+  background: var(--accent-fill);
+  color: var(--accent);
+}
 .shot-setting-row .shot-btn {
-  background: var(--subtle);
+  background: var(--surface);
+  border-color: var(--panel-border);
+}
+.shot-setting-row .shot-btn:hover {
+  border-color: var(--accent);
 }
 .shot-panel .shot-fields .shot-btn[data-shot="send"] {
   background: var(--accent);
@@ -308,11 +471,11 @@
   .shot-columns {
     flex-direction: column;
   }
-  .shot-original img {
+  .shot-original-stage img {
     max-height: 120px;
   }
   .shot-panel {
-    top: 6%;
+    top: 4%;
   }
   .shot-bar {
     gap: 0;

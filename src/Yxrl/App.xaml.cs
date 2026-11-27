@@ -70,6 +70,7 @@ public partial class App : Application
         RefreshVisible(DateTime.Now,recolor:true);
         panel.RefreshTheme();
         settingsWindow?.RefreshTheme();
+        capture?.RefreshTheme();
     });
     private ClockAnchor? ActiveAnchor => detected.FirstOrDefault(x=>x.Taskbar==lastBar) ?? detected.FirstOrDefault();
     private void OpenSettings(int section = 0)

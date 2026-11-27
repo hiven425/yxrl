@@ -6,6 +6,7 @@ using System.Windows.Automation;
 using System.Windows.Automation.Peers;
 using System.Windows.Automation.Provider;
 using System.Windows.Controls;
+using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Markup;
 using System.Xml.Linq;
@@ -23,9 +24,9 @@ internal static class CaptureWindowsChecks
     private static extern int DwmFlush();
     [DllImport("user32")]
     private static extern nint SetThreadDpiAwarenessContext(nint context);
-    private static CaptureOptions Global(string start = "", string clipboard = "") => new()
+    private static CaptureOptions Global(string start = "", string clipboard = "", string restorePin = "") => new()
     {
-        Shortcuts = new ShotShortcuts(Start: start, Clipboard: clipboard)
+        Shortcuts = new ShotShortcuts(Start: start, Clipboard: clipboard, RestorePin: restorePin)
     };
     private static void Check(bool ok, string message)
     {
@@ -158,6 +159,7 @@ internal static class CaptureWindowsChecks
             Pump();
             var overlay = app.Windows.OfType<ShotWindow>().Single(window => window.Selecting);
             var surface = Child<ShotSurface>(overlay)!;
+            Check(!InputMethod.GetIsInputMethodEnabled(surface), "选区画布应禁用输入法附着以免吞掉快捷键");
             var pick = new PixelPoint(current.X - capture.Bounds.Left, current.Y - capture.Bounds.Top);
             surface.SelectWindowAt(pick);
             Pump();
@@ -166,6 +168,15 @@ internal static class CaptureWindowsChecks
             Pump();
             var pin = app.Windows.OfType<ShotWindow>().Single();
             Check(pin.Topmost && !pin.Selecting && Child<ShotSurface>(pin)!.Document.Width == selected.Width, "贴图像素或置顶状态不符");
+            pin.SetPinOpacity(0.65);
+            Check(Math.Abs(pin.PinOpacity - 0.65) < 0.01, "贴图透明度设置");
+            pin.TogglePinLock();
+            pin.TogglePinTopmost();
+            pin.ToggleThumbnailMode();
+            Check(pin.IsLocked && !pin.Topmost && pin.IsThumbnailMode && Child<ShotSurface>(pin)!.Viewport is not null, "贴图锁定/置顶/缩略图状态");
+            pin.ToggleThumbnailMode();
+            pin.TogglePinTopmost();
+            pin.TogglePinLock();
             pin.Run(ImageAction.Ocr);
             Pump();
             var words = app.Windows.OfType<TextToolWindow>().Single();
@@ -173,6 +184,19 @@ internal static class CaptureWindowsChecks
             while (DateTime.UtcNow < deadline && !All<TextBox>(words).Any(f => f.Text.Contains("会议")))
                 Pump(80);
             Check(All<TextBox>(words).Any(f => f.Text.Contains("Room", StringComparison.OrdinalIgnoreCase)), "文字窗口没有显示真实识别结果");
+            pin.Close();
+            Pump();
+            Check(tools.HasClosedPins && tools.RestoreLastPin(), "关闭贴图应可由 Ctrl+3 恢复");
+            Pump();
+            var restoredPin = app.Windows.OfType<ShotWindow>().Single();
+            Check(Math.Abs(restoredPin.PinOpacity - 0.65) < 0.01, "恢复的贴图未保留透明度");
+            if (!liveScreen)
+            {
+                restoredPin.Close();
+                Pump();
+            }
+            else
+                pin = restoredPin;
             if (live >= 0)
             {
                 tools.Invoke(ShotAction.Translate);

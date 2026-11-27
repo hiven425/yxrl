@@ -11,11 +11,12 @@ internal enum ShotAction
     Ocr,
     Translate,
     Record,
-    LongShot
+    LongShot,
+    RestorePin
 }
 
 internal sealed record ShotShortcuts(string Start = "Ctrl+1", string Clipboard = "Ctrl+2", string Pin = "Ctrl+T", string Ocr = "Shift+C",
-    string Translate = "Ctrl+Q", string Record = "G", string LongShot = "L")
+    string Translate = "Ctrl+Q", string Record = "G", string LongShot = "L", string RestorePin = "Ctrl+3")
 {
     public string this[ShotAction action] => action switch
     {
@@ -26,6 +27,7 @@ internal sealed record ShotShortcuts(string Start = "Ctrl+1", string Clipboard =
         ShotAction.Translate => Translate,
         ShotAction.Record => Record,
         ShotAction.LongShot => LongShot,
+        ShotAction.RestorePin => RestorePin,
         _ => throw new ArgumentOutOfRangeException(nameof(action))};
     public ShotShortcuts Bind(ShotAction action, string value) => action switch
     {
@@ -57,6 +59,10 @@ internal sealed record ShotShortcuts(string Start = "Ctrl+1", string Clipboard =
         {
             LongShot = value
         },
+        ShotAction.RestorePin => this with
+        {
+            RestorePin = value
+        },
         _ => throw new ArgumentOutOfRangeException(nameof(action))};
 }
 
@@ -74,6 +80,7 @@ internal sealed record CaptureOptions
         ShotAction.Record => "录制屏幕",
         ShotAction.LongShot => "滚动长截图",
         ShotAction.Translate => "打开翻译",
+        ShotAction.RestorePin => "恢复关闭的贴图",
         _ => throw new ArgumentOutOfRangeException(nameof(action))
     };
 
@@ -94,7 +101,7 @@ internal sealed record CaptureOptions
                     $"「{Label(action)}」需要修饰键搭配字母、数字或功能键。");
             if (!used.Add(key))
                 throw new FormatException($"「{Label(action)}」的快捷键与其他截图动作重复。");
-            if (key.ToString() is "Ctrl+C" or "Ctrl+S" or "Ctrl+Z" or "Ctrl+Y" or "C")
+            if (key.ToString() is "Ctrl+C" or "Ctrl+S" or "Ctrl+Z" or "Ctrl+Y" or "Ctrl+Shift+Z" or "C")
                 throw new FormatException($"「{Label(action)}」与编辑和保存快捷键重复。");
         }
     }
@@ -104,7 +111,7 @@ internal readonly record struct ShotChord(ModifierKeys Mods, Key Key)
 {
     public static bool FromEvent(KeyEventArgs e, out ShotChord value, bool allowUnmodified = false)
     {
-        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        var key = e.Key == Key.System ? e.SystemKey : e.Key == Key.ImeProcessed ? e.ImeProcessedKey : e.Key;
         value = new(Keyboard.Modifiers, key);
         return value.Valid(allowUnmodified);
     }

@@ -28,7 +28,7 @@ internal static class CaptureChecks
         store.Load();
         Check(store.ReadError is null && store.Current.Capture.Shortcuts.Start == "Ctrl+1" &&
             store.Current.Capture.Shortcuts.Record == "G" && store.Current.Capture.Shortcuts.LongShot == "L", "旧配置默认值");
-        var shortcuts = new ShotShortcuts(Start: "Ctrl+Alt+F9", Ocr: "", Record: "", LongShot: "F8");
+        var shortcuts = new ShotShortcuts(Start: "Ctrl+Alt+F9", Ocr: "", Record: "", LongShot: "F8", RestorePin: "Ctrl+Shift+R");
         var changed = store.Current with
         {
             Capture = new CaptureOptions
@@ -41,7 +41,8 @@ internal static class CaptureChecks
         store.Save(changed);
         var reopened = new SettingsStore(dir.FullName);
         reopened.Load();
-        Check(reopened.Current == changed && (int? )JsonNode.Parse(File.ReadAllText(store.FilePath))?["capture"]?["futureOption"] == 12, "关闭与改键读回、保留扩展字段");
+        Check(reopened.Current == changed && reopened.Current.Capture.Shortcuts.RestorePin == "Ctrl+Shift+R" &&
+            (int? )JsonNode.Parse(File.ReadAllText(store.FilePath))?["capture"]?["futureOption"] == 12, "关闭与改键读回、保留扩展字段");
         Check(!ShotChord.TryParse("Ctrl+Ctrl+1", out _) && !ShotChord.TryParse("A", out _) && ShotChord.TryParse("Ctrl+1", out var k) && k.ToString() == "Ctrl+1", "按键解析");
         try
         {
@@ -115,6 +116,7 @@ internal static class CaptureChecks
     {
         CheckClipboardImage(directory);
         CheckEditableMarks();
+        CheckOcrLayout();
         CheckScrollStitch();
         var image = TestImage();
         var doc = new ShotDocument(image);
@@ -207,6 +209,45 @@ internal static class CaptureChecks
         new FormatConvertedBitmap(crop.RenderForExport(), PixelFormats.Bgra32, null, 0)
             .CopyPixels(new Int32Rect(53, 20, 1, 1), center, 4, 0);
         Check(center.SequenceEqual(new byte[] { 47, 64, 212, 255 }), "导出像素中包含序号");
+
+        // Verify generic shape hit-testing, handle resizing, ClearMarks undo/redo, and selection helpers
+        var rectMark = new ShotMark(MarkKind.Rectangle, [new(20, 20), new(120, 90)]);
+        doc.Add(rectMark);
+        Check(doc.EditableAt(MarkKind.Rectangle, new Point(22, 55)) == rectMark, "矩形边缘可二次选中");
+        var resized = ShotDocument.ResizeMark(rectMark, "se", new Point(150, 105));
+        Check(resized.Bounds == new Rect(20, 20, 130, 85) && ShotDocument.MarkHandles(resized).Length == 4, "矩形句柄调整与四角数量");
+        var arrowMark = new ShotMark(MarkKind.Arrow, [new(10, 10), new(90, 10)]);
+        doc.Add(arrowMark);
+        Check(doc.EditableAt(MarkKind.Arrow, new Point(50, 13)) == arrowMark && ShotDocument.MarkHandles(arrowMark).Length == 2, "箭头线段命中与双端点");
+        doc.ClearMarks();
+        Check(!doc.HasMarks && doc.CanUndo, "清空标注");
+        doc.Undo();
+        Check(doc.HasMarks && doc.EditableAt(MarkKind.Arrow, new Point(50, 10)) == arrowMark, "清空标注可撤销");
+        doc.Redo();
+        Check(!doc.HasMarks, "清空标注可重做");
+
+        var sel = new PixelRect(10, 20, 110, 100);
+        Check(ShotSelection.AdjustEdge(sel, 2, 0, -3, 0, doc.Full) == new PixelRect(12, 20, 107, 100), "选区边缘缩扩");
+        Check(ShotSelection.ScaleAroundCenter(sel, 0.5, doc.Full) == new PixelRect(35, 40, 85, 80), "选区中心等比缩放");
+    }
+
+    private static void CheckOcrLayout()
+    {
+        var doc = new OcrDocument([
+            new OcrLine("第一段未结束", new Rect(10, 10, 120, 22), [], 0.99),
+            new OcrLine("继续同一段，14:30。", new Rect(10, 35, 160, 22), [], 0.98),
+            new OcrLine("Second paragraph, ok!", new Rect(10, 85, 190, 22), [], 0.97)
+        ], 300, 140);
+
+        var smart = OcrLayout.Format(doc, new(OcrParagraphMode.Smart, RemoveSpaces: false, OcrPunctuationMode.Keep));
+        Check(smart.Text == "第一段未结束继续同一段，14:30。" + Environment.NewLine + "Second paragraph, ok!", "智能分段：" + smart.Text);
+        Check(smart.Spans.Count == 3 && smart.Text.Substring(smart.Spans[1].Start, smart.Spans[1].Length) == "继续同一段，14:30。", "Span 反向定位");
+
+        var mergeNoSpace = OcrLayout.Format(doc, new(OcrParagraphMode.Merge, RemoveSpaces: true, OcrPunctuationMode.English));
+        Check(!mergeNoSpace.Text.Contains('\n') && !mergeNoSpace.Text.Contains(' ') && mergeNoSpace.Text.Contains("14:30."), "合并去空格与英文标点：" + mergeNoSpace.Text);
+
+        var cjkPunct = OcrLayout.Format(doc, new(OcrParagraphMode.Keep, RemoveSpaces: false, OcrPunctuationMode.Cjk));
+        Check(cjkPunct.Text.Contains("14:30") && cjkPunct.Text.Contains("paragraph，"), "中文标点保留时间冒号：" + cjkPunct.Text);
     }
 
     private static void CheckScrollStitch()

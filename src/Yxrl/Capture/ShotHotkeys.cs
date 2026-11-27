@@ -38,7 +38,8 @@ internal sealed class ShotHotkeys : IDisposable
             foreach (var action in new[]
             {
                 ShotAction.Start,
-                ShotAction.Clipboard
+                ShotAction.Clipboard,
+                ShotAction.RestorePin
             })
                 if (ShotChord.TryParse(options.Shortcuts[action], out var k))
                     wanted.Add(k, action);

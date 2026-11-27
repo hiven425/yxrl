@@ -46,15 +46,23 @@ internal sealed record ShotMark(MarkKind Kind, Point[] Points, string Text = "",
 
 internal sealed class ShotDocument
 {
-    private sealed record Edit(int Index, ShotMark? Before, ShotMark? After);
+    private sealed record Edit(int Index, ShotMark? Before, ShotMark? After, ShotMark[]? Cleared = null);
 
-    public BitmapSource Image { get; }
+    public BitmapSource Image { get; private set; }
     public int Width => Image.PixelWidth;
     public int Height => Image.PixelHeight;
     public PixelRect Full => new(0, 0, Width, Height);
 
+    public void ReplaceImage(BitmapSource image)
+    {
+        if (!image.IsFrozen && image.CanFreeze)
+            image.Freeze();
+        Image = image;
+    }
+
     private readonly List<ShotMark> marks = [];
     private readonly Stack<Edit> undo = new(), redo = new();
+    public bool HasMarks => marks.Count > 0;
     public bool CanUndo => undo.Count > 0;
     public bool CanRedo => redo.Count > 0;
     public int NextNumber => Math.Clamp(marks.Count == 0 ? 1 : marks.Max(mark => mark.Number) + 1, 1, 9999);
@@ -68,17 +76,85 @@ internal sealed class ShotDocument
 
     public void Add(ShotMark mark) => Apply(new(marks.Count, null, mark));
 
-    public ShotMark? EditableAt(MarkKind kind, Point point) =>
-        kind is MarkKind.Text or MarkKind.Number
-        ? marks.LastOrDefault(mark => mark.Kind == kind && EditableBounds(mark).Contains(point))
-        : null;
+    public void ClearMarks()
+    {
+        if (marks.Count == 0)
+            return;
+        Apply(new(0, null, null, marks.ToArray()));
+    }
+
+    public ShotMark? EditableAt(MarkKind kind, Point point)
+    {
+        if (kind is MarkKind.Pen or MarkKind.Highlight)
+            return null;
+        return marks.LastOrDefault(mark => mark.Kind == kind && HitMark(mark, point));
+    }
+
+    private bool HitMark(ShotMark mark, Point point)
+    {
+        if (mark.Kind is MarkKind.Text or MarkKind.Number)
+            return EditableBounds(mark).Contains(point);
+        double tol = Math.Max(8, mark.Appearance.Size + 5);
+        if (mark.Kind is MarkKind.Line or MarkKind.Arrow)
+            return DistanceToSegment(point, mark.Points[0], mark.Points[^1]) <= tol;
+        var bounds = mark.Bounds;
+        var outer = Rect.Inflate(bounds, tol, tol);
+        if (!outer.Contains(point))
+            return false;
+        if (mark.Kind == MarkKind.Mosaic)
+            return true;
+        if (bounds.Width > tol * 2 && bounds.Height > tol * 2)
+            return !Rect.Inflate(bounds, -tol, -tol).Contains(point);
+        return true;
+    }
+
+    private static double DistanceToSegment(Point p, Point a, Point b)
+    {
+        double dx = b.X - a.X, dy = b.Y - a.Y;
+        double lenSq = dx * dx + dy * dy;
+        if (lenSq < 1e-6)
+            return (p - a).Length;
+        double t = Math.Clamp(((p.X - a.X) * dx + (p.Y - a.Y) * dy) / lenSq, 0, 1);
+        return (p - new Point(a.X + t * dx, a.Y + t * dy)).Length;
+    }
 
     public Rect EditableBounds(ShotMark mark)
     {
         var a = mark.Points[0];
-        return mark.Kind == MarkKind.Number
-            ? new Rect(a.X - mark.Appearance.Size / 2, a.Y - mark.Appearance.Size / 2, mark.Appearance.Size, mark.Appearance.Size)
-            : TextBounds(a, FormatText(mark, Brushes.Black));
+        return mark.Kind switch
+        {
+            MarkKind.Number => new Rect(a.X - mark.Appearance.Size / 2, a.Y - mark.Appearance.Size / 2, mark.Appearance.Size, mark.Appearance.Size),
+            MarkKind.Text => TextBounds(a, FormatText(mark, Brushes.Black)),
+            MarkKind.Line or MarkKind.Arrow => Rect.Inflate(mark.Bounds, Math.Max(6, mark.Appearance.Size), Math.Max(6, mark.Appearance.Size)),
+            MarkKind.Rectangle or MarkKind.Ellipse or MarkKind.Mosaic => Rect.Inflate(mark.Bounds, Math.Max(3, mark.Appearance.Size / 2), Math.Max(3, mark.Appearance.Size / 2)),
+            _ => mark.Bounds
+        };
+    }
+
+    public static (string Id, Point Point)[] MarkHandles(ShotMark mark) => mark.Kind switch
+    {
+        MarkKind.Line or MarkKind.Arrow => [("start", mark.Points[0]), ("end", mark.Points[^1])],
+        MarkKind.Rectangle or MarkKind.Ellipse or MarkKind.Mosaic => [
+            ("nw", mark.Bounds.TopLeft),
+            ("ne", mark.Bounds.TopRight),
+            ("sw", mark.Bounds.BottomLeft),
+            ("se", mark.Bounds.BottomRight)
+        ],
+        _ => []
+    };
+
+    public static ShotMark ResizeMark(ShotMark mark, string handle, Point target)
+    {
+        if (mark.Kind is MarkKind.Line or MarkKind.Arrow)
+        {
+            return handle == "start"
+                ? mark with { Points = [target, mark.Points[^1]] }
+                : mark with { Points = [mark.Points[0], target] };
+        }
+        var r = mark.Bounds;
+        double fixedX = handle.Contains('w') ? r.Right : r.Left;
+        double fixedY = handle.Contains('n') ? r.Bottom : r.Top;
+        return mark with { Points = [new(Math.Min(fixedX, target.X), Math.Min(fixedY, target.Y)), new(Math.Max(fixedX, target.X), Math.Max(fixedY, target.Y))] };
     }
 
     public void Replace(ShotMark before, ShotMark? after)
@@ -90,7 +166,10 @@ internal sealed class ShotDocument
 
     private void Apply(Edit change)
     {
-        Update(change.Index, change.Before, change.After);
+        if (change.Cleared is not null)
+            marks.Clear();
+        else
+            Update(change.Index, change.Before, change.After);
         undo.Push(change);
         redo.Clear();
     }
@@ -109,7 +188,13 @@ internal sealed class ShotDocument
     {
         if (undo.TryPop(out var change))
         {
-            Update(change.Index, change.After, change.Before);
+            if (change.Cleared is { } saved)
+            {
+                marks.Clear();
+                marks.AddRange(saved);
+            }
+            else
+                Update(change.Index, change.After, change.Before);
             redo.Push(change);
         }
     }
@@ -118,7 +203,10 @@ internal sealed class ShotDocument
     {
         if (redo.TryPop(out var change))
         {
-            Update(change.Index, change.Before, change.After);
+            if (change.Cleared is not null)
+                marks.Clear();
+            else
+                Update(change.Index, change.Before, change.After);
             undo.Push(change);
         }
     }
@@ -293,5 +381,22 @@ internal static class ShotSelection
 {
     public static PixelRect Between(Point a, Point b) => new((int)Math.Min(a.X, b.X), (int)Math.Min(a.Y, b.Y), (int)Math.Max(a.X, b.X), (int)Math.Max(a.Y, b.Y));
     public static PixelRect Move(PixelRect rect, int dx, int dy, PixelRect bounds) => rect.Offset(Math.Clamp(dx, bounds.Left - rect.Left, bounds.Right - rect.Right), Math.Clamp(dy, bounds.Top - rect.Top, bounds.Bottom - rect.Bottom));
+    public static PixelRect AdjustEdge(PixelRect rect, int dLeft, int dTop, int dRight, int dBottom, PixelRect bounds)
+    {
+        int left = Math.Clamp(rect.Left + dLeft, bounds.Left, rect.Right - 1);
+        int top = Math.Clamp(rect.Top + dTop, bounds.Top, rect.Bottom - 1);
+        int right = Math.Clamp(rect.Right + dRight, left + 1, bounds.Right);
+        int bottom = Math.Clamp(rect.Bottom + dBottom, top + 1, bounds.Bottom);
+        return new(left, top, right, bottom);
+    }
+    public static PixelRect ScaleAroundCenter(PixelRect rect, double factor, PixelRect bounds)
+    {
+        int nw = Math.Clamp((int)Math.Round(rect.Width * factor), 1, bounds.Width);
+        int nh = Math.Clamp((int)Math.Round(rect.Height * factor), 1, bounds.Height);
+        int cx = rect.Center.X, cy = rect.Center.Y;
+        int left = Math.Clamp(cx - nw / 2, bounds.Left, bounds.Right - nw);
+        int top = Math.Clamp(cy - nh / 2, bounds.Top, bounds.Bottom - nh);
+        return new(left, top, left + nw, top + nh);
+    }
     public static (string Id, Point Point)[] Handles(PixelRect r) => [("nw", new(r.Left, r.Top)), ("n", new(r.Center.X, r.Top)), ("ne", new(r.Right, r.Top)), ("w", new(r.Left, r.Center.Y)), ("e", new(r.Right, r.Center.Y)), ("sw", new(r.Left, r.Bottom)), ("s", new(r.Center.X, r.Bottom)), ("se", new(r.Right, r.Bottom))];
 }

@@ -8,14 +8,19 @@ using Yxrl.Desktop;
 
 namespace Yxrl.Capture;
 
+internal sealed record ClosedPin(ShotDocument Document, PixelRect Placement, double Opacity);
+
 internal sealed class CaptureTools : IDisposable
 {
     private readonly SettingsStore settings;
     private readonly HashSet<Window> windows = [];
+    private readonly List<PixelRect> selectionHistory = [];
+    private readonly List<ClosedPin> closedPins = [];
     private ShotWindow? selection;
     private RecordingWindow? recorder;
     private ScrollWindow? scrolling;
     private RecordingRecoveryWindow? recovery;
+    private bool disposing;
     private string RecordingsFolder => Path.Combine(settings.DirectoryPath, "RecordingRecovery");
     public ShotHotkeys Hotkeys { get; }
     public OcrReader Ocr { get; }
@@ -23,6 +28,8 @@ internal sealed class CaptureTools : IDisposable
     public CaptureOptions Options => settings.Current.Capture;
     public TranslationOptions Translation => settings.Current.Translation;
     public Action OpenSettings { get; }
+    public int SelectionHistoryCount => selectionHistory.Count;
+    public bool HasClosedPins => closedPins.Count > 0;
 
     internal CaptureTools(SettingsStore settings, Action openSettings)
     {
@@ -82,11 +89,63 @@ internal sealed class CaptureTools : IDisposable
                 case ShotAction.Translate:
                     Show(new TextToolWindow(this, null, true));
                     break;
+                case ShotAction.RestorePin:
+                    if (!RestoreLastPin())
+                        Feedback("没有已关闭的贴图可恢复。");
+                    break;
             }
         }
         catch (Exception ex) when (ex is ExternalException or Win32Exception or InvalidOperationException or IOException or NotSupportedException)
         {
             Feedback("打开截图工具失败。" + ex.Message);
+        }
+    }
+
+    public void RecordSelection(PixelRect area)
+    {
+        if (!area.HasArea)
+            return;
+        if (selectionHistory.Count > 0 && selectionHistory[^1] == area)
+            return;
+        selectionHistory.Add(area);
+        if (selectionHistory.Count > 20)
+            selectionHistory.RemoveAt(0);
+    }
+
+    public PixelRect? GetSelectionHistory(int reverseIndex)
+    {
+        if (selectionHistory.Count == 0 || reverseIndex < 0 || reverseIndex >= selectionHistory.Count)
+            return null;
+        return selectionHistory[selectionHistory.Count - 1 - reverseIndex];
+    }
+
+    public void RememberClosedPin(ShotDocument document, PixelRect placement, double opacity)
+    {
+        if (disposing || !placement.HasArea)
+            return;
+        closedPins.Add(new(document, placement, opacity));
+        if (closedPins.Count > 10)
+            closedPins.RemoveAt(0);
+    }
+
+    public bool RestoreLastPin()
+    {
+        if (closedPins.Count == 0)
+            return false;
+        var last = closedPins[^1];
+        closedPins.RemoveAt(closedPins.Count - 1);
+        Show(new ShotWindow(this, last.Document, placement: last.Placement, initialOpacity: last.Opacity));
+        return true;
+    }
+
+    public void RefreshTheme()
+    {
+        foreach (var win in windows.ToArray())
+        {
+            if (win is TextToolWindow text)
+                text.RefreshTheme();
+            else if (win is ShotWindow shot)
+                shot.RefreshTheme();
         }
     }
 
@@ -206,6 +265,9 @@ internal sealed class CaptureTools : IDisposable
                 return false;
             }
 
+            if (owner is ShotWindow { Selecting: true } && place is { } area)
+                RecordSelection(area);
+
             switch (action)
             {
                 case ImageAction.Copy:
@@ -306,6 +368,7 @@ internal sealed class CaptureTools : IDisposable
 
     public void Dispose()
     {
+        disposing = true;
         Hotkeys.Dispose();
         PreserveRecordings();
         foreach (var win in windows.ToArray()) win.Close();

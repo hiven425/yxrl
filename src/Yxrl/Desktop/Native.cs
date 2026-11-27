@@ -26,7 +26,8 @@ internal static class Native
     internal enum BackdropKind { None = 0, Mica = 2, Acrylic = 3, Tabbed = 4 }
     internal delegate bool EnumProc(nint hwnd, nint param);
     internal delegate nint MouseProc(int code, nint message, nint data);
-    internal static readonly nint Topmost = -1;
+    internal static readonly nint Topmost = -1, NoTopmost = -2;
+    internal const nint WsExLayered = 0x80000, WsExTransparent = 0x20;
     internal const uint NoSize = 1, NoMove = 2, NoActivate = 0x10, NoZOrder = 4, Show = 0x40, NoOwnerZOrder = 0x200;
     private const int DwmwaExtendedFrameBounds = 9, DwmwaUseImmersiveDarkMode = 20, DwmwaWindowCornerPreference = 33,
         DwmwaBorderColor = 34, DwmwaSystemBackdropType = 38, DwmwcpRound = 2;
@@ -46,6 +47,20 @@ internal static class Native
     [DllImport("user32")] private static extern int SetWindowRgn(nint hwnd, nint region, bool redraw);
     [DllImport("user32", EntryPoint="GetWindowLongPtrW")] internal static extern nint GetStyle(nint hwnd, int index);
     [DllImport("user32", EntryPoint="SetWindowLongPtrW")] internal static extern nint SetStyle(nint hwnd, int index, nint value);
+    [DllImport("user32", SetLastError = true)] internal static extern bool SetLayeredWindowAttributes(nint hwnd, uint crKey, byte bAlpha, uint dwFlags);
+    internal static void SetPinOverlayStyle(nint hwnd, double opacity, bool clickThrough)
+    {
+        if (hwnd == 0) return;
+        const int gwlExStyle = -20;
+        const uint lwaAlpha = 2;
+        bool layered = opacity < 0.999 || clickThrough;
+        var ex = GetStyle(hwnd, gwlExStyle);
+        ex = layered ? (ex | WsExLayered) : (ex & ~WsExLayered);
+        ex = clickThrough ? (ex | WsExTransparent) : (ex & ~WsExTransparent);
+        SetStyle(hwnd, gwlExStyle, ex);
+        if (layered)
+            SetLayeredWindowAttributes(hwnd, 0, (byte)Math.Clamp(Math.Round(opacity * 255), 25, 255), lwaAlpha);
+    }
     [DllImport("user32", SetLastError=true, CharSet=CharSet.Unicode)] internal static extern nint SetWindowsHookEx(int id, MouseProc proc, nint module, uint thread);
     [DllImport("kernel32", CharSet=CharSet.Unicode)] internal static extern nint GetModuleHandle(string? module);
     [DllImport("user32")] internal static extern bool UnhookWindowsHookEx(nint hook);
