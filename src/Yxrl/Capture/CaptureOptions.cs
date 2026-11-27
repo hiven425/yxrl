@@ -168,6 +168,8 @@ internal readonly record struct ShotChord(ModifierKeys Mods, Key Key)
 
 internal sealed record TranslationOptions(string BaseUrl = "", string Model = "", string TargetLanguage = "简体中文")
 {
+    internal const string ChatCompletionsPath = "/chat/completions";
+
     public Uri? Endpoint()
     {
         if (string.IsNullOrWhiteSpace(BaseUrl) && string.IsNullOrWhiteSpace(Model))
@@ -176,7 +178,10 @@ internal sealed record TranslationOptions(string BaseUrl = "", string Model = ""
             throw new FormatException("请填写不含密钥、查询参数或片段的 HTTP(S) API 基础地址。");
         if (string.IsNullOrWhiteSpace(Model))
             throw new FormatException("请填写翻译模型名。");
-        return new Uri(uri.AbsoluteUri.TrimEnd('/') + "/chat/completions");
+        var address = uri.AbsoluteUri.TrimEnd('/');
+        return new Uri(uri.AbsolutePath.TrimEnd('/').EndsWith(ChatCompletionsPath, StringComparison.OrdinalIgnoreCase)
+            ? address
+            : address + ChatCompletionsPath);
     }
 
     public void Validate()

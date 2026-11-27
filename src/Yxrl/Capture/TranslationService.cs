@@ -35,9 +35,17 @@ internal static class TranslationCredential
     [DllImport("advapi32")]
     private static extern void CredFree(nint value);
     private static string Name(Uri endpoint) => "YXRL/Translation/" + endpoint.AbsoluteUri;
+
     public static string? Read(Uri endpoint)
     {
-        if (!ReadNative(Name(endpoint), 1, 0, out var ptr))
+        var target = Name(endpoint);
+        // Older versions appended the path even when the user entered a complete endpoint.
+        return ReadTarget(target) ?? ReadTarget(target + TranslationOptions.ChatCompletionsPath);
+    }
+
+    private static string? ReadTarget(string target)
+    {
+        if (!ReadNative(target, 1, 0, out var ptr))
         {
             int error = Marshal.GetLastWin32Error();
             if (error == 1168)
@@ -58,10 +66,11 @@ internal static class TranslationCredential
 
     public static void Write(Uri endpoint, string? key)
     {
+        var target = Name(endpoint);
         if (string.IsNullOrEmpty(key))
         {
-            if (!DeleteNative(Name(endpoint), 1, 0) && Marshal.GetLastWin32Error() != 1168)
-                throw new Win32Exception(Marshal.GetLastWin32Error(), "无法删除翻译凭据。");
+            DeleteTarget(target + TranslationOptions.ChatCompletionsPath);
+            DeleteTarget(target);
             return;
         }
 
@@ -74,7 +83,7 @@ internal static class TranslationCredential
             var item = new Credential
             {
                 Type = 1,
-                TargetName = Name(endpoint),
+                TargetName = target,
                 Blob = handle.AddrOfPinnedObject(),
                 BlobSize = (uint)bytes.Length,
                 Persist = 2
@@ -87,6 +96,16 @@ internal static class TranslationCredential
             CryptographicOperations.ZeroMemory(bytes);
             handle.Free();
         }
+    }
+
+    private static void DeleteTarget(string target)
+    {
+        if (DeleteNative(target, 1, 0))
+            return;
+
+        int error = Marshal.GetLastWin32Error();
+        if (error != 1168)
+            throw new Win32Exception(error, "无法删除翻译凭据。");
     }
 }
 

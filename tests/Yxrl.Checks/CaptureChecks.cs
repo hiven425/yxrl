@@ -333,6 +333,10 @@ internal static class CaptureChecks
         var options = new TranslationOptions("http://localhost:4321/custom/v1/", "demo");
         var result = await service.Translate(options, "Room B", "简体中文", "unit-test", CancellationToken.None);
         Check(result == "B 会议室" && handler.Path == "/custom/v1/chat/completions" && handler.Original == "Room B", "接口路径与选段");
+        var fullAddress = options with { BaseUrl = options.BaseUrl + "chat/completions/" };
+        result = await service.Translate(fullAddress, "Room B", "简体中文", "unit-test", CancellationToken.None);
+        Check(result == "B 会议室" && handler.Path == "/custom/v1/chat/completions", "完整翻译接口地址只包含一次 chat/completions");
+        Check(new TranslationOptions("http://chat/completions", "demo").Endpoint()?.AbsolutePath == "/completions/chat/completions", "仅用地址的路径识别完整接口");
         handler.Status = HttpStatusCode.Unauthorized;
         try
         {

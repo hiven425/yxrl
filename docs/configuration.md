@@ -19,7 +19,7 @@
 
 录屏每次从普通模式、24 帧/秒、无延时、显示光标开始。系统声音、麦克风、摄像头和键鼠动画默认关闭。录制和回放选项按次生效，保存位置由用户选择。恢复素材位于 `%LOCALAPPDATA%\Yxrl\RecordingRecovery`。成功快速保存、主动关闭已保存的回放或确认放弃时清理该次素材。
 
-`translation.baseUrl` 为含版本前缀的 HTTP(S) 基础地址，例如 `http://localhost:11434/v1`。`translation.model` 为服务端模型名，两项默认留空。`translation.targetLanguage` 默认「简体中文」。设置页提供「测试连接」按钮校验接口与密钥。可选 API 密钥按服务地址保存在 Windows 当前用户凭据管理器。点击翻译才调用基础地址下的 `chat/completions`，发送校对后的选段或全文。截图、识别文本和译文仅在会话内使用，用户可以主动复制或另存 PNG。
+`translation.baseUrl` 支持含版本前缀的 HTTP(S) 基础地址，例如 `http://localhost:11434/v1`，也支持以 `/chat/completions` 结尾的完整接口地址。`translation.model` 为服务端模型名，两项默认留空。`translation.targetLanguage` 默认「简体中文」。设置页的「测试连接」用表单当前参数翻译示例文本，点击「应用设置」后，翻译面板使用保存的参数。可选 API 密钥按实际接口地址保存在 Windows 当前用户凭据管理器。翻译面板只在用户点击「翻译」时发送校对后的选段或全文。截图、识别文本和译文仅在会话内使用，用户可以主动复制或另存 PNG。
 
 ## 桌面设置字段
 
