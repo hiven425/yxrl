@@ -95,12 +95,13 @@ internal sealed class WebpRecording : AnimatedRecording
 {
     private readonly BinaryWriter writer;
     private readonly SKBitmap frame;
-    private readonly int width, height;
+    private readonly int width, height, quality;
 
-    public WebpRecording(string path, int width, int height)
+    public WebpRecording(string path, int width, int height, int quality = 86)
     {
         this.width = width;
         this.height = height;
+        this.quality = Math.Clamp(quality, 40, 100);
         frame = new SKBitmap(width, height, SKColorType.Bgra8888, SKAlphaType.Opaque);
         BinaryWriter? output = null;
         try
@@ -129,7 +130,7 @@ internal sealed class WebpRecording : AnimatedRecording
     {
         Marshal.Copy(pixels, 0, frame.GetPixels(), pixels.Length);
         frame.NotifyPixelsChanged();
-        using var encoded = frame.Encode(SKEncodedImageFormat.Webp, 86) ?? throw new IOException("WebP 编码失败。");
+        using var encoded = frame.Encode(SKEncodedImageFormat.Webp, quality) ?? throw new IOException("WebP 编码失败。");
         byte[] bytes = encoded.ToArray();
         for (int offset = 12; offset + 8 < bytes.Length;)
         {

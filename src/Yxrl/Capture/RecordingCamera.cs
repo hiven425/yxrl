@@ -10,7 +10,8 @@ internal sealed record CameraDevice(string Name, string Link)
 }
 
 internal enum CameraCorner { BottomRight, BottomLeft, TopRight, TopLeft }
-internal sealed record CameraOptions(CameraDevice Device, CameraCorner Corner, bool Circle);
+internal enum CameraSize { Small, Medium, Large }
+internal sealed record CameraOptions(CameraDevice Device, CameraCorner Corner, bool Circle, bool Mirror = true, CameraSize Size = CameraSize.Medium);
 
 internal sealed class RecordingCamera : IDisposable
 {
@@ -205,17 +206,28 @@ internal sealed class RecordingCamera : IDisposable
     {
         if (failure is { } error) throw error;
         if (image is not { } frame) return false;
+        return OverlayFrame(screen, width, height, frame.Pixels, frame.Width, frame.Height, options);
+    }
+
+    internal static bool OverlayFrame(byte[] screen, int width, int height, byte[] cameraPixels, int cameraWidth, int cameraHeight, CameraOptions options)
+    {
+        if (cameraWidth < 1 || cameraHeight < 1) return false;
         int inset = Math.Max(3, Math.Min(width, height) / 28);
-        int w = Math.Min(width * 28 / 100, height / 3 * 4 / 3);
+        int w = options.Size switch
+        {
+            CameraSize.Small => Math.Min(width * 20 / 100, height * 24 / 100 * 4 / 3),
+            CameraSize.Large => Math.Min(width * 36 / 100, height * 42 / 100 * 4 / 3),
+            _ => Math.Min(width * 28 / 100, height / 3 * 4 / 3)
+        };
         int h = options.Circle ? w : w * 3 / 4;
         if (w <= 0 || h <= 0) return false;
         bool right = options.Corner is CameraCorner.BottomRight or CameraCorner.TopRight;
         bool bottom = options.Corner is CameraCorner.BottomRight or CameraCorner.BottomLeft;
         int left = right ? width - w - inset : inset, top = bottom ? height - h - inset : inset;
-        int sourceWidth = Math.Min(frame.Width, frame.Height * w / h);
-        int sourceHeight = Math.Min(frame.Height, frame.Width * h / w);
+        int sourceWidth = Math.Min(cameraWidth, cameraHeight * w / h);
+        int sourceHeight = Math.Min(cameraHeight, cameraWidth * h / w);
         if (sourceWidth < 1 || sourceHeight < 1) return false;
-        int sourceX = (frame.Width - sourceWidth) / 2, sourceY = (frame.Height - sourceHeight) / 2;
+        int sourceX = (cameraWidth - sourceWidth) / 2, sourceY = (cameraHeight - sourceHeight) / 2;
         for (int y = 0; y < h; y++)
         for (int x = 0; x < w; x++)
         {
@@ -229,10 +241,12 @@ internal sealed class RecordingCamera : IDisposable
                 screen[dst] = screen[dst + 1] = screen[dst + 2] = 246;
                 continue;
             }
-            int src = ((sourceY + y * sourceHeight / h) * frame.Width + sourceX + x * sourceWidth / w) * 4;
-            screen[dst] = frame.Pixels[src];
-            screen[dst + 1] = frame.Pixels[src + 1];
-            screen[dst + 2] = frame.Pixels[src + 2];
+            int mappedX = x * sourceWidth / w;
+            int sx = options.Mirror ? Math.Max(0, sourceWidth - 1 - mappedX) : mappedX;
+            int src = ((sourceY + y * sourceHeight / h) * cameraWidth + sourceX + sx) * 4;
+            screen[dst] = cameraPixels[src];
+            screen[dst + 1] = cameraPixels[src + 1];
+            screen[dst + 2] = cameraPixels[src + 2];
         }
         return true;
     }

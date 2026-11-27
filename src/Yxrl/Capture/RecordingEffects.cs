@@ -228,3 +228,71 @@ internal sealed class CuePainter : IDisposable
         paint.Dispose();
     }
 }
+
+internal enum RecordingProgressStyle { None, Bar, Elapsed, Countdown }
+
+internal static class RecordingProgressPainter
+{
+    public static double ProgressFraction(long elapsedTicks, long totalTicks) =>
+        totalTicks > 0 ? Math.Clamp((double)elapsedTicks / totalTicks, 0, 1) : 0;
+
+    public static string FormatClock(long ticks)
+    {
+        var span = TimeSpan.FromTicks(Math.Max(0, ticks));
+        return span.TotalHours >= 1
+            ? $"{(int)span.TotalHours:00}:{span.Minutes:00}:{span.Seconds:00}"
+            : $"{(int)span.TotalMinutes:00}:{span.Seconds:00}";
+    }
+
+    public static void Draw(byte[] data, int width, int height, long elapsedTicks, long totalTicks, RecordingProgressStyle style)
+    {
+        if (style == RecordingProgressStyle.None || width < 16 || height < 16)
+            return;
+        var pin = GCHandle.Alloc(data, GCHandleType.Pinned);
+        try
+        {
+            using var surface = SKSurface.Create(new(width, height, SKColorType.Bgra8888, SKAlphaType.Opaque),
+                pin.AddrOfPinnedObject(), width * 4);
+            var canvas = surface.Canvas;
+            using var paint = new SKPaint { IsAntialias = true };
+
+            if (style == RecordingProgressStyle.Bar)
+            {
+                float barH = (float)Math.Clamp(Math.Round(height / 72.0), 3, 8);
+                float y = height - barH;
+                paint.Style = SKPaintStyle.Fill;
+                paint.Color = new(16, 26, 38, 175);
+                canvas.DrawRect(new SKRect(0, y, width, height), paint);
+                float fillW = (float)(width * ProgressFraction(elapsedTicks, totalTicks));
+                if (fillW > 0.5f)
+                {
+                    paint.Color = new(45, 156, 255, 245);
+                    canvas.DrawRect(new SKRect(0, y, fillW, height), paint);
+                }
+            }
+            else
+            {
+                long shown = style == RecordingProgressStyle.Elapsed
+                    ? Math.Clamp(elapsedTicks, 0, Math.Max(0, totalTicks))
+                    : Math.Max(0, totalTicks - Math.Max(0, elapsedTicks));
+                string label = FormatClock(shown);
+                float unit = (float)Math.Clamp(height / 360.0, 0.55, 2.4);
+                using var typeface = SKTypeface.FromFamilyName("Segoe UI", SKFontStyle.Bold);
+                using var font = new SKFont(typeface, 14 * unit);
+                float padX = 7 * unit;
+                float margin = 8 * unit;
+                float pillH = 22 * unit;
+                float pillW = font.MeasureText(label) + 2 * padX;
+                float x = Math.Max(4 * unit, width - pillW - margin);
+                float y = Math.Max(4 * unit, margin);
+                paint.Style = SKPaintStyle.Fill;
+                paint.Color = new(16, 28, 44, 214);
+                canvas.DrawRoundRect(new SKRect(x, y, x + pillW, y + pillH), 5 * unit, 5 * unit, paint);
+                paint.Color = SKColors.White;
+                canvas.DrawText(label, x + padX, y + 16 * unit, SKTextAlign.Left, font, paint);
+            }
+            canvas.Flush();
+        }
+        finally { pin.Free(); }
+    }
+}

@@ -121,4 +121,30 @@ internal static class Native
         DeleteObject(region);
         return false;
     }
+
+    [StructLayout(LayoutKind.Explicit, Size = 40)]
+    private struct MouseInput64
+    {
+        [FieldOffset(0)] public int Type;
+        [FieldOffset(8)] public int Dx;
+        [FieldOffset(12)] public int Dy;
+        [FieldOffset(16)] public int MouseData;
+        [FieldOffset(20)] public uint Flags;
+        [FieldOffset(24)] public uint Time;
+        [FieldOffset(32)] public nint ExtraInfo;
+    }
+
+    [DllImport("user32", SetLastError = true)]
+    private static extern uint SendInput(uint count, MouseInput64[] inputs, int size);
+
+    internal static void SendMouseWheel(int delta, bool horizontal)
+    {
+        var input = new MouseInput64
+        {
+            Type = 0, // INPUT_MOUSE
+            MouseData = delta,
+            Flags = horizontal ? 0x1000u : 0x0800u // MOUSEEVENTF_HWHEEL : MOUSEEVENTF_WHEEL
+        };
+        _ = SendInput(1, [input], Marshal.SizeOf<MouseInput64>());
+    }
 }

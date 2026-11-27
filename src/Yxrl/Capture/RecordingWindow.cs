@@ -30,21 +30,30 @@ internal sealed class RecordingWindow : Window
     private readonly CheckBox cursor = new() { Content = "显示光标", IsChecked = true };
     private readonly CheckBox system = new() { Content = "系统声音" }, microphone = new() { Content = "麦克风" };
     private readonly CheckBox mouseCues = new() { Content = "鼠标点击和滚轮" }, keyCues = new() { Content = "显示快捷键" },
-        camera = new() { Content = "摄像头" }, circle = new() { Content = "圆形" };
-    private readonly ComboBox device = new() { MinWidth = 120, MaxWidth = 195 }, corner = new();
+        camera = new() { Content = "摄像头" }, circle = new() { Content = "圆形" },
+        cameraMirror = new() { Content = "镜像", IsChecked = true },
+        hardwareAccel = new() { Content = "硬件加速" },
+        quickAutoSave = new() { Content = "直接存至视频目录" };
+    private readonly ComboBox device = new() { MinWidth = 115, MaxWidth = 180 }, corner = new(), cameraSize = new(), quickQuality = new();
     private readonly ComboBox microphoneDevice = new() { MinWidth = 160, HorizontalAlignment = HorizontalAlignment.Stretch };
-    private readonly Border micHost, camHost;
-    private readonly WrapPanel cameraControls = new();
-    private readonly Button start = new() { Content = "开始录制" }, pause = new() { Content = "暂停" };
-    private readonly Button cancel = new() { Content = "放弃" };
+    private readonly Border micHost, camHost, quickHost, annotateBar;
+    private readonly WrapPanel cameraControls = new(), quickControls = new();
+    private readonly Button start = new() { Content = "开始录制" }, pause = new() { Content = "暂停" },
+        redo = new() { Content = "重录" }, annotate = new() { Content = "标注" }, cancel = new() { Content = "放弃" };
+    private readonly Button undoAnnotate = new() { Content = "撤销" }, clearAnnotate = new() { Content = "清空" },
+        passAnnotate = new() { Content = "穿透" };
+    private readonly List<(LiveAnnotationTool Tool, Button Button)> toolButtons = [];
+    private readonly List<(Color Color, Button Button, Ellipse Swatch)> swatchButtons = [];
     private readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromMilliseconds(100) };
     private CancellationTokenSource? countdown;
     private RegionRecording? recording;
     internal RecordingSession? ActiveSession => recording?.Session;
     private readonly RecordingRegionFrame regionFrame;
+    private readonly RecordingAnnotationOverlay annotationOverlay;
     internal RecordingRegionFrame RegionFrame => regionFrame;
+    internal RecordingAnnotationOverlay AnnotationOverlay => annotationOverlay;
     private RecordingInput? inputCapture;
-    private bool paused, abandoned, closing, forceClose, placeOk, stopping, micaEnabled;
+    private bool paused, abandoned, restarted, closing, forceClose, placeOk, stopping, micaEnabled;
 
     public RecordingWindow(PixelRect area, string sessionRoot, Action<RecordedClip> showPreview)
     {
@@ -52,6 +61,7 @@ internal sealed class RecordingWindow : Window
         this.sessionRoot = sessionRoot;
         this.showPreview = showPreview;
         regionFrame = new RecordingRegionFrame(area);
+        annotationOverlay = new RecordingAnnotationOverlay(area);
         Title = "YXRL 屏幕录制";
         if (Theme.AppIcon is { } appIcon) Icon = appIcon;
         AutomationProperties.SetAutomationId(this, "YxrlRecorder");
@@ -120,7 +130,10 @@ internal sealed class RecordingWindow : Window
         delay.SelectedItem = 0;
         mode.SelectedIndex = 0;
 
-        var fields = new UniformGrid { Columns = 3, Margin = new Thickness(0, 0, 0, 10) };
+        var fields = new Grid { Margin = new Thickness(0, 0, 0, 10) };
+        fields.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0.8, GridUnitType.Star) });
+        fields.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0.85, GridUnitType.Star) });
+        fields.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1.35, GridUnitType.Star) });
         var fieldDefs = new[] { ("帧率", fps), ("延时（秒）", delay), ("模式", mode) };
         for (int i = 0; i < fieldDefs.Length; i++)
         {
@@ -133,6 +146,7 @@ internal sealed class RecordingWindow : Window
             menu.MinHeight = 30;
             menu.Padding = new Thickness(8, 3, 24, 3);
             field.Children.Add(menu);
+            Grid.SetColumn(field, i);
             fields.Children.Add(field);
         }
         options.Children.Add(fields);
@@ -142,7 +156,7 @@ internal sealed class RecordingWindow : Window
         options.Children.Add(optSep);
 
         var inputs = new UniformGrid { Columns = 2 };
-        foreach (var control in new[] { cursor, system, microphone, mouseCues, keyCues, camera })
+        foreach (var control in new[] { cursor, system, microphone, mouseCues, keyCues, camera, hardwareAccel })
         {
             control.Margin = new Thickness(0, 3, 8, 3);
             inputs.Children.Add(control);
@@ -163,7 +177,11 @@ internal sealed class RecordingWindow : Window
 
         foreach (string value in new[] { "右下", "左下", "右上", "左上" }) corner.Items.Add(value);
         corner.SelectedIndex = 0;
-        foreach (var (control, name) in new (Control, string)[] { (device, "摄像头设备"), (corner, "摄像头位置"), (circle, "圆形摄像头") })
+        foreach (string value in new[] { "小", "中", "大" }) cameraSize.Items.Add(value);
+        cameraSize.SelectedIndex = 1;
+        foreach (var (control, name) in new (Control, string)[] {
+            (device, "摄像头设备"), (corner, "摄像头位置"), (cameraSize, "摄像头大小"),
+            (circle, "圆形摄像头"), (cameraMirror, "摄像头镜像") })
         {
             AutomationProperties.SetName(control, name);
             control.Margin = new Thickness(0, 2, 8, 2);
@@ -174,31 +192,115 @@ internal sealed class RecordingWindow : Window
         camera.Unchecked += async (_, _) => await ChooseCamera();
         options.Children.Add(camHost);
 
+        foreach (string value in new[] { "轻量", "标准", "高清" }) quickQuality.Items.Add(value);
+        quickQuality.SelectedIndex = 1;
+        AutomationProperties.SetName(quickQuality, "快速录制画质");
+        var quickLbl = new TextBlock { Text = "导出画质", FontSize = 11.5, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
+        quickLbl.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
+        quickControls.Children.Add(quickLbl);
+        quickQuality.Margin = new Thickness(0, 0, 12, 0);
+        quickControls.Children.Add(quickQuality);
+        quickAutoSave.VerticalAlignment = VerticalAlignment.Center;
+        AutomationProperties.SetName(quickAutoSave, "直接存至视频目录");
+        quickControls.Children.Add(quickAutoSave);
+        quickHost = SubCard(quickControls, Visibility.Collapsed);
+        mode.SelectionChanged += (_, _) => quickHost.Visibility = mode.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
+        options.Children.Add(quickHost);
+
         var optionsCard = new Border { Margin = new Thickness(0, 0, 0, 10), Child = options };
         optionsCard.SetResourceReference(StyleProperty, "GroupCard");
         optionsCard.Padding = new Thickness(12, 10, 12, 10);
         column.Children.Add(optionsCard);
 
-        // Action strip
+        // Action strip & live annotation bar
         var actions = new DockPanel();
         var actionLeft = new WrapPanel { VerticalAlignment = VerticalAlignment.Center };
         start.SetResourceReference(StyleProperty, "PrimaryButton");
         pause.SetResourceReference(StyleProperty, "SecondaryButton");
+        redo.SetResourceReference(StyleProperty, "SecondaryButton");
+        annotate.SetResourceReference(StyleProperty, "SecondaryButton");
         cancel.SetResourceReference(StyleProperty, "SecondaryButton");
-        foreach (var button in new[] { start, pause, cancel })
+        AutomationProperties.SetName(redo, "重新录制");
+        AutomationProperties.SetName(annotate, "边录边标");
+
+        foreach (var button in new[] { start, pause, annotate, redo, cancel })
         {
             button.MinHeight = 30;
-            button.Padding = new Thickness(13, 4, 13, 4);
-            button.Margin = new Thickness(0, 0, 8, 0);
+            button.Padding = new Thickness(11, 4, 11, 4);
+            button.Margin = new Thickness(0, 0, 7, 0);
             actionLeft.Children.Add(button);
         }
-        pause.Visibility = Visibility.Collapsed;
-        cancel.Visibility = Visibility.Collapsed;
+        pause.Visibility = annotate.Visibility = redo.Visibility = cancel.Visibility = Visibility.Collapsed;
         start.Click += async (_, _) => await StartOrStop();
         pause.Click += (_, _) => TogglePause();
+        redo.Click += (_, _) => RestartRecording();
+        annotate.Click += (_, _) => SetLiveAnnotationMode(!annotationOverlay.IsDrawing);
         cancel.Click += (_, _) => Close();
+        annotationOverlay.DrawingModeChanged += drawing => Dispatcher.Invoke(() =>
+        {
+            if (closing) return;
+            SyncAnnotationToggleVisual(drawing);
+        });
         actions.Children.Add(actionLeft);
         column.Children.Add(actions);
+
+        var annotateRow = new WrapPanel { VerticalAlignment = VerticalAlignment.Center };
+        foreach (var (tool, label) in new[] {
+            (LiveAnnotationTool.Pen, "画笔"),
+            (LiveAnnotationTool.Arrow, "箭头"),
+            (LiveAnnotationTool.Rectangle, "矩形"),
+            (LiveAnnotationTool.Number, "序号") })
+        {
+            var btn = new Button
+            {
+                Content = label,
+                MinHeight = 26,
+                Padding = new Thickness(8, 2, 8, 2),
+                FontSize = 12,
+                Margin = new Thickness(0, 2, 5, 2)
+            };
+            btn.SetResourceReference(StyleProperty, "SecondaryButton");
+            AutomationProperties.SetName(btn, "标注" + label);
+            btn.Click += (_, _) => SelectAnnotationTool(tool);
+            toolButtons.Add((tool, btn));
+            annotateRow.Children.Add(btn);
+        }
+        var swatchSep = new Border { Width = 1, Height = 16, Margin = new Thickness(3, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center };
+        swatchSep.SetResourceReference(Border.BackgroundProperty, "Line");
+        annotateRow.Children.Add(swatchSep);
+        foreach (var color in RecordingAnnotationOverlay.Palette)
+        {
+            var dot = new Ellipse { Width = 12, Height = 12, Fill = new SolidColorBrush(color) };
+            var btn = new Button
+            {
+                Width = 22,
+                Height = 22,
+                Padding = new Thickness(0),
+                Margin = new Thickness(0, 2, 4, 2),
+                Content = dot
+            };
+            btn.SetResourceReference(StyleProperty, "SecondaryButton");
+            btn.Click += (_, _) => SelectAnnotationColor(color);
+            swatchButtons.Add((color, btn, dot));
+            annotateRow.Children.Add(btn);
+        }
+        foreach (var (btn, name) in new[] { (undoAnnotate, "撤销标注"), (clearAnnotate, "清空标注"), (passAnnotate, "切回穿透") })
+        {
+            btn.SetResourceReference(StyleProperty, "SecondaryButton");
+            btn.MinHeight = 26;
+            btn.Padding = new Thickness(8, 2, 8, 2);
+            btn.FontSize = 12;
+            btn.Margin = new Thickness(3, 2, 0, 2);
+            AutomationProperties.SetName(btn, name);
+            annotateRow.Children.Add(btn);
+        }
+        undoAnnotate.Click += (_, _) => annotationOverlay.Undo();
+        clearAnnotate.Click += (_, _) => annotationOverlay.Clear();
+        passAnnotate.Click += (_, _) => SetLiveAnnotationMode(false);
+        annotateBar = SubCard(annotateRow, Visibility.Collapsed);
+        column.Children.Add(annotateBar);
+        SelectAnnotationTool(LiveAnnotationTool.Pen);
+        SelectAnnotationColor(RecordingAnnotationOverlay.Palette[0]);
 
         var statusRow = new DockPanel { Margin = new Thickness(2, 9, 0, 0), VerticalAlignment = VerticalAlignment.Center };
         DockPanel.SetDock(statusDot, Dock.Left);
@@ -218,7 +320,8 @@ internal sealed class RecordingWindow : Window
         PreviewKeyDown += (_, e) =>
         {
             if (e.Key != Key.Escape || mode.IsDropDownOpen || fps.IsDropDownOpen || delay.IsDropDownOpen ||
-                device.IsDropDownOpen || corner.IsDropDownOpen || microphoneDevice.IsDropDownOpen)
+                device.IsDropDownOpen || corner.IsDropDownOpen || cameraSize.IsDropDownOpen ||
+                quickQuality.IsDropDownOpen || microphoneDevice.IsDropDownOpen)
                 return;
             e.Handled = true;
             Close();
@@ -228,6 +331,7 @@ internal sealed class RecordingWindow : Window
         {
             timer.Stop();
             inputCapture?.Dispose();
+            annotationOverlay.CloseSafely();
             regionFrame.CloseSafely();
         };
     }
@@ -280,18 +384,47 @@ internal sealed class RecordingWindow : Window
         try
         {
             var available = await Task.Run(RecordingCamera.List);
-            if (closing || camera.IsChecked != true) return;
-            device.ItemsSource = available;
-            var preferred = available.FirstOrDefault(item => !item.Name.Contains("IR Camera", StringComparison.OrdinalIgnoreCase));
-            device.SelectedItem = preferred ?? available.FirstOrDefault();
-            SetStatus(available.Length > 0 ? "就绪" : "没有检测到摄像头。", available.Length == 0);
+            if (closing || Dispatcher.HasShutdownStarted) return;
+            await Dispatcher.InvokeAsync(() =>
+            {
+                if (closing || camera.IsChecked != true) return;
+                device.ItemsSource = available;
+                var preferred = available.FirstOrDefault(item => !item.Name.Contains("IR Camera", StringComparison.OrdinalIgnoreCase));
+                device.SelectedItem = preferred ?? available.FirstOrDefault();
+                SetStatus(available.Length > 0 ? "就绪" : "没有检测到摄像头。", available.Length == 0);
+            });
+        }
+        catch (TaskCanceledException) when (closing || Dispatcher.HasShutdownStarted)
+        {
         }
         catch (Exception ex) when (ex is ExternalException or DllNotFoundException or EntryPointNotFoundException or InvalidCastException)
         {
-            if (!closing)
-                SetStatus("无法读取摄像头列表。 " + ex.Message, true);
+            if (!closing && !Dispatcher.HasShutdownStarted)
+            {
+                try
+                {
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        if (!closing) SetStatus("无法读取摄像头列表。 " + ex.Message, true);
+                    });
+                }
+                catch (TaskCanceledException) { }
+            }
         }
-        finally { if (!closing) start.IsEnabled = true; }
+        finally
+        {
+            if (!closing && !Dispatcher.HasShutdownStarted)
+            {
+                try
+                {
+                    await Dispatcher.InvokeAsync(() =>
+                    {
+                        if (!closing) start.IsEnabled = true;
+                    });
+                }
+                catch (TaskCanceledException) { }
+            }
+        }
     }
 
     private void PositionControls()
@@ -312,25 +445,108 @@ internal sealed class RecordingWindow : Window
         headerDot.SetResourceReference(Shape.FillProperty, stateDotKey ?? (warning ? "Warning" : "Accent"));
     }
 
-    private async Task StartOrStop()
+    private void SetLiveAnnotationMode(bool drawing)
+    {
+        if (closing) return;
+        annotationOverlay.SetDrawingMode(drawing);
+        SyncAnnotationToggleVisual(annotationOverlay.IsDrawing);
+    }
+
+    private void SyncAnnotationToggleVisual(bool drawing)
+    {
+        annotateBar.Visibility = drawing ? Visibility.Visible : Visibility.Collapsed;
+        annotate.SetResourceReference(Control.BackgroundProperty, drawing ? "Hot" : "Paper");
+        annotate.SetResourceReference(Control.BorderBrushProperty, drawing ? "Accent" : "PanelBorder");
+        annotate.SetResourceReference(Control.ForegroundProperty, drawing ? "Accent" : "Ink");
+        if (recording is not null)
+        {
+            SetStatus(
+                drawing ? "● 标注绘制中（右键或 Esc 切回操作）" : (paused ? "已暂停" : "● 正在录制"),
+                warning: !drawing && !paused,
+                stateDotKey: drawing ? "Accent" : (paused ? "Warning" : "DangerFill"));
+        }
+    }
+
+    private void SelectAnnotationTool(LiveAnnotationTool selected)
+    {
+        annotationOverlay.CurrentTool = selected;
+        foreach (var (tool, btn) in toolButtons)
+        {
+            bool active = tool == selected;
+            btn.SetResourceReference(Control.BackgroundProperty, active ? "Hot" : "Paper");
+            btn.SetResourceReference(Control.BorderBrushProperty, active ? "Accent" : "PanelBorder");
+            btn.SetResourceReference(Control.ForegroundProperty, active ? "Accent" : "Ink");
+        }
+    }
+
+    private void SelectAnnotationColor(Color selected)
+    {
+        annotationOverlay.CurrentColor = selected;
+        foreach (var (color, btn, _) in swatchButtons)
+        {
+            bool active = color == selected;
+            btn.SetResourceReference(Control.BackgroundProperty, active ? "Hot" : "Paper");
+            btn.SetResourceReference(Control.BorderBrushProperty, active ? "Accent" : "PanelBorder");
+        }
+    }
+
+    private void RestartRecording()
+    {
+        if (recording is not { } running || stopping)
+            return;
+        restarted = true;
+        stopping = true;
+        start.IsEnabled = pause.IsEnabled = redo.IsEnabled = annotate.IsEnabled = cancel.IsEnabled = false;
+        SetStatus("正在重置录制…");
+        annotationOverlay.Clear();
+        SyncAnnotationToggleVisual(false);
+        running.Stop(abandon: true);
+    }
+
+    internal static string UniqueQuickSavePath(string extension = "mp4", string? customRoot = null)
+    {
+        string baseDir = customRoot ?? Environment.GetFolderPath(Environment.SpecialFolder.MyVideos);
+        if (string.IsNullOrWhiteSpace(baseDir))
+            baseDir = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+        string dir = System.IO.Path.Combine(baseDir, "YXRL");
+        Directory.CreateDirectory(dir);
+        string stem = $"YXRL-{DateTime.Now:yyyyMMdd-HHmmss}";
+        string candidate = System.IO.Path.Combine(dir, $"{stem}.{extension}");
+        for (int n = 1; File.Exists(candidate); n++)
+            candidate = System.IO.Path.Combine(dir, $"{stem}_{n}.{extension}");
+        return candidate;
+    }
+
+    private Task StartOrStop() => StartOrStop(null);
+
+    private async Task StartOrStop(string? presetTarget)
     {
         if (recording is { } running)
         {
             stopping = true;
-            start.IsEnabled = pause.IsEnabled = cancel.IsEnabled = false;
+            start.IsEnabled = pause.IsEnabled = redo.IsEnabled = annotate.IsEnabled = cancel.IsEnabled = false;
+            annotationOverlay.SetDrawingMode(false);
             SetStatus("正在完成录制…");
             running.Stop();
             return;
         }
 
-        string? target = null;
-        if (mode.SelectedIndex == 1)
+        string? target = presetTarget;
+        var selectedQuality = mode.SelectedIndex == 1 ? (RecordingQuality)Math.Clamp(quickQuality.SelectedIndex, 0, 2) : RecordingQuality.Standard;
+        if (mode.SelectedIndex == 1 && target is null)
         {
-            var save = new SaveFileDialog { Title = "保存录屏", Filter = "MP4 视频 (*.mp4)|*.mp4", DefaultExt = ".mp4",
-                FileName = $"YXRL-{DateTime.Now:yyyyMMdd-HHmmss}.mp4", AddExtension = true };
-            if (save.ShowDialog(this) != true)
-                return;
-            target = save.FileName;
+            if (quickAutoSave.IsChecked == true)
+            {
+                target = UniqueQuickSavePath("mp4");
+            }
+            else
+            {
+                var save = new SaveFileDialog { Title = "保存录屏", Filter = "MP4 视频 (*.mp4)|*.mp4", DefaultExt = ".mp4",
+                    FileName = $"YXRL-{DateTime.Now:yyyyMMdd-HHmmss}.mp4", AddExtension = true };
+                if (save.ShowDialog(this) != true)
+                    return;
+                target = save.FileName;
+            }
         }
         if (!placeOk)
             return;
@@ -342,8 +558,10 @@ internal sealed class RecordingWindow : Window
                 SetStatus("请选择可用的摄像头，或关闭摄像头后录制。", true);
                 return;
             }
-            cameraOptions = new(selectedDevice, (CameraCorner)corner.SelectedIndex, circle.IsChecked == true);
+            cameraOptions = new(selectedDevice, (CameraCorner)corner.SelectedIndex, circle.IsChecked == true,
+                cameraMirror.IsChecked == true, (CameraSize)Math.Clamp(cameraSize.SelectedIndex, 0, 2));
         }
+        bool hwAccel = hardwareAccel.IsChecked == true;
         var session = new CancellationTokenSource();
         countdown = session;
         options.IsEnabled = start.IsEnabled = false;
@@ -362,7 +580,8 @@ internal sealed class RecordingWindow : Window
             regionFrame.UpdateState(RecordingFrameState.Live);
             var preferences = new RecordingOptions((int)fps.SelectedItem, cursor.IsChecked == true,
                 system.IsChecked == true, microphone.IsChecked == true,
-                mouseCues.IsChecked == true, keyCues.IsChecked == true, cameraOptions, (microphoneDevice.SelectedItem as RecordingMicrophone)?.Id);
+                mouseCues.IsChecked == true, keyCues.IsChecked == true, cameraOptions,
+                (microphoneDevice.SelectedItem as RecordingMicrophone)?.Id, selectedQuality, hwAccel);
             var newRecording = new RegionRecording(area, preferences, sessionRoot);
             recording = newRecording;
             if (preferences.MouseCues || preferences.KeyCues)
@@ -370,12 +589,12 @@ internal sealed class RecordingWindow : Window
                     newRecording.CueTime, newRecording.AddCue);
             start.SetResourceReference(StyleProperty, "DangerButton");
             start.Content = "停止录制";
-            start.IsEnabled = pause.IsEnabled = true;
-            pause.Visibility = Visibility.Visible;
+            start.IsEnabled = pause.IsEnabled = redo.IsEnabled = annotate.IsEnabled = true;
+            pause.Visibility = annotate.Visibility = redo.Visibility = Visibility.Visible;
             SetStatus("● 正在录制", warning: true, stateDotKey: "DangerFill");
             timer.Start();
             var result = await recording.Completion;
-            if (abandoned || closing)
+            if (restarted || abandoned || closing)
                 return;
             if (result is null)
             {
@@ -386,8 +605,9 @@ internal sealed class RecordingWindow : Window
             {
                 try
                 {
+                    var quickEdits = RecordingEdits.Whole(result) with { Quality = selectedQuality, HardwareAcceleration = hwAccel };
                     await Task.Run(() => RecordingExport.Save(result, target, RecordingFormat.Mp4, TimeSpan.Zero,
-                        result.Duration, session.Token));
+                        result.Duration, session.Token, edits: quickEdits));
                     result.Session?.Delete();
                     CloseImmediately();
                 }
@@ -417,21 +637,31 @@ internal sealed class RecordingWindow : Window
         }
         finally
         {
+            bool shouldRestart = restarted && !closing;
             countdown = null;
             session.Dispose();
             inputCapture?.Dispose();
             inputCapture = null;
             recording = null;
             timer.Stop();
+            annotationOverlay.Clear();
+            annotationOverlay.SetDrawingMode(false);
             if (!closing)
             {
                 regionFrame.UpdateState(RecordingFrameState.Ready);
-                options.IsEnabled = start.IsEnabled = cancel.IsEnabled = true;
+                elapsed.Text = "00:00";
+                options.IsEnabled = start.IsEnabled = pause.IsEnabled = redo.IsEnabled = annotate.IsEnabled = cancel.IsEnabled = true;
                 start.SetResourceReference(StyleProperty, "PrimaryButton");
                 start.Content = "开始录制";
                 pause.Content = "暂停";
-                pause.Visibility = cancel.Visibility = Visibility.Collapsed;
-                paused = stopping = abandoned = false;
+                pause.Visibility = annotate.Visibility = redo.Visibility = cancel.Visibility = annotateBar.Visibility = Visibility.Collapsed;
+                SyncAnnotationToggleVisual(false);
+                paused = stopping = abandoned = restarted = false;
+                if (shouldRestart)
+                {
+                    string? nextTarget = mode.SelectedIndex == 1 && quickAutoSave.IsChecked != true ? target : null;
+                    _ = Dispatcher.BeginInvoke(async () => { if (!closing) await StartOrStop(nextTarget); });
+                }
             }
         }
     }
@@ -444,7 +674,7 @@ internal sealed class RecordingWindow : Window
         recording.Pause(paused);
         regionFrame.UpdateState(paused ? RecordingFrameState.Paused : RecordingFrameState.Live);
         pause.Content = paused ? "继续" : "暂停";
-        SetStatus(paused ? "已暂停" : "● 正在录制", warning: !paused, stateDotKey: paused ? "Warning" : "DangerFill");
+        SyncAnnotationToggleVisual(annotationOverlay.IsDrawing);
     }
 
     private void ConfirmClose(object? sender, CancelEventArgs e)
@@ -471,6 +701,8 @@ internal sealed class RecordingWindow : Window
     {
         closing = abandoned = true;
         countdown?.Cancel();
+        annotationOverlay.Clear();
+        annotationOverlay.SetDrawingMode(false);
         if (recording is not { } running)
             return;
         running.Stop(abandon: true);
@@ -500,6 +732,7 @@ internal sealed class RecordingWindow : Window
             try { running.Completion.Wait(TimeSpan.FromSeconds(2)); }
             catch (AggregateException) { } // Earlier sealed parts remain available for recovery.
         }
+        annotationOverlay.CloseSafely();
         regionFrame.CloseSafely();
         Close();
     }

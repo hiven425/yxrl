@@ -19,6 +19,7 @@ internal sealed class MediaFoundation : IDisposable
     public static readonly Guid Rgb32 = new("00000016-0000-0010-8000-00aa00389b71");
     public static readonly Guid VideoProcessing = new("fb394f3d-ccf1-42ee-bbb3-f9b845d5681d");
     public static readonly Guid DisableThrottling = new("08b845d8-2b74-4afe-9d53-be16d2d5ae4f");
+    public static readonly Guid ReadWriteEnableHardwareTransforms = new("a634a91c-822b-41b9-a494-4de4643612b0");
     public static readonly Guid Audio = new("73647561-0000-0010-8000-00aa00389b71");
     public static readonly Guid Pcm = new("00000001-0000-0010-8000-00aa00389b71");
     public static readonly Guid Aac = new("00001610-0000-0010-8000-00aa00389b71");

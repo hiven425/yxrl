@@ -5,7 +5,8 @@ using Yxrl.Desktop;
 namespace Yxrl.Capture;
 
 internal sealed record RecordingOptions(int Fps, bool Cursor, bool SystemAudio, bool Microphone,
-    bool MouseCues = false, bool KeyCues = false, CameraOptions? Camera = null, string? MicrophoneDevice = null)
+    bool MouseCues = false, bool KeyCues = false, CameraOptions? Camera = null, string? MicrophoneDevice = null,
+    RecordingQuality Quality = RecordingQuality.Standard, bool HardwareAcceleration = false)
 {
     public bool HasAudio => SystemAudio || Microphone;
 }
@@ -173,7 +174,8 @@ internal sealed class RegionRecording
                     if (paused || stop) continue;
                     source.CopyFrame(pixels, options.Cursor);
                 }
-                sink ??= new Mp4Writer(Session.PartFile(part), area.Width, area.Height, options.Fps);
+                sink ??= new Mp4Writer(Session.PartFile(part), area.Width, area.Height, options.Fps,
+                    quality: options.Quality, hardwareAcceleration: options.HardwareAcceleration);
                 camera?.Overlay(pixels, area.Width, area.Height);
                 sink.Frame(pixels, time - partStart, interval);
                 duration = time + interval;

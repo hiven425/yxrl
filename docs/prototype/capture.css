@@ -367,7 +367,7 @@
   cursor: pointer;
 }
 .shot-recorder {
-  width: min(588px, 96%);
+  width: min(636px, 96%);
 }
 .shot-video-image {
   position: relative;
@@ -381,7 +381,7 @@
   display: block;
   width: 100%;
   min-height: 68px;
-  max-height: 36vh;
+  max-height: 27vh;
   object-fit: contain;
 }
 .shot-video-position {
@@ -403,8 +403,13 @@
 }
 .shot-video-key { bottom: 10px; left: 50%; transform: translateX(-50%); }
 .shot-video-camera {
-  display: grid;
-  place-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  line-height: 1.3;
+  font-size: 12px;
   right: 9px;
   bottom: 9px;
   width: 27%;
@@ -414,7 +419,129 @@
 }
 .shot-video-camera[data-corner="1"], .shot-video-camera[data-corner="3"] { left: 9px; right: auto; }
 .shot-video-camera[data-corner="2"], .shot-video-camera[data-corner="3"] { top: 9px; bottom: auto; }
+.shot-video-camera[data-size="0"] { width: 20%; }
+.shot-video-camera[data-size="2"] { width: 34%; }
 .shot-video-camera.round { aspect-ratio: 1; border-radius: 50%; }
+.shot-video-camera.mirrored { background: linear-gradient(230deg, #245a76, #1d3247); }
+.shot-video-camera.mirrored::after { content: " · 镜像"; font-size: 11px; opacity: 0.85; }
+.shot-video-annotations {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+.shot-crop-box {
+  position: absolute;
+  border: 1.5px solid #2d9cff;
+  box-shadow: 0 0 0 999px rgb(8 13 20 / 42%);
+  pointer-events: none;
+}
+.shot-crop-box[data-cropped="false"] {
+  box-shadow: none;
+  border-color: rgb(45 156 255 / 45%);
+}
+.shot-crop-box i {
+  position: absolute;
+  background: #fff;
+  border: 1px solid #2d9cff;
+  border-radius: 2px;
+}
+.shot-crop-box i:nth-child(1),
+.shot-crop-box i:nth-child(2) { left: 50%; transform: translateX(-50%); width: 20px; height: 4px; }
+.shot-crop-box i:nth-child(1) { top: -2.5px; }
+.shot-crop-box i:nth-child(2) { bottom: -2.5px; }
+.shot-crop-box i:nth-child(3),
+.shot-crop-box i:nth-child(4) { top: 50%; transform: translateY(-50%); width: 4px; height: 20px; }
+.shot-crop-box i:nth-child(3) { left: -2.5px; }
+.shot-crop-box i:nth-child(4) { right: -2.5px; }
+.shot-progress-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 4px;
+  background: rgb(16 26 38 / 72%);
+  pointer-events: none;
+}
+.shot-progress-bar i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: #2d9cff;
+}
+.shot-progress-pill {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: rgb(16 28 44 / 84%);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+.shot-live-annotate-bar {
+  margin-top: 0;
+  margin-bottom: 8px;
+  gap: 5px 6px;
+}
+.shot-live-swatch {
+  width: 24px;
+  min-height: 24px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+}
+.shot-live-swatch i {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+}
+.shot-btn.is-active {
+  background: var(--accent-fill, #e8f3ff);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.shot-trim-visual {
+  position: relative;
+  height: 16px;
+  margin: 0 0 8px;
+  display: flex;
+  align-items: center;
+}
+.shot-trim-visual::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--line);
+}
+.shot-trim-span {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--accent);
+}
+.shot-trim-visual input[type="range"] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  background: transparent;
+  pointer-events: none;
+}
+.shot-trim-visual input[type="range"]::-webkit-slider-thumb {
+  pointer-events: auto;
+  border-radius: 4px;
+  width: 10px;
+  height: 15px;
+}
 .shot-rec-card {
   background: var(--paper);
   border: 1px solid var(--line);
@@ -561,8 +688,14 @@
 .shot-rec-footer {
   margin-top: 10px;
 }
+.shot-rec-footer .shot-status-wrap {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
 .shot-rec-footer .shot-row {
   margin: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 .shot-scroll-bar {
   margin-top: 10px;
@@ -1060,6 +1193,11 @@
   border-style: dashed;
   border-color: #d97706;
   --frame-accent: #d97706;
+}
+.shot-record-frame[data-stage="scrolling"] {
+  border-style: dashed;
+  border-color: #0b75d1;
+  --frame-accent: #0b75d1;
 }
 .shot-record-frame .c {
   position: absolute;

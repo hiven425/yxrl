@@ -80,8 +80,99 @@ internal static class RecordingChecks
                 frames.All(s => s.Data.Length == 80 * 48 * 4 && s.Data[0] > 190) && samples.Any(s => !s.IsVideo),
                 "裁画面和倍速后的 MP4 像素、时序和音轨");
         }
+        VerifyEnhancements(directory, clip, from, to);
         VerifyRecovery(directory);
-        Console.WriteLine("通过：Windows H.264/AAC、剪辑、动图、两轨独立调音、键鼠合成及未完成片段恢复。");
+        Console.WriteLine("通过：Windows H.264/AAC、剪辑、0.2x~2x 倍速、三档画质/进度叠加、镜像摄像头、动图、两轨独立调音、键鼠合成及未完成片段恢复。");
+    }
+
+    private static void VerifyEnhancements(string directory, RecordedClip clip, TimeSpan from, TimeSpan to)
+    {
+        Check(Mp4Writer.ComputeBitrate(1280, 720, 30, RecordingQuality.Compact) <
+            Mp4Writer.ComputeBitrate(1280, 720, 30, RecordingQuality.Standard) &&
+            Mp4Writer.ComputeBitrate(1280, 720, 30, RecordingQuality.Standard) <
+            Mp4Writer.ComputeBitrate(1280, 720, 30, RecordingQuality.High), "录屏三档导出码率递增");
+
+        var slowFile = Path.Combine(directory, "slow-02x.mp4");
+        var slowEdits = RecordingEdits.Whole(clip) with
+        {
+            Speed = 0.2,
+            Quality = RecordingQuality.Compact,
+            HardwareAcceleration = true
+        };
+        RecordingExport.Save(clip, slowFile, RecordingFormat.Mp4, from, to, CancellationToken.None, edits: slowEdits);
+        using (var reader = new ClipReader(clip with { Path = slowFile, Fps = 16, Duration = TimeSpan.FromMilliseconds(2600) }, false, 0))
+        {
+            var slowFrames = reader.Samples(false, TimeSpan.FromMilliseconds(2600).Ticks).Where(s => s.IsVideo).ToArray();
+            Check(slowFrames.Length == 8 && slowFrames.Last().Time >= TimeSpan.FromMilliseconds(2000).Ticks,
+                $"0.2x 慢放时序异常，共 {slowFrames.Length} 帧，末帧 {slowFrames.Last().Time}");
+        }
+
+        var croppedWithBar = RecordingEdits.Whole(clip) with
+        {
+            Crop = new(8, 12, 120, 100),
+            Quality = RecordingQuality.High,
+            ProgressStyle = RecordingProgressStyle.Bar
+        };
+        var barMp4 = Path.Combine(directory, "bar-crop.mp4");
+        RecordingExport.Save(clip, barMp4, RecordingFormat.Mp4, from, to, CancellationToken.None, edits: croppedWithBar);
+        using (var reader = new ClipReader(clip with { Path = barMp4, Width = 112, Height = 88, Duration = to - from }, false, 0))
+        {
+            var video = reader.Samples(false, (to - from).Ticks).Where(s => s.IsVideo).ToArray();
+            var last = video.Last().Data;
+            int p = (86 * 112 + 40) * 4;
+            Check(video.Length == 8 && last.Length == 112 * 88 * 4 && last[p] > 180 && last[p + 2] < 110,
+                "裁剪后底部蓝色进度条未正确烧录到 MP4");
+        }
+
+        var barWebp = Path.Combine(directory, "bar-crop.webp");
+        RecordingExport.Save(clip, barWebp, RecordingFormat.Webp, from, to, CancellationToken.None,
+            edits: croppedWithBar with { Quality = RecordingQuality.Compact });
+        using (var codec = SKCodec.Create(barWebp))
+        {
+            Check(codec is not null && codec.FrameCount == 8 && codec.Info.Width == 112 && codec.Info.Height == 88,
+                "带进度条裁剪 WebP 帧数或尺寸异常");
+            using var bmp = new SKBitmap(codec!.Info);
+            codec.GetPixels(bmp.Info, bmp.GetPixels(), new SKCodecOptions(codec.FrameCount - 1));
+            var c = bmp.GetPixel(40, 86);
+            Check(c.Blue > 200 && c.Red < 90, $"WebP 末帧底部进度条像素异常 {c}");
+        }
+
+        Check(RecordingProgressPainter.FormatClock(TimeSpan.FromSeconds(75).Ticks) == "01:15", "进度计时格式化异常");
+        Check(Math.Abs(RecordingProgressPainter.ProgressFraction(50, 100) - 0.5) < 0.001, "进度比例计算异常");
+        var badgeBuf = new byte[160 * 90 * 4];
+        RecordingProgressPainter.Draw(badgeBuf, 160, 90, TimeSpan.FromSeconds(2).Ticks, TimeSpan.FromSeconds(5).Ticks,
+            RecordingProgressStyle.Countdown);
+        Check(badgeBuf.Skip(90 * 160 * 0).Where((v, i) => i % 4 == 3 && v > 0).Any(), "倒计时进度角标未绘制像素");
+
+        // 摄像头镜像与尺寸验证：左半纯蓝(B=240), 右半纯红(R=240)
+        const int sw = 200, sh = 120, cw = 40, ch = 30;
+        var camPixels = new byte[cw * ch * 4];
+        for (int y = 0; y < ch; y++)
+            for (int x = 0; x < cw; x++)
+            {
+                int i = (y * cw + x) * 4;
+                if (x < cw / 2) camPixels[i] = 240;
+                else camPixels[i + 2] = 240;
+                camPixels[i + 3] = 255;
+            }
+        var screenMirror = new byte[sw * sh * 4];
+        var screenNormal = new byte[sw * sh * 4];
+        RecordingCamera.OverlayFrame(screenMirror, sw, sh, camPixels, cw, ch,
+            new CameraOptions(null!, 0, false, Mirror: true, Size: CameraSize.Small));
+        RecordingCamera.OverlayFrame(screenNormal, sw, sh, camPixels, cw, ch,
+            new CameraOptions(null!, 0, false, Mirror: false, Size: CameraSize.Large));
+        // Small PiP (~18% of 200 = 36px wide, margin 12 => x in [152..188], y in [81..108])
+        int leftSample = (95 * sw + 160) * 4;
+        int rightSample = (95 * sw + 180) * 4;
+        Check(screenMirror[leftSample + 2] > 180 && screenMirror[rightSample] > 180, "镜像开启后摄像头左右未翻转");
+        Check(screenNormal[leftSample] > 180 || screenNormal[(95 * sw + 140) * 4] > 180, "关闭镜像与大尺寸摄像头叠加位置异常");
+
+        var quickDir = Path.Combine(directory, "quick-paths");
+        Directory.CreateDirectory(quickDir);
+        var q1 = RecordingWindow.UniqueQuickSavePath("mp4", quickDir);
+        File.WriteAllBytes(q1, [0]);
+        var q2 = RecordingWindow.UniqueQuickSavePath("mp4", quickDir);
+        Check(q1 != q2 && File.Exists(q1) && !File.Exists(q2) && q2.EndsWith(".mp4"), "快存/直接保存防重名路径异常");
     }
 
     private static void VerifyRecovery(string directory)

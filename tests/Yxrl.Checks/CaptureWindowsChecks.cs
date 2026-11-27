@@ -91,6 +91,7 @@ internal static class CaptureWindowsChecks
         }
 
         var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown, Resources = CalendarResources() };
+        SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(Dispatcher.CurrentDispatcher));
         Theme.Apply();
         var fixture = new Window
         {
@@ -479,10 +480,59 @@ internal static class CaptureWindowsChecks
 
         frame.UpdateState(RecordingFrameState.Paused);
         Check(frame.State == RecordingFrameState.Paused && frame.Opacity == 1.0, "UI 用例：暂停状态应停止呼吸并恢复不透明");
+        frame.UpdateState(RecordingFrameState.Scrolling, badgeLabel: "长截图区域 · 按 A 自动滚动");
+        Check(frame.State == RecordingFrameState.Scrolling && frame.Opacity == 1.0, "UI 用例：长截图选框状态不符");
         frame.UpdateState(RecordingFrameState.Ready);
+
+        // 验证录屏控制条新增选项默认状态及显示联动
+        Check(All<CheckBox>(recWin).Single(c => Equals(c.Content, "硬件加速")).IsChecked == false, "UI 用例：硬件加速默认应关闭");
+        var camToggle = All<CheckBox>(recWin).Single(c => Equals(c.Content, "摄像头"));
+        ((IToggleProvider)UIElementAutomationPeer.CreatePeerForElement(camToggle)!.GetPattern(PatternInterface.Toggle)!).Toggle();
+        Pump(40);
+        Check(All<CheckBox>(recWin).Single(c => Equals(c.Content, "镜像")).IsChecked == true, "UI 用例：摄像头镜像默认应开启");
+        var camSizeCombo = All<ComboBox>(recWin).Single(c => AutomationProperties.GetName(c) == "摄像头大小");
+        Check(camSizeCombo.Items.Count == 3 && camSizeCombo.SelectedIndex == 1, "UI 用例：摄像头大小预设应默认中号");
+        All<ComboBox>(recWin).Single(c => AutomationProperties.GetName(c) == "模式").SelectedIndex = 1;
+        Pump(40);
+        Check(All<ComboBox>(recWin).Single(c => AutomationProperties.GetName(c) == "快速录制画质").SelectedIndex == 1, "UI 用例：快速画质应默认标准");
+        Check(All<CheckBox>(recWin).Single(c => Equals(c.Content, "直接存至视频目录")).IsChecked == false, "UI 用例：直接存至视频目录默认应关闭");
+
+        // 验证边录边标透明批注层（允许进入录制画面 + 穿透/绘制切换 + 撤销/清空）
+        var ann = new RecordingAnnotationOverlay(area);
+        ann.Show();
+        Pump(60);
+        var annHwnd = new WindowInteropHelper(ann).Handle;
+        Check(ann.IsVisible && ann.Topmost && !ann.CaptureExcluded && ann.PassThrough && !ann.IsDrawing,
+            "UI 用例：边录边标层应置顶、可录制且初始为鼠标穿透状态");
+        Check((Native.GetStyle(annHwnd, -20) & Native.WsExTransparent) != 0, "UI 用例：边录边标初始缺少穿透样式");
+        ann.SetDrawingMode(true);
+        Pump(40);
+        Check(ann.IsDrawing && !ann.PassThrough && (Native.GetStyle(annHwnd, -20) & Native.WsExTransparent) == 0,
+            "UI 用例：开启边录边标绘制后应取消穿透");
+        ann.CurrentTool = LiveAnnotationTool.Rectangle;
+        ann.BeginStroke(new System.Windows.Point(40, 40));
+        ann.MoveStroke(new System.Windows.Point(160, 120));
+        ann.EndStroke();
+        ann.CurrentTool = LiveAnnotationTool.Number;
+        ann.BeginStroke(new System.Windows.Point(200, 100));
+        ann.EndStroke();
+        Pump(30);
+        Check(ann.MarkCount == 2 && ann.HasMarks, "UI 用例：边录边标绘制计数异常");
+        ann.Undo();
+        Check(ann.MarkCount == 1, "UI 用例：边录边标撤销异常");
+        ann.Clear();
+        Check(ann.MarkCount == 0 && !ann.HasMarks, "UI 用例：边录边标清空异常");
+        ann.SetDrawingMode(false);
+        Pump(30);
+        Check((Native.GetStyle(annHwnd, -20) & Native.WsExTransparent) != 0, "UI 用例：退出绘制后未恢复鼠标穿透");
+        ann.CloseSafely();
+        Pump(30);
+        Check(!app.Windows.OfType<RecordingAnnotationOverlay>().Contains(ann), "UI 用例：单独边录边标窗口未关闭");
+
         recWin.Shutdown();
         Pump(50);
-        Check(!app.Windows.OfType<RecordingRegionFrame>().Any(), "UI 用例：控制窗退出后录制范围框未关闭");
+        Check(!app.Windows.OfType<RecordingRegionFrame>().Any() && !app.Windows.OfType<RecordingAnnotationOverlay>().Any(),
+            "UI 用例：控制窗退出后录制范围框或批注层未关闭");
     }
 
     private static RecordingWindow PrepareRecording(CaptureTools tools, PixelPoint current)
@@ -575,6 +625,14 @@ internal static class CaptureWindowsChecks
         Pump();
         Click(overlay, "滚动长截图");
         var window = Application.Current.Windows.OfType<ScrollWindow>().Single();
+        Check(Application.Current.Windows.OfType<RecordingRegionFrame>().Any(f =>
+            f.IsVisible && f.CaptureExcluded && f.State == RecordingFrameState.Scrolling),
+            "长截图未显示置顶且排除捕获的选区范围框");
+        Check(All<Button>(window).Any(b => Equals(b.Content, "自动滚动")) &&
+            All<Button>(window).Any(b => Equals(b.Content, "清空重截")) &&
+            All<Button>(window).Any(b => Equals(b.Content, "复制")) &&
+            All<Button>(window).Any(b => Equals(b.Content, "保存")),
+            "长截图缺少自动滚动、清空重截、复制或保存按钮");
         var ready = All<Button>(window).Single(b => Equals(b.Content, "完成长截图"));
         var deadline = DateTime.UtcNow.AddSeconds(8);
         while (!ready.IsEnabled && DateTime.UtcNow < deadline) Pump();

@@ -13,7 +13,8 @@ internal enum RecordingFrameState
     Ready,
     Countdown,
     Live,
-    Paused
+    Paused,
+    Scrolling
 }
 
 internal sealed class RecordingRegionFrame : Window
@@ -106,11 +107,11 @@ internal sealed class RecordingRegionFrame : Window
         }
     }
 
-    public void UpdateState(RecordingFrameState nextState, int countdownSeconds = 0)
+    public void UpdateState(RecordingFrameState nextState, int countdownSeconds = 0, string? badgeLabel = null)
     {
         if (closed)
             return;
-        visual.SetState(nextState, countdownSeconds);
+        visual.SetState(nextState, countdownSeconds, badgeLabel);
         if (nextState == RecordingFrameState.Live)
         {
             if (!pulseTimer.IsEnabled)
@@ -156,6 +157,7 @@ internal sealed class RecordingRegionFrame : Window
         private static readonly Color CountdownColor = Color.FromRgb(249, 115, 22);
         private static readonly Color LiveColor = Color.FromRgb(224, 49, 49);
         private static readonly Color PausedColor = Color.FromRgb(217, 119, 6);
+        private static readonly Color ScrollingColor = Color.FromRgb(11, 117, 209);
         private static readonly Typeface BadgeTypeface = new(new FontFamily("Segoe UI, Microsoft YaHei UI"),
             FontStyles.Normal, FontWeights.Bold, FontStretches.Normal);
 
@@ -167,16 +169,18 @@ internal sealed class RecordingRegionFrame : Window
         }
 
         private int countdownSeconds;
+        private string? labelText;
         public RecordingFrameState State { get; private set; } = RecordingFrameState.Ready;
 
         public FrameVisual() => IsHitTestVisible = false;
 
-        public void SetState(RecordingFrameState nextState, int seconds)
+        public void SetState(RecordingFrameState nextState, int seconds, string? label)
         {
-            if (State == nextState && countdownSeconds == seconds)
+            if (State == nextState && countdownSeconds == seconds && labelText == label)
                 return;
             State = nextState;
             countdownSeconds = seconds;
+            labelText = label;
             InvalidateVisual();
         }
 
@@ -191,10 +195,11 @@ internal sealed class RecordingRegionFrame : Window
                 RecordingFrameState.Countdown => CountdownColor,
                 RecordingFrameState.Live => LiveColor,
                 RecordingFrameState.Paused => PausedColor,
+                RecordingFrameState.Scrolling => ScrollingColor,
                 _ => ReadyColor
             };
-            bool dashed = State is RecordingFrameState.Ready or RecordingFrameState.Paused;
-            double stroke = State == RecordingFrameState.Ready ? 2.0 : 2.5;
+            bool dashed = State is RecordingFrameState.Ready or RecordingFrameState.Paused or RecordingFrameState.Scrolling;
+            double stroke = State is RecordingFrameState.Ready or RecordingFrameState.Scrolling ? 2.0 : 2.5;
             double cornerStroke = State == RecordingFrameState.Live ? 3.2 : 3.0;
             double inset = stroke / 2.0 + 0.5;
             var rect = new Rect(inset, inset, Math.Max(1, w - inset * 2), Math.Max(1, h - inset * 2));
@@ -253,6 +258,18 @@ internal sealed class RecordingRegionFrame : Window
                 var pill = new Rect((w - bw) / 2, (h - bh) / 2, bw, bh);
                 dc.DrawRoundedRectangle(BadgeFill, BadgeBorder, pill, 12, 12);
                 dc.DrawText(formatted, new Point((w - formatted.Width) / 2, (h - formatted.Height) / 2));
+            }
+            else if (State == RecordingFrameState.Scrolling && !string.IsNullOrWhiteSpace(labelText) && w >= 120 && h >= 56)
+            {
+                double pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+                var formatted = new FormattedText(labelText, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
+                    BadgeTypeface, 11, Brushes.White, pixelsPerDip);
+                double bw = formatted.Width + 16, bh = formatted.Height + 6;
+                var pillBorder = new Pen(mainBrush, 1);
+                pillBorder.Freeze();
+                var pill = new Rect((w - bw) / 2, 7, bw, bh);
+                dc.DrawRoundedRectangle(BadgeFill, pillBorder, pill, 6, 6);
+                dc.DrawText(formatted, new Point(pill.Left + 8, pill.Top + 3));
             }
         }
     }

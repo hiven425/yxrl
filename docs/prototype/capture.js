@@ -1349,7 +1349,7 @@ const CapturePreview = (function createPreview() {
     view.setAttribute("aria-label", "屏幕录制演示");
     const sizePill = areaRect ? `<span class="shot-count-pill">${Math.round(areaRect.w)} × ${Math.round(areaRect.h)} px</span>` : "";
     view.innerHTML = `<header><div class="shot-col-title"><b>屏幕录制</b>${sizePill}</div>${button("video-close", "关闭录屏", glyphs.close, "shot-btn shot-tool-icon")}</header>
-      <div class="shot-video-image"><img alt="录制区域"><span class="shot-video-position" hidden></span><kbd class="shot-video-key" hidden>Ctrl+T</kbd><span class="shot-video-camera" hidden>摄像头示例</span></div>
+      <div class="shot-video-image"><img alt="录制区域"><svg class="shot-video-annotations" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"></svg><div class="shot-crop-box" hidden><i></i><i></i><i></i><i></i></div><span class="shot-video-position" hidden></span><kbd class="shot-video-key" hidden>Ctrl+T</kbd><span class="shot-video-camera" hidden>摄像头示例</span><span class="shot-progress-pill" hidden>00:00</span><div class="shot-progress-bar" hidden><i></i></div></div>
       <div class="shot-rec-card shot-video-options">
         <div class="shot-rec-params">
           <label class="field">帧率<select id="shot-fps">${[5, 16, 24, 30, 60].map(value => `<option ${value === 24 ? "selected" : ""}>${value}</option>`).join("")}</select></label>
@@ -1363,64 +1363,131 @@ const CapturePreview = (function createPreview() {
           <label class="shot-inline-opt"><input type="checkbox" id="shot-video-mouse">鼠标点击和滚轮</label>
           <label class="shot-inline-opt"><input type="checkbox" id="shot-video-keys">显示快捷键</label>
           <label class="shot-inline-opt"><input type="checkbox" id="shot-video-camera">摄像头</label>
+          <label class="shot-inline-opt"><input type="checkbox" id="shot-video-hw">硬件加速</label>
         </div>
         <label class="shot-rec-sub shot-microphone-field" hidden>麦克风设备 <select aria-label="麦克风设备"><option>Windows 默认麦克风</option><option>内置麦克风阵列（示例）</option></select></label>
         <div class="shot-rec-sub shot-camera-fields" hidden>
           <label>摄像头设备 <select><option>本机摄像头（示例）</option></select></label>
           <label>位置 <select id="shot-camera-corner" aria-label="摄像头位置"><option>右下</option><option>左下</option><option>右上</option><option>左上</option></select></label>
+          <label>大小 <select id="shot-camera-size" aria-label="摄像头大小"><option>小</option><option selected>中</option><option>大</option></select></label>
           <label class="shot-inline-opt"><input type="checkbox" id="shot-camera-circle">圆形</label>
+          <label class="shot-inline-opt"><input type="checkbox" id="shot-camera-mirror" checked>镜像</label>
         </div>
+        <div class="shot-rec-sub shot-quick-fields" hidden>
+          <label>导出画质 <select id="shot-quick-quality" aria-label="快速录制画质"><option>轻量</option><option selected>标准</option><option>高清</option></select></label>
+          <label class="shot-inline-opt"><input type="checkbox" id="shot-quick-autosave">直接存至视频目录</label>
+        </div>
+      </div>
+      <div class="shot-rec-sub shot-live-annotate-bar" hidden>
+        ${[["pen", "画笔"], ["arrow", "箭头"], ["rect", "矩形"], ["number", "序号"]].map(([t, lbl], i) => `<button type="button" class="shot-btn secondary${i === 0 ? " is-active" : ""}" data-live-tool="${t}">${lbl}</button>`).join("")}
+        ${["#e03131", "#0b75d1", "#2b8a3e", "#f08c00"].map((c, i) => `<button type="button" class="shot-btn secondary shot-live-swatch${i === 0 ? " is-active" : ""}" data-live-color="${c}" aria-label="标注颜色"><i style="background:${c}"></i></button>`).join("")}
+        ${button("video-ann-undo", "撤销标注", "撤销", "shot-btn secondary")}${button("video-ann-clear", "清空标注", "清空", "shot-btn secondary")}${button("video-ann-done", "切回穿透", "穿透", "shot-btn secondary")}
       </div>
       <div class="shot-rec-card shot-video-trim" hidden>
         <label class="shot-trim-seek"><span>回放进度</span><input id="shot-playhead" class="shot-slider" type="range" min="0" step="0.1"></label>
+        <div class="shot-trim-visual"><span class="shot-trim-span"></span><input id="shot-trim-start" class="shot-slider" type="range" min="0" value="0" step="0.1" aria-label="剪辑开始滑块"><input id="shot-trim-end" class="shot-slider" type="range" min="0" value="1" step="0.1" aria-label="剪辑结束滑块"></div>
         <div class="shot-trim-row">
-          <label>开始（秒）<input type="number" min="0" value="0" step=".1"></label>
+          <label>开始（秒）<input id="shot-video-start-sec" type="number" min="0" value="0" step=".1"></label>
           <label>结束（秒）<input id="shot-video-end" type="number" min="0" step=".1"></label>
-          <label>倍速<select id="shot-speed">${[.25,.5,1,1.25,1.5,2].map(speed => `<option ${speed === 1 ? "selected" : ""}>${speed}×</option>`).join("")}</select></label>
-          <label>导出格式<select><option>MP4</option><option>GIF</option><option>WebP</option></select></label>
+          <label>倍速<select id="shot-speed">${[.2, .25, .5, .75, 1, 1.25, 1.5, 2].map(speed => `<option ${speed === 1 ? "selected" : ""}>${speed}×</option>`).join("")}</select></label>
+          <label>导出格式<select id="shot-export-format"><option>MP4</option><option>GIF</option><option>WebP</option></select></label>
         </div>
         <div class="shot-trim-row">
           ${["左", "上", "右", "下"].map(side => `<label>裁${side}<input type="number" min="0" value="0" data-crop="${side}"></label>`).join("")}
+          ${button("video-reset-crop", "重置裁剪", "重置", "shot-btn secondary")}
         </div>
       </div>
       <div class="shot-rec-card shot-video-mixer" hidden>
-        <span class="shot-mixer-title">音轨与动画</span>
+        <span class="shot-mixer-title">音轨、动效与导出选项</span>
         ${[["system","系统声音"],["mic","麦克风"]].map(([id,label]) => `<div data-track="${id}"><label>${label}<input class="shot-slider" type="range" min="0" max="100" value="100" aria-label="${label}音量"></label><output>100%</output><label class="shot-inline-opt"><input type="checkbox" aria-label="${label}静音">静音</label></div>`).join("")}
         <label class="shot-inline-opt" data-effect="mouse"><input type="checkbox" checked>鼠标动画</label>
         <label class="shot-inline-opt" data-effect="keys"><input type="checkbox" checked>快捷键动画</label>
+        <label class="shot-inline-opt">显示进度<select id="shot-progress-style" aria-label="显示进度"><option>无进度</option><option>底部进度条</option><option>计时文字</option><option>倒计时</option></select></label>
+        <label class="shot-inline-opt">画质<select id="shot-export-quality" aria-label="导出画质"><option>轻量</option><option selected>标准</option><option>高清</option></select></label>
+        <label class="shot-inline-opt"><input type="checkbox" id="shot-export-hw">硬件加速</label>
+        <label class="shot-inline-opt"><input type="checkbox" id="shot-close-after">导出后关闭</label>
       </div>
       <div class="shot-panel-footer shot-rec-footer">
         <div class="shot-status-wrap"><i class="shot-status-dot" data-state="accent" aria-hidden="true"></i><p class="shot-video-status" role="status"></p></div>
-        <div class="shot-row">${button("video-start", "开始录制", "开始录制", "shot-btn primary")}${button("video-pause", "暂停", "暂停", "shot-btn secondary")}${button("video-save", "另存为", "另存为", "shot-btn primary")}${button("video-repeat", "重新录制", "重新录制", "shot-btn secondary")}${button("video-interrupt", "模拟中断", "模拟中断", "shot-btn secondary")}</div>
+        <div class="shot-row">${button("video-start", "开始录制", "开始录制", "shot-btn primary")}${button("video-pause", "暂停", "暂停", "shot-btn secondary")}${button("video-annotate", "边录边标", "标注", "shot-btn secondary")}${button("video-redo", "重新录制", "重录", "shot-btn secondary")}${button("video-save", "另存为", "另存为", "shot-btn primary")}${button("video-quicksave", "快速保存", "快存", "shot-btn secondary")}${button("video-copyfile", "复制文件", "复制文件", "shot-btn secondary")}${button("video-openfolder", "打开位置", "打开位置", "shot-btn secondary")}${button("video-repeat", "重新录制", "重新录制", "shot-btn secondary")}${button("video-interrupt", "模拟中断", "模拟中断", "shot-btn secondary")}</div>
       </div>`;
     view.querySelector("img").src = shot.image.toDataURL();
     recordingClip = { view, frame, rect: areaRect, shot, stage: recovered ? "review" : "ready", elapsed: recovered?.elapsed || 0, left: 0, position: 0,
-      options: recovered?.options || {}, timer: null };
+      trimStart: 0, trimEnd: recovered?.elapsed || 0, options: recovered?.options || { cameraSize: 1, mirror: true }, annotating: false, liveMarks: [], savedOnce: false, timer: null };
     if (recovered) {
       view.querySelector("#shot-video-end").value = recovered.elapsed.toFixed(1);
       view.querySelector("#shot-playhead").max = recovered.elapsed.toFixed(1);
+      view.querySelector("#shot-trim-start").max = recovered.elapsed.toFixed(1);
+      view.querySelector("#shot-trim-end").max = recovered.elapsed.toFixed(1);
+      view.querySelector("#shot-trim-end").value = recovered.elapsed.toFixed(1);
       recordingClock(recordingClip);
     }
     view.querySelector(".shot-video-options").onchange = () => {
       recordingClip.options = Object.fromEntries(["system", "mic", "mouse", "keys", "camera"].map(
         value => [value, view.querySelector("#shot-video-" + value).checked]));
       recordingClip.options.corner = view.querySelector("#shot-camera-corner").selectedIndex;
+      recordingClip.options.cameraSize = view.querySelector("#shot-camera-size").selectedIndex;
       recordingClip.options.circle = view.querySelector("#shot-camera-circle").checked;
+      recordingClip.options.mirror = view.querySelector("#shot-camera-mirror").checked;
+      recordingClip.options.quickMode = view.querySelector("#shot-mode").selectedIndex === 1;
       updateRecording();
     };
     view.querySelector(".shot-video-mixer").onchange = updateRecording;
     view.querySelectorAll("[data-track] input[type=range]").forEach(range => range.oninput = () =>
       range.closest("[data-track]").querySelector("output").value = range.value + "%");
+    view.querySelectorAll("[data-live-tool]").forEach(btn => btn.onclick = () => {
+      view.querySelectorAll("[data-live-tool]").forEach(el => el.classList.toggle("is-active", el === btn));
+    });
+    view.querySelectorAll("[data-live-color]").forEach(btn => btn.onclick = () => {
+      view.querySelectorAll("[data-live-color]").forEach(el => el.classList.toggle("is-active", el === btn));
+    });
     view.querySelector("#shot-playhead").oninput = ev => {
       recordingClip.position = Number(ev.target.value);
       updateRecording();
     };
-    view.querySelector(".shot-video-trim").onchange = () => {
-      const inset = ["上", "右", "下", "左"].map(side => Math.max(0, Number(view.querySelector(`[data-crop="${side}"]`).value)));
-      view.querySelector("img").style.clipPath = `inset(${inset.map(n => n + "px").join(" ")})`;
+    const startRange = view.querySelector("#shot-trim-start"), endRange = view.querySelector("#shot-trim-end");
+    const startNum = view.querySelector("#shot-video-start-sec"), endNum = view.querySelector("#shot-video-end");
+    const syncTrimInputs = (source) => {
+      let s = Math.max(0, Number(source === "range" ? startRange.value : startNum.value));
+      let e = Math.max(s + 0.1, Number(source === "range" ? endRange.value : endNum.value));
+      s = Math.min(s, Math.max(0, e - 0.1));
+      e = Math.min(recordingClip.elapsed, Math.max(s + 0.1, e));
+      recordingClip.trimStart = s;
+      recordingClip.trimEnd = e;
+      startNum.value = startRange.value = s.toFixed(1);
+      endNum.value = endRange.value = e.toFixed(1);
+      updateRecording();
+    };
+    startRange.oninput = endRange.oninput = () => syncTrimInputs("range");
+    startNum.onchange = endNum.onchange = () => syncTrimInputs("num");
+    view.querySelector(".shot-video-trim").onchange = (ev) => {
+      if (ev.target.dataset?.crop) {
+        const inset = ["上", "右", "下", "左"].map(side => Math.max(0, Number(view.querySelector(`[data-crop="${side}"]`).value)));
+        view.querySelector("img").style.clipPath = `inset(${inset.map(n => n + "px").join(" ")})`;
+        updateRecording();
+      }
     };
     updateRecording();
     view.querySelector('[data-shot="video-start"]').focus();
+  }
+  function formatClock(sec) {
+    const s = Math.max(0, Math.floor(sec));
+    const m = Math.floor(s / 60), r = s % 60;
+    return String(m).padStart(2, "0") + ":" + String(r).padStart(2, "0");
+  }
+  function renderLiveAnnotations(clip) {
+    const svg = clip.view.querySelector(".shot-video-annotations");
+    if (!svg) return;
+    if (!clip.liveMarks?.length) { svg.innerHTML = ""; return; }
+    svg.innerHTML = clip.liveMarks.map(m => {
+      if (m.tool === "arrow")
+        return `<line x1="22" y1="30" x2="54" y2="48" stroke="${m.color}" stroke-width="2.2" stroke-linecap="round"/><polygon points="55,48.5 47,49 51,42" fill="${m.color}"/>`;
+      if (m.tool === "rect")
+        return `<rect x="52" y="20" width="24" height="20" rx="2" fill="none" stroke="${m.color}" stroke-width="2"/>`;
+      if (m.tool === "number")
+        return `<circle cx="34" cy="64" r="5" fill="${m.color}" stroke="#fff" stroke-width="1"/><text x="34" y="66" text-anchor="middle" font-size="6" font-weight="700" fill="#fff">1</text>`;
+      return `<path d="M16,58 Q28,42 40,56 T62,48" fill="none" stroke="${m.color}" stroke-width="2.2" stroke-linecap="round"/>`;
+    }).join("");
   }
   function updateRecording() {
     const clip = recordingClip, { view, stage } = clip;
@@ -1430,36 +1497,81 @@ const CapturePreview = (function createPreview() {
     view.querySelector(".shot-video-options").hidden = stage !== "ready";
     view.querySelector(".shot-camera-fields").hidden = !clip.options.camera;
     view.querySelector(".shot-microphone-field").hidden = !clip.options.mic;
+    const quickFields = view.querySelector(".shot-quick-fields");
+    if (quickFields) quickFields.hidden = !clip.options.quickMode;
     const inset = view.querySelector(".shot-video-camera");
     inset.hidden = !clip.options.camera;
     inset.dataset.corner = clip.options.corner || 0;
+    inset.dataset.size = clip.options.cameraSize ?? 1;
     inset.classList.toggle("round", !!clip.options.circle);
+    inset.classList.toggle("mirrored", clip.options.mirror !== false);
+    const annBar = view.querySelector(".shot-live-annotate-bar");
+    if (annBar) annBar.hidden = !(clip.annotating && (live || paused));
     view.querySelector(".shot-video-trim").hidden = !review;
     const mixer = view.querySelector(".shot-video-mixer");
-    mixer.hidden = !review || !["system", "mic", "mouse", "keys"].some(key => clip.options[key]);
+    mixer.hidden = !review;
     mixer.querySelectorAll("[data-track],[data-effect]").forEach(row => row.hidden = !clip.options[row.dataset.track || row.dataset.effect]);
+    const cropBox = view.querySelector(".shot-crop-box");
+    const crops = ["左", "上", "右", "下"].map(side => Math.max(0, Number(view.querySelector(`[data-crop="${side}"]`)?.value || 0)));
+    const hasCrop = crops.some(v => v > 0);
+    if (cropBox) {
+      cropBox.hidden = !review;
+      cropBox.dataset.cropped = String(hasCrop);
+      cropBox.style.inset = review ? `${Math.min(40, crops[1])}px ${Math.min(40, crops[2])}px ${Math.min(40, crops[3])}px ${Math.min(40, crops[0])}px` : "0";
+    }
+    const trimSpan = view.querySelector(".shot-trim-span");
+    if (trimSpan && clip.elapsed > 0) {
+      const sPct = clamp(clip.trimStart / clip.elapsed, 0, 1) * 100;
+      const ePct = clamp((clip.trimEnd || clip.elapsed) / clip.elapsed, 0, 1) * 100;
+      trimSpan.style.left = sPct + "%";
+      trimSpan.style.width = Math.max(2, ePct - sPct) + "%";
+    }
+    const pStyle = view.querySelector("#shot-progress-style")?.selectedIndex || 0;
+    const pBar = view.querySelector(".shot-progress-bar"), pPill = view.querySelector(".shot-progress-pill");
+    const frac = clip.elapsed > 0 ? clamp(clip.position / clip.elapsed, 0, 1) : 0;
+    if (pBar) {
+      pBar.hidden = !(review && pStyle === 1);
+      pBar.firstElementChild.style.width = (frac * 100).toFixed(1) + "%";
+    }
+    if (pPill) {
+      pPill.hidden = !(review && (pStyle === 2 || pStyle === 3));
+      pPill.textContent = formatClock(pStyle === 2 ? clip.position : Math.max(0, clip.elapsed - clip.position));
+    }
     const primary = view.querySelector('[data-shot="video-start"]');
     primary.hidden = stage === "delay";
     const title = review ? (clip.playing ? "暂停播放" : "播放") : live || paused ? "停止录制" : "开始录制";
     primary.textContent = title;
     primary.setAttribute("aria-label", title);
     primary.className = live || paused ? "shot-btn danger-fill" : review ? "shot-btn secondary" : "shot-btn primary";
-    for (const [id, visible] of [["pause", live || paused], ["save", review], ["repeat", review], ["interrupt", live || paused]]) {
+    for (const [id, visible] of [
+      ["pause", live || paused],
+      ["annotate", live || paused],
+      ["redo", live || paused],
+      ["save", review],
+      ["quicksave", review],
+      ["copyfile", review],
+      ["openfolder", review && clip.savedOnce],
+      ["repeat", review],
+      ["interrupt", live || paused]
+    ]) {
       const control = view.querySelector(`[data-shot="video-${id}"]`);
+      if (!control) continue;
       control.hidden = !visible;
       if (id === "pause") {
         control.textContent = paused ? "继续" : "暂停";
         control.setAttribute("aria-label", control.textContent);
       }
+      if (id === "annotate") control.classList.toggle("is-active", !!clip.annotating);
     }
     const label = stage === "delay" ? `${Math.max(1, Math.ceil(clip.left))} 秒后开始录制` :
+      clip.annotating && (live || paused) ? "标注绘制中" :
       live ? "正在录制" : paused ? "已暂停" : review ? "回放" : "就绪";
     view.querySelector("header b").textContent = review ? "录屏回放" : "屏幕录制";
     const status = view.querySelector(".shot-video-status");
     status.textContent = `${label} · ${(review ? clip.position : clip.elapsed).toFixed(1)} 秒 · 离线演示`;
     status.dataset.live = String(live);
     const dot = view.querySelector(".shot-rec-footer .shot-status-dot");
-    if (dot) dot.dataset.state = live ? "danger" : paused || stage === "delay" ? "warning" : review ? "positive" : "accent";
+    if (dot) dot.dataset.state = clip.annotating && (live || paused) ? "accent" : live ? "danger" : paused || stage === "delay" ? "warning" : review ? "positive" : "accent";
     view.querySelector(".shot-video-image").dataset.stage = stage;
     if (clip.frame) {
       clip.frame.hidden = review;
@@ -1496,12 +1608,64 @@ const CapturePreview = (function createPreview() {
     if (!clip) return;
     if (id === "video-close") return closeRecording();
     if (id === "video-repeat") return recordingPanel(clip.shot);
+    if (id === "video-redo") {
+      clearInterval(clip.timer);
+      clip.elapsed = 0;
+      clip.position = 0;
+      clip.liveMarks = [];
+      clip.annotating = false;
+      clip.stage = Number(clip.view.querySelector("#shot-delay").value) ? "delay" : "live";
+      clip.left = Number(clip.view.querySelector("#shot-delay").value);
+      renderLiveAnnotations(clip);
+      recordingClock(clip);
+      updateRecording();
+      return;
+    }
+    if (id === "video-annotate" || id === "video-ann-done") {
+      clip.annotating = !clip.annotating;
+      if (clip.annotating && !clip.liveMarks.length) {
+        const tool = clip.view.querySelector("[data-live-tool].is-active")?.dataset.liveTool || "pen";
+        const color = clip.view.querySelector("[data-live-color].is-active")?.dataset.liveColor || "#e03131";
+        clip.liveMarks.push({ tool, color });
+        renderLiveAnnotations(clip);
+      }
+      updateRecording();
+      return;
+    }
+    if (id === "video-ann-undo") {
+      clip.liveMarks.pop();
+      renderLiveAnnotations(clip);
+      return;
+    }
+    if (id === "video-ann-clear") {
+      clip.liveMarks = [];
+      renderLiveAnnotations(clip);
+      return;
+    }
+    if (id === "video-reset-crop") {
+      clip.view.querySelectorAll("[data-crop]").forEach(el => { el.value = "0"; });
+      clip.view.querySelector("img").style.clipPath = "";
+      updateRecording();
+      return;
+    }
     if (id === "video-interrupt") {
       recoverySample = { shot: clip.shot, elapsed: clip.elapsed, options: { ...clip.options } };
       closeRecording();
       return announce("已留下可恢复的录屏片段");
     }
-    if (id === "video-save") return announce("离线原型已完成导出流程，桌面版生成实际文件");
+    if (id === "video-save" || id === "video-quicksave") {
+      clip.savedOnce = true;
+      updateRecording();
+      announce(id === "video-quicksave" ? "离线演示：已快速保存至 视频\\YXRL" : "离线原型已完成导出流程，桌面版生成实际文件");
+      if (clip.view.querySelector("#shot-close-after")?.checked) closeRecording();
+      return;
+    }
+    if (id === "video-copyfile") {
+      return announce("离线演示：已将导出文件复制到剪贴板");
+    }
+    if (id === "video-openfolder") {
+      return announce("离线演示：将在资源管理器定位输出文件");
+    }
     if (id === "video-pause") clip.stage = clip.stage === "paused" ? "live" : "paused";
     if (id === "video-start") {
       if (clip.stage === "ready") {
@@ -1516,9 +1680,16 @@ const CapturePreview = (function createPreview() {
           closeRecording();
           return announce("离线演示：快速录制已完成");
         }
+        clip.annotating = false;
         clip.stage = "review";
+        clip.trimStart = 0;
+        clip.trimEnd = clip.elapsed;
+        clip.view.querySelector("#shot-video-start-sec").value = "0";
         clip.view.querySelector("#shot-video-end").value = clip.elapsed.toFixed(1);
         clip.view.querySelector("#shot-playhead").max = clip.elapsed.toFixed(1);
+        clip.view.querySelector("#shot-trim-start").max = clip.elapsed.toFixed(1);
+        clip.view.querySelector("#shot-trim-end").max = clip.elapsed.toFixed(1);
+        clip.view.querySelector("#shot-trim-end").value = clip.elapsed.toFixed(1);
         const save = clip.view.querySelector('[data-shot="video-save"]');
         save.hidden = false;
         save.focus();
@@ -1534,18 +1705,27 @@ const CapturePreview = (function createPreview() {
       if (clip.stage === "delay" && (clip.left -= delta) <= 0) clip.stage = "live";
       else if (clip.stage === "live") clip.elapsed += delta;
       else if (clip.stage === "review" && clip.playing) {
-        clip.position = Math.min(clip.elapsed, clip.position + delta * parseFloat(clip.view.querySelector("#shot-speed").value));
-        if (clip.position >= clip.elapsed) clip.playing = false;
+        clip.position = Math.min(clip.trimEnd || clip.elapsed, clip.position + delta * parseFloat(clip.view.querySelector("#shot-speed").value));
+        if (clip.position >= (clip.trimEnd || clip.elapsed)) clip.playing = false;
       } else if (clip.stage === "paused" || clip.stage === "review") return;
       updateRecording();
     }, 100);
   }
   function closeScroll() {
-    scrollClip?.view.remove();
+    if (!scrollClip) return;
+    clearInterval(scrollClip.autoTimer);
+    scrollClip.frame?.remove();
+    scrollClip.view.remove();
     scrollClip = null;
   }
   function scrollingPanel(shot) {
     closeScroll();
+    const frame = shot?.rect ? createRecordFrame(shot.rect) : null;
+    if (frame) {
+      frame.dataset.stage = "scrolling";
+      const badge = frame.querySelector(".shot-record-badge");
+      if (badge) badge.textContent = "长截图区域";
+    }
     const view = element("section", "shot-recorder", desk());
     view.setAttribute("aria-label", "长截图演示");
     view.innerHTML = `<header><div class="shot-col-title"><b>长截图</b><span class="shot-count-pill" id="shot-scroll-count">1 屏</span></div>${button("scroll-close", "关闭长截图", glyphs.close, "shot-btn shot-tool-icon")}</header>
@@ -1560,7 +1740,7 @@ const CapturePreview = (function createPreview() {
       </div>
       <div class="shot-panel-footer shot-rec-footer">
         <div class="shot-status-wrap"><i class="shot-status-dot" data-state="positive" aria-hidden="true"></i><p class="shot-video-status" role="status"></p></div>
-        <div class="shot-row">${button("scroll-add", "拼接下一屏", "拼接下一屏", "shot-btn secondary")}${button("scroll-finish", "完成长截图", "完成长截图", "shot-btn primary")}</div>
+        <div class="shot-row">${button("scroll-add", "拼接下一屏", "拼接下一屏", "shot-btn secondary")}${button("scroll-auto", "自动滚动", "自动滚动", "shot-btn secondary")}${button("scroll-reset", "清空重截", "清空重截", "shot-btn secondary")}${button("scroll-finish", "完成长截图", "完成长截图", "shot-btn primary")}${button("scroll-copy", "复制长截图", "复制", "shot-btn secondary")}${button("scroll-save", "保存长截图", "保存", "shot-btn secondary")}</div>
       </div>`;
     const images = view.querySelector(".shot-scroll-source");
     for (let page = 1; page <= 5; page++) {
@@ -1575,19 +1755,27 @@ const CapturePreview = (function createPreview() {
       canvasPreview.setAttribute("aria-label", "示例第 " + page + " 屏");
       images.append(canvasPreview);
     }
-    scrollClip = { view, images, horizontal: false, shot, page: 0 };
+    scrollClip = { view, frame, images, horizontal: false, shot, page: 0, autoRolling: false, autoTimer: null };
     function update() {
       const n = scrollClip.page + 1;
       const badge = view.querySelector("#shot-scroll-count");
       if (badge) badge.textContent = `${n} 屏`;
       view.querySelector("p").textContent = `${n} 屏已拼接 · 离线演示`;
+      const autoBtn = view.querySelector('[data-shot="scroll-auto"]');
+      if (autoBtn) {
+        autoBtn.textContent = scrollClip.autoRolling ? "停止滚动" : "自动滚动";
+        autoBtn.classList.toggle("is-active", scrollClip.autoRolling);
+      }
+      if (scrollClip.frame) {
+        const fb = scrollClip.frame.querySelector(".shot-record-badge");
+        if (fb) fb.textContent = scrollClip.autoRolling ? "自动滚动中 · 按 A 停止" : "长截图区域";
+      }
     }
+    scrollClip.update = update;
     view.querySelector("select").onchange = ev => {
       scrollClip.horizontal = ev.target.selectedIndex === 1;
       images.classList.toggle("horizontal", scrollClip.horizontal);
-      scrollClip.page = 0;
-      images.scrollTo(0, 0);
-      update();
+      scrollAction("scroll-reset");
     };
     images.onscroll = () => {
       if (!view.querySelector("#shot-scroll-auto").checked) return;
@@ -1597,20 +1785,49 @@ const CapturePreview = (function createPreview() {
       update();
     };
     update();
+    positionRecorder(view, shot?.rect, "ready");
     images.focus();
   }
   function scrollAction(id) {
     if (!scrollClip) return;
     if (id === "scroll-close") return closeScroll();
     const { view, images, horizontal, shot } = scrollClip;
+    if (id === "scroll-reset") {
+      clearInterval(scrollClip.autoTimer);
+      scrollClip.autoRolling = false;
+      scrollClip.page = 0;
+      images.scrollTo(0, 0);
+      scrollClip.update?.();
+      view.querySelector("p").textContent = "已清空重截 · 1 屏已就绪";
+      return;
+    }
+    if (id === "scroll-auto") {
+      scrollClip.autoRolling = !scrollClip.autoRolling;
+      clearInterval(scrollClip.autoTimer);
+      if (scrollClip.autoRolling) {
+        scrollClip.autoTimer = setInterval(() => {
+          if (!scrollClip || scrollClip.page >= 4) {
+            clearInterval(scrollClip?.autoTimer);
+            if (scrollClip) { scrollClip.autoRolling = false; scrollClip.update?.(); }
+            return;
+          }
+          scrollClip.page++;
+          const span = horizontal ? images.firstElementChild.offsetWidth : images.firstElementChild.offsetHeight;
+          images.scrollTo(horizontal ? span * scrollClip.page : 0, horizontal ? 0 : span * scrollClip.page);
+          scrollClip.update?.();
+        }, 420);
+      }
+      scrollClip.update?.();
+      return;
+    }
     if (id === "scroll-add") {
       const position = horizontal ? images.scrollLeft : images.scrollTop;
       const span = horizontal ? images.firstElementChild.offsetWidth : images.firstElementChild.offsetHeight;
       scrollClip.page = Math.min(4, Math.max(scrollClip.page, Math.round(position / span)));
-      const n = scrollClip.page + 1;
-      const badge = view.querySelector("#shot-scroll-count");
-      if (badge) badge.textContent = `${n} 屏`;
-      view.querySelector("p").textContent = `${n} 屏已拼接 · 离线演示`;
+      scrollClip.update?.();
+    }
+    if (id === "scroll-copy" || id === "scroll-save") {
+      return announce(id === "scroll-copy" ? `离线演示：已复制 ${scrollClip.page + 1} 屏长截图` : `离线演示：已保存 ${scrollClip.page + 1} 屏 PNG`);
     }
     if (id === "scroll-finish") {
       const count = scrollClip.page + 1;
@@ -1800,7 +2017,18 @@ const CapturePreview = (function createPreview() {
       finish();
       return recordingPanel(shot, null, rect);
     }
-    if (id === "scroll" && ed && !ed.pin) { finish(); return scrollingPanel(shot); }
+    if (id === "scroll" && ed && !ed.pin) {
+      const box = ed.c.getBoundingClientRect(), d = desk().getBoundingClientRect();
+      const sx = box.width / ed.c.width, sy = box.height / ed.c.height;
+      shot.rect = {
+        x: Math.round(box.left - d.left + ed.sel.x * sx),
+        y: Math.round(box.top - d.top + ed.sel.y * sy),
+        w: Math.round(ed.sel.w * sx),
+        h: Math.round(ed.sel.h * sy),
+      };
+      finish();
+      return scrollingPanel(shot);
+    }
     if (id === "apply") {
       ed.pin.shot = shot;
       ed.pin.redrawPin();
@@ -1873,6 +2101,11 @@ const CapturePreview = (function createPreview() {
       );
     if (base === "Escape" && (editor || panel || menu || pin || recordingClip || scrollClip))
       id = scrollClip ? "scroll-close" : recordingClip ? "video-close" : panel ? "close-panel" : menu ? "menu" : "close";
+    if (!id && scrollClip && chord === "A" && !ev.repeat) {
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      return scrollAction("scroll-auto");
+    }
     if (!id && editor?.sel && (chord === "Shift+4" || chord === "Shift+8"))
       id = chord === "Shift+4" ? "number" : "text";
     if (!id && editor && !editor.pin && base === "F5") id = "refresh";
