@@ -26,8 +26,9 @@ internal static class CaptureChecks
         var store = new SettingsStore(dir.FullName);
         File.WriteAllText(store.FilePath, """{"schemaVersion":1,"clock":{"futureKey":1},"capture":{"futureOption":12}}""");
         store.Load();
-        Check(store.ReadError is null && store.Current.Capture.Shortcuts.Start == "Ctrl+1", "旧配置默认值");
-        var shortcuts = new ShotShortcuts(Start: "Ctrl+Alt+F9", Ocr: "");
+        Check(store.ReadError is null && store.Current.Capture.Shortcuts.Start == "Ctrl+1" &&
+            store.Current.Capture.Shortcuts.Record == "G" && store.Current.Capture.Shortcuts.LongShot == "L", "旧配置默认值");
+        var shortcuts = new ShotShortcuts(Start: "Ctrl+Alt+F9", Ocr: "", Record: "", LongShot: "F8");
         var changed = store.Current with
         {
             Capture = new CaptureOptions
@@ -55,6 +56,8 @@ internal static class CaptureChecks
         }
 
         await Task.Run(() => Sta(() => CheckImages(dir.FullName, args)));
+        if (args.Contains("--recording"))
+            await Task.Run(() => Sta(() => RecordingChecks.Verify(dir.FullName)));
         if (args.Contains("--capture-windows") || args.Contains("--capture-ui"))
             await Task.Run(() => Sta(() => CaptureWindowsChecks.Verify(dir.FullName, args)));
         await CheckTranslation();
@@ -111,6 +114,8 @@ internal static class CaptureChecks
     private static void CheckImages(string directory, string[] args)
     {
         CheckClipboardImage(directory);
+        CheckEditableMarks();
+        CheckScrollStitch();
         var image = TestImage();
         var doc = new ShotDocument(image);
         var frame = new DesktopFrame(image, new(-420, -10, 140, 120), [new(-370, 0, -120, 95)]);
@@ -173,6 +178,62 @@ internal static class CaptureChecks
             Check(recognized.Contains("screenshot", StringComparison.OrdinalIgnoreCase) && recognized.Contains("toolbar", StringComparison.OrdinalIgnoreCase), "示例英文识别");
             Console.WriteLine($"实图识别 {bmp.PixelWidth}×{bmp.PixelHeight}，命中 screenshot 和 toolbar，共 {recognized.Length} 字符。");
         }
+    }
+
+    private static void CheckEditableMarks()
+    {
+        var doc = new ShotDocument(TestImage());
+        for (int i = 1; i <= 3; i++)
+        {
+            Check(doc.NextNumber == i, "序号自动递增");
+            doc.Add(new(MarkKind.Number, [new(i * 80, 40)], Number: doc.NextNumber));
+        }
+        var second = doc.EditableAt(MarkKind.Number, new Point(160, 40));
+        Check(second?.Number == 2, "序号可选中");
+        doc.Replace(second!, second!.Offset(0, 40));
+        Check(doc.EditableAt(MarkKind.Number, new Point(160, 80))?.Number == 2, "可移动序号");
+        var text = new ShotMark(MarkKind.Text, [new(10, 64)], "添加中文\nSecond line", Style: new(Colors.Blue, 18, true, true));
+        doc.Add(text);
+        Check(doc.EditableBounds(text).Height > 36, "多行文字换行");
+        doc.Replace(text, text with { Text = "修改说明" });
+        doc.Undo();
+        Check(doc.EditableAt(MarkKind.Text, new Point(14, 95))?.Text == text.Text, "文字修改可撤销");
+        doc.Redo();
+        Check(doc.EditableAt(MarkKind.Text, new Point(14, 72))?.Text == "修改说明", "文字修改可重做");
+        var crop = doc.Crop(new(20, 20, 280, 110));
+        Check(crop.EditableAt(MarkKind.Number, new Point(60, 20))?.Number == 1 && crop.NextNumber == 4,
+            "贴图保留编号和图像坐标");
+        byte[] center = new byte[4];
+        new FormatConvertedBitmap(crop.RenderForExport(), PixelFormats.Bgra32, null, 0)
+            .CopyPixels(new Int32Rect(53, 20, 1, 1), center, 4, 0);
+        Check(center.SequenceEqual(new byte[] { 47, 64, 212, 255 }), "导出像素中包含序号");
+    }
+
+    private static void CheckScrollStitch()
+    {
+        const int width = 89, height = 71;
+        var rng = new Random(1427);
+        var buffer = new byte[width * height * 4];
+        rng.NextBytes(buffer);
+        var image = BitmapSource.Create(width, height, 96, 96, PixelFormats.Bgr32, null, buffer, width * 4);
+        void Verify(bool horizontal, Int32Rect viewport, int offset)
+        {
+            var capture = new ScrollStitch(horizontal);
+            var first = new CroppedBitmap(image, viewport);
+            var next = new CroppedBitmap(image, new Int32Rect(horizontal ? offset : 0, horizontal ? 0 : offset,
+                viewport.Width, viewport.Height));
+            Check(capture.Append(first) == StitchResult.Added && capture.Append(first) == StitchResult.Unchanged, "长截图识别未滚动的重复帧");
+            Check(capture.Append(next) == StitchResult.Added, "长截图未识别重叠区域");
+            var merged = capture.Finish();
+            Check(merged.PixelWidth == viewport.Width + (horizontal ? offset : 0) &&
+                merged.PixelHeight == viewport.Height + (horizontal ? 0 : offset), "拼接长度");
+            byte[] expected = new byte[merged.PixelWidth * merged.PixelHeight * 4], actual = new byte[expected.Length];
+            image.CopyPixels(new Int32Rect(0, 0, merged.PixelWidth, merged.PixelHeight), expected, merged.PixelWidth * 4, 0);
+            merged.CopyPixels(actual, merged.PixelWidth * 4, 0);
+            Check(expected.Where((_, i) => i % 4 != 3).SequenceEqual(actual.Where((_, i) => i % 4 != 3)), "拼接像素");
+        }
+        Verify(false, new Int32Rect(0, 0, 64, 42), 17);
+        Verify(true, new Int32Rect(0, 0, 64, 42), 21);
     }
 
     private static void CheckClipboardImage(string directory)

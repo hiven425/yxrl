@@ -13,6 +13,8 @@ internal sealed class CaptureTools : IDisposable
     private readonly SettingsStore settings;
     private readonly HashSet<Window> windows = [];
     private ShotWindow? selection;
+    private RecordingWindow? recorder;
+    private ScrollWindow? scrolling;
     public ShotHotkeys Hotkeys { get; }
     public OcrReader Ocr { get; }
     public TranslationService Translator { get; } = new();
@@ -55,6 +57,7 @@ internal sealed class CaptureTools : IDisposable
             switch (action)
             {
                 case ShotAction.Start:
+                case ShotAction.Record:
                     if (selection is not null)
                     {
                         selection.Activate();
@@ -62,7 +65,7 @@ internal sealed class CaptureTools : IDisposable
                     }
 
                     var frame = DesktopFrame.Freeze();
-                    selection = new(this, new(frame.Image), frame);
+                    selection = new(this, new(frame.Image), frame, recordingSelection: action == ShotAction.Record);
                     Show(selection);
                     break;
                 case ShotAction.Clipboard:
@@ -83,6 +86,54 @@ internal sealed class CaptureTools : IDisposable
         {
             Feedback("打开截图工具失败。" + ex.Message);
         }
+    }
+
+    internal void OpenRecorder(ShotWindow owner, PixelRect area)
+    {
+        var even = area with { Right = area.Right - area.Width % 2, Bottom = area.Bottom - area.Height % 2 };
+        if (even.Width < Mp4Writer.MinimumEdge || even.Height < Mp4Writer.MinimumEdge)
+        {
+            Feedback($"录制区域至少需要 {Mp4Writer.MinimumEdge} × {Mp4Writer.MinimumEdge} 像素。请扩大选区。");
+            return;
+        }
+        owner.Close();
+        OpenRecording(even);
+    }
+
+    private void OpenRecording(PixelRect area)
+    {
+        if (!Options.Enabled)
+        {
+            Feedback("截图工具已关闭，可在「截图与翻译」设置中开启。");
+            return;
+        }
+        if (recorder is not null)
+        {
+            recorder.Activate();
+            return;
+        }
+        var window = new RecordingWindow(area, clip => Show(new RecordingPreview(clip, () => OpenRecording(area))));
+        recorder = window;
+        window.Closed += (_, _) => recorder = null;
+        Show(window);
+    }
+
+    internal void OpenScroll(ShotWindow owner, PixelRect area)
+    {
+        if (area.Width < 32 || area.Height < 32)
+        {
+            Feedback("长截图区域至少需要 32 × 32 像素。请扩大选区。");
+            return;
+        }
+        owner.Close();
+        if (scrolling is not null)
+        {
+            scrolling.Activate();
+            return;
+        }
+        scrolling = new ScrollWindow(area, image => Show(new ShotWindow(this, new ShotDocument(image))));
+        scrolling.Closed += (_, _) => scrolling = null;
+        Show(scrolling);
     }
 
     internal static BitmapSource? ReadClipboardImage(IDataObject? data)
@@ -225,7 +276,12 @@ internal sealed class CaptureTools : IDisposable
     {
         Hotkeys.Dispose();
         foreach (var win in windows.ToArray())
-            win.Close();
+            switch (win)
+            {
+                case RecordingWindow recording: recording.Shutdown(); break;
+                case RecordingPreview preview: preview.Shutdown(); break;
+                default: win.Close(); break;
+            }
         Ocr.Dispose();
         Translator.Dispose();
     }

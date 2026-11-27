@@ -7,6 +7,8 @@ const CapturePreview = (function createPreview() {
     pin: "Ctrl+T",
     ocr: "Shift+C",
     translate: "Ctrl+Q",
+    record: "G",
+    scroll: "L",
   };
   const labels = {
     start: "开始截图",
@@ -14,19 +16,28 @@ const CapturePreview = (function createPreview() {
     pin: "钉住选区",
     ocr: "提取文字",
     translate: "打开翻译",
+    record: "录制屏幕",
+    scroll: "滚动长截图",
   };
   const names = {
     rect: "矩形",
+    ellipse: "椭圆",
     arrow: "箭头",
+    line: "线段",
     pen: "画笔",
-    text: "文字",
+    highlight: "荧光笔",
+    text: "添加文字",
+    number: "序号",
     mosaic: "马赛克",
   };
   const glyphs = {
     rect: "□",
+    ellipse: "○",
     arrow: "↗",
+    line: "／",
     pen: "✎",
-    text: "T",
+    text: "文字",
+    highlight: "荧光",
     mosaic: "▦",
     undo: "↶",
     redo: "↷",
@@ -37,6 +48,8 @@ const CapturePreview = (function createPreview() {
     ocr: "提取文字",
     translate: "翻译",
     pin: "钉住",
+    scroll: "长截图",
+    record: "录屏",
     save: "保存",
     copy: "复制",
     close: "取消",
@@ -54,6 +67,8 @@ const CapturePreview = (function createPreview() {
     clipboard,
     editor,
     recording,
+    recordingClip,
+    scrollClip,
     menu,
     panel,
     announce,
@@ -61,6 +76,8 @@ const CapturePreview = (function createPreview() {
   const pins = new Set();
   function reset() {
     finish();
+    closeRecording();
+    closeScroll();
     panel?.remove();
     panel = null;
     menu?.remove();
@@ -158,27 +175,65 @@ const CapturePreview = (function createPreview() {
       b = m.points.at(-1),
       r = rectangle(a, b);
     g.save();
-    g.lineWidth = 3;
-    g.strokeStyle = g.fillStyle = "#cd422f";
+    const color = m.color || "#d4402f";
+    const size = m.size || (m.kind === "text" ? 20 : m.kind === "number" ? 28 : m.kind === "highlight" ? 18 : 3);
+    g.lineWidth = size;
+    g.strokeStyle = g.fillStyle = color;
     g.lineCap = "round";
     if (m.kind === "rect") g.strokeRect(r.x, r.y, r.w, r.h);
-    if (m.kind === "pen" || m.kind === "arrow") {
+    if (m.kind === "ellipse" && r.w && r.h) {
+      g.beginPath();
+      g.ellipse(r.x + r.w / 2, r.y + r.h / 2, r.w / 2, r.h / 2, 0, 0, Math.PI * 2);
+      g.stroke();
+    }
+    if (["pen", "arrow", "line", "highlight"].includes(m.kind)) {
+      if (m.kind === "highlight") g.globalAlpha = .35;
       g.beginPath();
       g.moveTo(a.x, a.y);
       for (const p of m.points.slice(1)) g.lineTo(p.x, p.y);
       g.stroke();
-      if (m.kind === "arrow") {
-        let t = Math.atan2(b.y - a.y, b.x - a.x);
-        g.beginPath();
-        g.moveTo(b.x, b.y);
-        g.lineTo(b.x - 14 * Math.cos(t - 0.45), b.y - 14 * Math.sin(t - 0.45));
-        g.lineTo(b.x - 14 * Math.cos(t + 0.45), b.y - 14 * Math.sin(t + 0.45));
-        g.fill();
-      }
+      if (m.kind === "arrow") arrowHead(g, a, b);
     }
     if (m.kind === "text") {
-      g.font = "bold 18px Segoe UI, Microsoft YaHei UI";
-      g.fillText(m.label || "", a.x, a.y + 17);
+      const lines = m.label.split("\n");
+      g.font = markFont(m, size);
+      const box = markBounds(g, m);
+      if (m.background) {
+        g.fillStyle = color === "#fff" || color === "#f8c226" ? "#172530" : "#fff";
+        g.fillRect(box.x, box.y, box.w, box.h);
+      }
+      g.fillStyle = color;
+      lines.forEach((line, i) => {
+        const y = a.y + size + i * size * 1.25;
+        if (m.outline) {
+          g.lineWidth = 2;
+          g.strokeStyle = color === "#fff" ? "#172530" : "#fff";
+          g.strokeText(line, a.x + 4, y);
+        }
+        g.fillText(line, a.x + 4, y);
+      });
+    }
+    if (m.kind === "number") {
+      if (Math.hypot(b.x - a.x, b.y - a.y) > size / 2 + 5) {
+        g.lineWidth = Math.max(2, size / 10);
+        g.beginPath(); g.moveTo(a.x, a.y); g.lineTo(b.x, b.y); g.stroke();
+        arrowHead(g, a, b);
+      }
+      g.beginPath();
+      if (m.square) g.roundRect(a.x - size / 2, a.y - size / 2, size, size, size / 5);
+      else g.arc(a.x, a.y, size / 2, 0, 2 * Math.PI);
+      g.fill();
+      g.fillStyle = ["#fff", "#f8c226"].includes(color) ? "#172530" : "#fff";
+      g.textAlign = "center";
+      g.textBaseline = "middle";
+      g.font = `bold ${size * Math.min(.54, 1.35 / String(m.number).length)}px Segoe UI`;
+      g.fillText(m.number, a.x, a.y);
+      if (m.label) {
+        g.textAlign = "start";
+        g.textBaseline = "alphabetic";
+        paint(g, { ...m, kind: "text", points: [{ x: a.x + size / 2 + 5, y: a.y - size / 2 }],
+          size: Math.max(10, Math.round(size * .55)), background: true });
+      }
     }
     if (m.kind === "mosaic" && r.w && r.h) {
       const tmp = canvas(Math.ceil(r.w / 10), Math.ceil(r.h / 10));
@@ -200,20 +255,53 @@ const CapturePreview = (function createPreview() {
     }
     g.restore();
   }
+  function arrowHead(g, a, b) {
+    const angle = Math.atan2(b.y - a.y, b.x - a.x);
+    g.beginPath();
+    g.moveTo(b.x, b.y);
+    g.lineTo(b.x - 14 * Math.cos(angle - .45), b.y - 14 * Math.sin(angle - .45));
+    g.lineTo(b.x - 14 * Math.cos(angle + .45), b.y - 14 * Math.sin(angle + .45));
+    g.fill();
+  }
+  function markBounds(g, m) {
+    const [a] = m.points, size = m.size || (m.kind === "text" ? 20 : 28);
+    if (m.kind === "number") return { x: a.x - size / 2, y: a.y - size / 2, w: size, h: size };
+    g.save();
+    g.font = markFont(m, size);
+    const lines = m.label.split("\n");
+    const w = Math.max(...lines.map(line => g.measureText(line).width)) + 8;
+    g.restore();
+    return { x: a.x, y: a.y, w, h: lines.length * size * 1.25 };
+  }
+  const markFont = (mark, size) => `${mark.italic ? "italic " : ""}${mark.bold ? "bold " : ""}${size}px ${mark.font || "Segoe UI, Microsoft YaHei UI"}`;
+  const nextNumber = ed => ed.next || Math.min(9999, Math.max(0, ...ed.marks.map(m => m.number || 0)) + 1);
+  function changeMarks(ed, next) {
+    ed.undo.push(ed.marks);
+    ed.marks = next;
+    ed.redo = [];
+  }
+  function editMark(ed, before, after) {
+    changeMarks(ed, after ? ed.marks.map(m => m === before ? after : m) : ed.marks.filter(m => m !== before));
+    ed.selected = after;
+  }
   function flat(ed) {
     const r = ed.sel,
       image = canvas(r.w, r.h),
       g = image.getContext("2d");
     g.drawImage(ed.source.image, r.x, r.y, r.w, r.h, 0, 0, r.w, r.h);
+    const original = canvas(r.w, r.h);
+    original.getContext("2d").drawImage(image, 0, 0);
     g.translate(-r.x, -r.y);
     ed.marks.forEach((m) => paint(g, m, r));
     const masks = ed.marks
       .filter((m) => m.kind === "mosaic")
       .map((m) => rectangle(m.points[0], m.points.at(-1)));
-    const words = ed.source.words
-      .filter((s) => overlaps(r, s) && !masks.some((m) => overlaps(m, s)))
+    const originalWords = ed.source.words.filter(s => overlaps(r, s));
+    const localWords = list => list
       .map((s) => ({ ...s, x: s.x - r.x, y: s.y - r.y }));
-    return { image, words };
+    return { image, words: localWords(originalWords.filter(s => !masks.some(m => overlaps(m, s)))),
+      original: { image: original, words: localWords(originalWords) },
+      marks: ed.marks.map(m => ({ ...m, points: m.points.map(p => ({ x: p.x - r.x, y: p.y - r.y })) })) };
   }
   function handles(r) {
     return ["nw", "n", "ne", "w", "e", "sw", "s", "se"].map((k) => ({
@@ -238,8 +326,14 @@ const CapturePreview = (function createPreview() {
     g.beginPath();
     g.rect(r.x, r.y, r.w, r.h);
     g.clip();
-    ed.marks.forEach((m) => paint(g, m));
-    if (ed.pending) paint(g, ed.pending);
+    ed.marks.forEach(m => paint(g, m === ed.selected && ed.moving && ed.pending ? ed.pending : m));
+    if (ed.pending && !ed.moving) paint(g, ed.pending);
+    if (ed.selected) {
+      const box = markBounds(g, ed.pending || ed.selected);
+      g.lineWidth = 1;
+      g.strokeStyle = "#168be2";
+      g.strokeRect(box.x, box.y, box.w, box.h);
+    }
     g.restore();
     if (!ed.pin) {
       g.fillStyle = "#1018208c";
@@ -257,6 +351,18 @@ const CapturePreview = (function createPreview() {
       }
     }
     info.textContent = `${r.x}, ${r.y}   ·   ${r.w} × ${r.h} px`;
+    ed.styles.hidden = !["text", "number"].includes(ed.tool);
+    ed.styles.querySelectorAll("[data-mark-kind]").forEach(control => control.hidden = control.dataset.markKind !== ed.tool);
+    const count = ed.styles.querySelector("#shot-serial");
+    if (document.activeElement !== count) count.value = ed.selected?.number || nextNumber(ed);
+    ed.styles.querySelector("#shot-serial-label").textContent = ed.selected ? "当前号" : "下一号";
+    const configured = ed.selected || ed.appearance;
+    ed.styles.querySelector('[data-shot="number-note"]').hidden = !ed.selected || ed.selected.kind !== "number";
+    for (const key of ["color", "size", "font", "bold", "italic", "outline", "background", "square"]) {
+      const control = ed.styles.querySelector(`[data-appearance="${key}"]`);
+      if (control.type === "checkbox") control.checked = !!configured[key];
+      else control.value = configured[key] || ({ color: "#d4402f", size: ed.tool === "number" ? 28 : 20, font: "" })[key];
+    }
     const view = c.getBoundingClientRect(),
       scaleX = view.width / c.width,
       scaleY = view.height / c.height;
@@ -297,18 +403,30 @@ const CapturePreview = (function createPreview() {
     layer.tabIndex = -1;
     layer.setAttribute("aria-label", "截图选区");
     const source = pin
-        ? pin.shot
+        ? pin.shot.original
         : sample(layer.clientWidth, layer.clientHeight),
       c = canvas(source.image.width, source.image.height);
     layer.append(c);
     const info = element("output", "shot-info", layer),
       bar = element("div", "shot-bar", layer);
-    bar.setAttribute("role", "toolbar");
-    bar.innerHTML =
+    const choices = element("div", "shot-tool-buttons", bar);
+    choices.setAttribute("role", "toolbar");
+    choices.innerHTML =
       Object.entries({ ...names, ...actions })
-        .filter(([k]) => !pin || k !== "pin")
+        .filter(([k]) => !pin || !["pin", "record", "scroll"].includes(k))
         .map(([k, v]) => button(k, v, glyphs[k] || v))
         .join("") + (pin ? button("apply", "完成标注") : "");
+    const styles = element("div", "shot-style-options", bar);
+    styles.innerHTML = `<label data-mark-kind="number"><span id="shot-serial-label">下一号</span> <input id="shot-serial" type="number" min="1" max="9999" aria-label="标注序号"></label>
+      <label>颜色 <select data-appearance="color" aria-label="标注颜色"><option value="#d4402f">红</option><option value="#1967ba">蓝</option><option value="#087960">绿</option><option value="#f8c226">黄</option><option value="#fff">白</option><option value="#000">黑</option></select></label>
+      <label>大小 <select data-appearance="size" aria-label="标注大小">${[12,16,20,24,28,32,40,48,64,80].map(value => `<option>${value}</option>`).join("")}</select></label>
+      <label data-mark-kind="text">字体 <select data-appearance="font" aria-label="标注字体"><option value="">系统字体</option><option>Segoe UI</option><option>Microsoft YaHei UI</option><option>Consolas</option></select></label>
+      <label data-mark-kind="text"><input type="checkbox" data-appearance="bold"> 粗体</label>
+      <label data-mark-kind="text"><input type="checkbox" data-appearance="italic"> 斜体</label>
+      <label data-mark-kind="text"><input type="checkbox" data-appearance="outline"> 描边</label>
+      <label data-mark-kind="text"><input type="checkbox" data-appearance="background"> 背景</label>
+      <label data-mark-kind="number"><input type="checkbox" data-appearance="square"> 方形</label>
+      ${button("number-note", "编辑编号说明", "编号说明")}`;
     editor = {
       pin,
       layer,
@@ -316,11 +434,31 @@ const CapturePreview = (function createPreview() {
       source,
       info,
       bar,
-      marks: [],
+      styles,
+      marks: pin?.shot.marks || [],
+      undo: [],
       redo: [],
       sel: pin ? { x: 0, y: 0, w: c.width, h: c.height } : null,
       tool: null,
       pending: null,
+      selected: null,
+      appearance: {},
+      next: null,
+    };
+    styles.onchange = ev => {
+      const ed = editor, input = ev.target, key = input.dataset.appearance;
+      if (input.id === "shot-serial") {
+        const number = Number(input.value);
+        if (Number.isInteger(number) && number >= 1 && number <= 9999) {
+          if (ed.selected) editMark(ed, ed.selected, { ...ed.selected, number });
+          else ed.next = number;
+        }
+      } else if (key) {
+        const value = input.type === "checkbox" ? input.checked : key === "size" ? Number(input.value) : input.value;
+        ed.appearance = { ...ed.appearance, [key]: value };
+        if (ed.selected) editMark(ed, ed.selected, { ...ed.selected, [key]: value });
+      }
+      draw();
     };
     function point(ev) {
       const v = c.getBoundingClientRect();
@@ -342,39 +480,30 @@ const CapturePreview = (function createPreview() {
       const ed = editor,
         p = point(ev),
         r = ed.sel;
-      c.setPointerCapture(ev.pointerId);
       if (ed.tool && inside(r, p)) {
-        if (ed.tool === "text") {
-          const input = element("input", "shot-label", layer);
-          input.setAttribute("aria-label", "标注文字");
-          input.style.left = ev.offsetX + "px";
-          input.style.top = ev.offsetY + "px";
-          input.focus();
-          const commit = () => {
-            if (input.value) {
-              ed.marks.push({ kind: "text", points: [p], label: input.value });
-              ed.redo = [];
-            }
-            input.remove();
+        if (["text", "number"].includes(ed.tool)) {
+          const hit = ed.marks.findLast(m => m.kind === ed.tool && inside(markBounds(c.getContext("2d"), m), p));
+          ed.selected = hit || null;
+          if (hit) {
+            drag = { type: "edit", p };
+            ed.moving = true;
+            c.setPointerCapture(ev.pointerId);
             draw();
-          };
-          input.onkeydown = (k) => {
-            if (k.key === "Enter") {
-              k.preventDefault();
-              commit();
-            }
-            if (k.key === "Escape") {
-              k.stopPropagation();
-              input.remove();
-            }
-          };
+            return;
+          }
+        }
+        if (ed.tool === "text") {
+          textEditor(ed, p);
           return;
         }
-        ed.pending = { kind: ed.tool, points: [p, p] };
+        ed.pending = { ...ed.appearance, kind: ed.tool, points: [p, p], number: ed.tool === "number" ? nextNumber(ed) : 0 };
         drag = { type: "mark", p };
+        c.setPointerCapture(ev.pointerId);
         return;
       }
       if (ed.pin) return;
+      ed.selected = null;
+      c.setPointerCapture(ev.pointerId);
       const h =
         r &&
         handles(r).find(
@@ -387,13 +516,16 @@ const CapturePreview = (function createPreview() {
       };
     };
     c.onpointermove = (ev) => {
+      if (editor) editor.pointer = point(ev);
       if (!drag) return;
       const ed = editor,
         p = point(ev),
         a = drag.p,
         r = drag.r;
-      if (drag.type === "mark") {
-        if (ed.pending.kind === "pen") ed.pending.points.push(p);
+      if (drag.type === "edit") {
+        ed.pending = { ...ed.selected, points: ed.selected.points.map(pt => ({ x: pt.x + p.x - a.x, y: pt.y + p.y - a.y })) };
+      } else if (drag.type === "mark") {
+        if (["pen", "highlight"].includes(ed.pending.kind)) ed.pending.points.push(p);
         else ed.pending.points[1] = p;
       } else if (drag.type === "new") ed.sel = rectangle(a, p);
       else if (drag.type === "move")
@@ -418,9 +550,12 @@ const CapturePreview = (function createPreview() {
       if (!drag) return;
       const ed = editor;
       if (ed.pending) {
-        ed.marks.push(ed.pending);
+        if (ed.moving) editMark(ed, ed.selected, ed.pending);
+        else {
+          changeMarks(ed, [...ed.marks, ed.pending]);
+          if (ed.pending.kind === "number" && ed.next) ed.next = Math.min(9999, ed.next + 1);
+        }
         ed.pending = null;
-        ed.redo = [];
       } else if (
         drag.type === "new" &&
         (!ed.sel || ed.sel.w < 3 || ed.sel.h < 3)
@@ -429,11 +564,47 @@ const CapturePreview = (function createPreview() {
           ? { ...source.window }
           : { x: 0, y: 0, w: c.width, h: c.height };
       }
+      ed.moving = false;
       drag = null;
       draw();
     };
+    c.ondblclick = ev => {
+      const ed = editor;
+      if (!["text", "number"].includes(ed?.tool)) return;
+      const p = point(ev);
+      const hit = ed.marks.findLast(m => m.kind === ed.tool && inside(markBounds(c.getContext("2d"), m), p));
+      if (hit) textEditor(ed, p, hit);
+    };
     layer.focus();
     draw();
+  }
+  function textEditor(ed, point, mark = null) {
+    ed.layer.querySelector(".shot-label")?.remove();
+    const box = element("div", "shot-label", ed.layer);
+    box.style.left = clamp(point.x, 8, ed.layer.clientWidth - 316) + "px";
+    box.style.top = clamp(point.y, 8, ed.layer.clientHeight - 145) + "px";
+    const text = element("textarea", "", box);
+    text.rows = 4;
+    text.maxLength = 4000;
+    text.value = mark?.label || "";
+    text.setAttribute("aria-label", "标注文字");
+    const confirm = element("button", "shot-btn", box);
+    confirm.textContent = "确认文字";
+    confirm.onclick = () => {
+      if (text.value.trim()) {
+        const updated = mark ? { ...mark, label: text.value } : { ...ed.appearance, kind: "text", label: text.value, points: [point] };
+        if (mark) editMark(ed, mark, updated);
+        else changeMarks(ed, [...ed.marks, updated]);
+      } else if (mark) editMark(ed, mark, mark.kind === "number" ? { ...mark, label: "" } : null);
+      box.remove();
+      ed.layer.focus();
+      draw();
+    };
+    text.onkeydown = ev => {
+      if (ev.ctrlKey && ev.key === "Enter") { ev.preventDefault(); confirm.click(); }
+      if (ev.key === "Escape") { box.remove(); ed.layer.focus(); }
+    };
+    text.focus();
   }
   function pinImage(shot) {
     if (!shot) return announce("剪贴板中没有图片");
@@ -499,6 +670,183 @@ const CapturePreview = (function createPreview() {
       shot && !shot.words.length ? "演示选区中没有文字" : "离线演示样例";
     panel.querySelector(translate ? ".shot-language" : ".shot-source").focus();
   }
+  function closeRecording() {
+    if (!recordingClip) return;
+    clearInterval(recordingClip.timer);
+    recordingClip.view.remove();
+    recordingClip = null;
+  }
+  function recordingPanel(shot) {
+    closeRecording();
+    const view = element("section", "shot-recorder", desk());
+    view.setAttribute("aria-label", "屏幕录制演示");
+    view.innerHTML = `<header><b>屏幕录制</b>${button("video-close", "关闭录屏", "×")}</header>
+      <div class="shot-video-image"><img alt="录制区域"><span class="shot-video-position" hidden></span></div>
+      <div class="shot-video-options"><label>帧率 <select id="shot-fps">${[5, 16, 24, 30, 60].map(value => `<option ${value === 24 ? "selected" : ""}>${value}</option>`).join("")}</select></label>
+      <label>延时（秒） <select id="shot-delay">${[0, 1, 2, 3, 5, 10].map(value => `<option>${value}</option>`).join("")}</select></label>
+      <label>模式 <select id="shot-mode"><option>普通录制</option><option>快速保存 MP4</option></select></label>
+      <label><input type="checkbox" checked> 显示光标</label><label><input type="checkbox"> 系统声音</label><label><input type="checkbox"> 麦克风</label></div>
+      <div class="shot-video-trim" hidden><label>回放进度 <input id="shot-playhead" type="range" min="0" step="0.1"></label>
+      <label>开始（秒） <input type="number" min="0" value="0" step=".1"></label><label>结束（秒） <input id="shot-video-end" type="number" min="0" step=".1"></label>
+      <label>倍速 <select id="shot-speed">${[.25,.5,1,1.25,1.5,2].map(speed => `<option ${speed === 1 ? "selected" : ""}>${speed}</option>`).join("")}</select></label>
+      <label>导出格式 <select><option>MP4</option><option>GIF</option><option>WebP</option></select></label>
+      ${["左", "上", "右", "下"].map(side => `<label>裁${side} <input type="number" min="0" value="0" data-crop="${side}"></label>`).join("")}</div>
+      <div class="shot-row">${button("video-start", "开始录制")}${button("video-pause", "暂停")}${button("video-save", "另存为")}${button("video-repeat", "重新录制")}</div>
+      <p class="shot-video-status" role="status"></p>`;
+    view.querySelector("img").src = shot.image.toDataURL();
+    recordingClip = { view, shot, stage: "ready", elapsed: 0, left: 0, position: 0, timer: null };
+    view.querySelector("#shot-playhead").oninput = ev => {
+      recordingClip.position = Number(ev.target.value);
+      updateRecording();
+    };
+    view.querySelector(".shot-video-trim").onchange = () => {
+      const inset = ["上", "右", "下", "左"].map(side => Math.max(0, Number(view.querySelector(`[data-crop="${side}"]`).value)));
+      view.querySelector("img").style.clipPath = `inset(${inset.map(n => n + "px").join(" ")})`;
+    };
+    updateRecording();
+    view.querySelector('[data-shot="video-start"]').focus();
+  }
+  function updateRecording() {
+    const clip = recordingClip, { view, stage } = clip;
+    const paused = stage === "paused", review = stage === "review", live = stage === "live";
+    const playhead = view.querySelector("#shot-playhead");
+    playhead.value = clip.position.toFixed(1);
+    view.querySelector(".shot-video-options").hidden = stage !== "ready";
+    view.querySelector(".shot-video-trim").hidden = !review;
+    const primary = view.querySelector('[data-shot="video-start"]');
+    primary.hidden = stage === "delay";
+    const title = review ? (clip.playing ? "暂停播放" : "播放") : live || paused ? "停止录制" : "开始录制";
+    primary.textContent = title;
+    primary.setAttribute("aria-label", title);
+    for (const [id, visible] of [["pause", live || paused], ["save", review], ["repeat", review]]) {
+      const control = view.querySelector(`[data-shot="video-${id}"]`);
+      control.hidden = !visible;
+      if (id === "pause") {
+        control.textContent = paused ? "继续" : "暂停";
+        control.setAttribute("aria-label", control.textContent);
+      }
+    }
+    const label = stage === "delay" ? `${Math.max(1, Math.ceil(clip.left))} 秒后开始录制` :
+      live ? "正在录制" : paused ? "已暂停" : review ? "回放" : "就绪";
+    view.querySelector("header b").textContent = review ? "录屏回放" : "屏幕录制";
+    const status = view.querySelector(".shot-video-status");
+    status.textContent = `${label} · ${(review ? clip.position : clip.elapsed).toFixed(1)} 秒 · 离线演示`;
+    status.dataset.live = String(live);
+    const marker = view.querySelector(".shot-video-position");
+    marker.hidden = !review && !live && !paused;
+    marker.style.left = 21 + ((review ? clip.position : clip.elapsed) * 12) % 58 + "%";
+    marker.style.top = 48 + Math.sin((review ? clip.position : clip.elapsed) * 1.8) * 12 + "%";
+  }
+  function videoAction(id) {
+    const clip = recordingClip;
+    if (!clip) return;
+    if (id === "video-close") return closeRecording();
+    if (id === "video-repeat") return recordingPanel(clip.shot);
+    if (id === "video-save") return announce("离线原型已完成导出流程，桌面版生成实际文件");
+    if (id === "video-pause") clip.stage = clip.stage === "paused" ? "live" : "paused";
+    if (id === "video-start") {
+      if (clip.stage === "ready") {
+        clip.left = Number(clip.view.querySelector("#shot-delay").value);
+        clip.stage = clip.left ? "delay" : "live";
+        let previous = performance.now();
+        clip.timer = setInterval(() => {
+          const now = performance.now(), delta = (now - previous) / 1000;
+          previous = now;
+          if (clip.stage === "delay" && (clip.left -= delta) <= 0) clip.stage = "live";
+          else if (clip.stage === "live") clip.elapsed += delta;
+          else if (clip.stage === "review" && clip.playing) {
+            clip.position = Math.min(clip.elapsed, clip.position + delta * Number(clip.view.querySelector("#shot-speed").value));
+            if (clip.position >= clip.elapsed) clip.playing = false;
+          } else if (clip.stage === "paused" || clip.stage === "review") return;
+          updateRecording();
+        }, 100);
+      } else if (clip.stage === "review") {
+        if (clip.position >= clip.elapsed) clip.position = 0;
+        clip.playing = !clip.playing;
+      } else if (clip.stage === "live" || clip.stage === "paused") {
+        if (clip.view.querySelector("#shot-mode").selectedIndex === 1) {
+          closeRecording();
+          return announce("离线演示：快速录制已完成");
+        }
+        clip.stage = "review";
+        clip.view.querySelector("#shot-video-end").value = clip.elapsed.toFixed(1);
+        clip.view.querySelector("#shot-playhead").max = clip.elapsed.toFixed(1);
+        const save = clip.view.querySelector('[data-shot="video-save"]');
+        save.hidden = false;
+        save.focus();
+      }
+    }
+    updateRecording();
+  }
+  function closeScroll() {
+    scrollClip?.view.remove();
+    scrollClip = null;
+  }
+  function scrollingPanel(shot) {
+    closeScroll();
+    const view = element("section", "shot-recorder", desk());
+    view.setAttribute("aria-label", "长截图演示");
+    view.innerHTML = `<header><b>长截图</b>${button("scroll-close", "关闭长截图", "×")}</header>
+      <div class="shot-video-options"><label>滚动方向 <select id="shot-scroll-axis"><option>纵向向下</option><option>横向向右</option></select></label>
+      <label><input id="shot-scroll-auto" type="checkbox" checked> 滚动后自动拼接</label></div>
+      <div class="shot-scroll-source" tabindex="0" aria-label="可滚动示例区域"></div>
+      <div class="shot-row">${button("scroll-add", "拼接下一屏")}${button("scroll-finish", "完成长截图")}</div>
+      <p class="shot-video-status" role="status"></p>`;
+    const images = view.querySelector(".shot-scroll-source");
+    for (let page = 1; page <= 5; page++) {
+      const canvasPreview = canvas(shot.image.width, shot.image.height);
+      const g = canvasPreview.getContext("2d");
+      g.drawImage(shot.image, 0, 0);
+      g.font = "bold 16px Segoe UI";
+      g.fillStyle = "#e8f4ff";
+      g.fillRect(8, 8, 79, 25);
+      g.fillStyle = "#174473";
+      g.fillText("第 " + page + " 屏", 17, 26);
+      canvasPreview.setAttribute("aria-label", "示例第 " + page + " 屏");
+      images.append(canvasPreview);
+    }
+    scrollClip = { view, images, horizontal: false, shot, page: 0 };
+    function update() {
+      view.querySelector("p").textContent = `${scrollClip.page + 1} 屏已拼接 · 离线演示`;
+    }
+    view.querySelector("select").onchange = ev => {
+      scrollClip.horizontal = ev.target.selectedIndex === 1;
+      images.classList.toggle("horizontal", scrollClip.horizontal);
+      scrollClip.page = 0;
+      images.scrollTo(0, 0);
+      update();
+    };
+    images.onscroll = () => {
+      if (!view.querySelector("#shot-scroll-auto").checked) return;
+      const position = scrollClip.horizontal ? images.scrollLeft : images.scrollTop;
+      const span = scrollClip.horizontal ? images.firstElementChild.offsetWidth : images.firstElementChild.offsetHeight;
+      scrollClip.page = Math.min(4, Math.max(scrollClip.page, Math.round(position / span)));
+      update();
+    };
+    update();
+    images.focus();
+  }
+  function scrollAction(id) {
+    if (!scrollClip) return;
+    if (id === "scroll-close") return closeScroll();
+    const { view, images, horizontal, shot } = scrollClip;
+    if (id === "scroll-add") {
+      const position = horizontal ? images.scrollLeft : images.scrollTop;
+      const span = horizontal ? images.firstElementChild.offsetWidth : images.firstElementChild.offsetHeight;
+      scrollClip.page = Math.min(4, Math.max(scrollClip.page, Math.round(position / span)));
+      view.querySelector("p").textContent = `${scrollClip.page + 1} 屏已拼接 · 离线演示`;
+    }
+    if (id === "scroll-finish") {
+      const count = scrollClip.page + 1;
+      const w = shot.image.width, h = shot.image.height;
+      const image = canvas(horizontal ? w * count : w, horizontal ? h : h * count);
+      const painter = image.getContext("2d");
+      for (let i = 0; i < count; i++)
+        painter.drawImage(images.children[i], horizontal ? w * i : 0, horizontal ? 0 : h * i);
+      closeScroll();
+      pinImage({ image, words: [], original: { image, words: [] }, marks: [] });
+    }
+  }
   function execute(id, from) {
     const pin = from?.closest(".shot-pin"),
       ed = editor;
@@ -512,6 +860,7 @@ const CapturePreview = (function createPreview() {
       menu.setAttribute("role", "menu");
       menu.innerHTML =
         button("start", "开始截图") +
+        button("video-select", "录制屏幕") +
         button("clipboard", "钉住剪贴板图片") +
         button("manual", "粘贴文字翻译") +
         button("settings", "截图与翻译设置");
@@ -545,15 +894,19 @@ const CapturePreview = (function createPreview() {
       return;
     }
     if (id === "close") {
-      if (ed) finish();
+      if (ed?.selected) { ed.selected = null; draw(); }
+      else if (ed) finish();
       else if (pin) {
         pin.remove();
         pins.delete(pin);
       }
       return;
     }
+    if (id.startsWith("video-") && id !== "video-select") return videoAction(id);
+    if (id.startsWith("scroll-")) return scrollAction(id);
     if (!enabled) return announce("截图工具已关闭");
     if (id === "start") return start();
+    if (id === "video-select") { start(); return announce("选择要录制的区域，再点击录屏"); }
     if (id === "clipboard") return pinImage(clipboard);
     if (id === "edit-pin") return start(pin);
     if (id === "manual") return textPanel(null, false);
@@ -595,18 +948,31 @@ const CapturePreview = (function createPreview() {
     }
     if (names[id] && ed) {
       ed.tool = ed.tool === id ? null : id;
+      ed.appearance = {};
+      ed.selected = null;
       draw();
       return;
     }
+    if (id === "number-note" && ed?.selected?.kind === "number")
+      return textEditor(ed, ed.selected.points[0], ed.selected);
     if (ed && (id === "undo" || id === "redo")) {
-      const a = id === "undo" ? ed.marks : ed.redo,
-        b = id === "undo" ? ed.redo : ed.marks;
-      if (a.length) b.push(a.pop());
+      const a = id === "undo" ? ed.undo : ed.redo,
+        b = id === "undo" ? ed.redo : ed.undo;
+      if (a.length) { b.push(ed.marks); ed.marks = a.pop(); }
+      ed.selected = ed.next = null;
       draw();
       return;
     }
     if (!ed?.sel && !pin) return;
     const shot = ed ? flat(ed) : pin.shot;
+    if (id === "record" && ed && !ed.pin) {
+      finish();
+      return recordingPanel(shot);
+    }
+    if (id === "scroll" && ed && !ed.pin) {
+      finish();
+      return scrollingPanel(shot);
+    }
     if (id === "apply") {
       ed.pin.shot = shot;
       ed.pin.querySelector("img").src = shot.image.toDataURL();
@@ -629,7 +995,7 @@ const CapturePreview = (function createPreview() {
   }
   function keyboard(ev) {
     const target = ev.target,
-      base = ev.key.length === 1 ? ev.key.toUpperCase() : ev.key;
+      base = /^Digit[0-9]$/.test(ev.code) ? ev.code.at(-1) : ev.key.length === 1 ? ev.key.toUpperCase() : ev.key;
     const chord = [
       ev.ctrlKey ? "Ctrl" : "",
       ev.altKey ? "Alt" : "",
@@ -645,7 +1011,9 @@ const CapturePreview = (function createPreview() {
       if (["Control", "Shift", "Alt", "Meta"].includes(base)) return;
       if (base !== "Escape") {
         if (
-          !chord.includes("+") ||
+          (!chord.includes("+") && !["record", "scroll"].includes(recording)) ||
+          !/^(?:(?:Ctrl|Alt|Shift|Win)\+)*(?:[A-Z0-9]|F(?:[1-9]|1[0-9]|2[0-4]))$/.test(chord) ||
+          ["C", "Ctrl+C", "Ctrl+S", "Ctrl+Z", "Ctrl+Y"].includes(chord) ||
           Object.entries(keys).some(
             ([id, key]) => id !== recording && key === chord,
           )
@@ -666,10 +1034,33 @@ const CapturePreview = (function createPreview() {
       Object.keys(keys).find(
         (k) =>
           keys[k] === chord &&
-          (["start", "clipboard"].includes(k) || editor?.sel || pin),
+          (["start", "clipboard"].includes(k) || (["record", "scroll", "pin"].includes(k) ? editor?.sel && !editor.pin : editor?.sel || pin)),
       );
-    if (base === "Escape" && (editor || panel || menu || pin))
-      id = panel ? "close-panel" : menu ? "menu" : "close";
+    if (base === "Escape" && (editor || panel || menu || pin || recordingClip || scrollClip))
+      id = scrollClip ? "scroll-close" : recordingClip ? "video-close" : panel ? "close-panel" : menu ? "menu" : "close";
+    if (!id && editor?.sel && (chord === "Shift+4" || chord === "Shift+8"))
+      id = chord === "Shift+4" ? "number" : "text";
+    if (!id && chord === "C" && editor && !editor.pin && editor.pointer) {
+      const { x, y } = editor.pointer;
+      const values = editor.source.image.getContext("2d").getImageData(x, y, 1, 1).data;
+      const color = "#" + [...values.slice(0, 3)].map(value => value.toString(16).padStart(2, "0")).join("").toUpperCase();
+      navigator.clipboard?.writeText(color).catch(() => {});
+      announce("取色 " + color);
+      ev.preventDefault();
+      return;
+    }
+    if (base === "Delete" && editor?.selected) {
+      editMark(editor, editor.selected, null);
+      draw();
+      ev.preventDefault();
+      return;
+    }
+    if (!id && editor && !editor.pin && ["Ctrl+A", "Ctrl+Shift+A"].includes(chord)) {
+      editor.sel = { x: 0, y: 0, w: editor.c.width, h: editor.c.height };
+      draw();
+      ev.preventDefault();
+      return;
+    }
     if (
       editor?.sel &&
       ["Enter", "Ctrl+C", "Ctrl+S", "Ctrl+Z", "Ctrl+Y"].includes(chord)
@@ -718,7 +1109,7 @@ const CapturePreview = (function createPreview() {
     document.addEventListener("click", (ev) => {
       const b = ev.target.closest("[data-shot]");
       if (b) {
-        ev.preventDefault();
+        if (b.tagName === "A") ev.preventDefault();
         execute(b.dataset.shot, b);
       } else if (menu) {
         menu.remove();
@@ -733,5 +1124,5 @@ const CapturePreview = (function createPreview() {
       if (el.id === "shot-model") model = el.value;
     });
   }
-  return { settings, connect, reset, busy: () => !!(editor || menu || panel) };
+  return { settings, connect, reset, busy: () => !!(editor || menu || panel || recordingClip || scrollClip) };
 })();

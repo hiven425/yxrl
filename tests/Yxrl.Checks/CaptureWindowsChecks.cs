@@ -1,4 +1,5 @@
 using System.IO;
+using System.Media;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Automation;
@@ -192,6 +193,15 @@ internal static class CaptureWindowsChecks
                 Console.WriteLine("真实文字面板选段翻译：" + output.Text);
             }
 
+            if (liveScreen && args.Contains("--recording"))
+            {
+                words.Close();
+                pin.Close();
+                VerifyRecording(tools, fixture, current, args);
+                VerifyScrolling(tools, fixture, current);
+                if (Array.IndexOf(args, "--recording-quick") is int quick && quick >= 0)
+                    VerifyQuickRecording(tools, fixture, current, args[quick + 1]);
+            }
             VerifyCalendarMenu(store, tools);
             string source = liveScreen ? "真实 GDI 桌面" : "公开样例像素";
             Console.WriteLine($"{source} / Windows 选区 / 置顶贴图 / OCR，{selected.Width}×{selected.Height} px，DPI {Native.GetDpiForWindow(hwnd)}。");
@@ -202,6 +212,210 @@ internal static class CaptureWindowsChecks
             fixture.Close();
             app.Shutdown();
         }
+    }
+
+    private static void VerifyRecording(CaptureTools tools, Window fixture, PixelPoint current, string[] args)
+    {
+        Check(RegionRecording.EnsureDisplay(), "真实录屏验收需要活动显示器");
+        void Color(Brush background)
+        {
+            fixture.Background = background;
+            Pump();
+            DwmFlush();
+        }
+        Color(Brushes.OrangeRed);
+        var controls = PrepareRecording(tools, current);
+        bool audio = args.Contains("--recording-device-audio");
+        if (audio)
+            All<CheckBox>(controls).Single(button => Equals(button.Content, "系统声音")).IsChecked = true;
+        Click(controls, "开始录制");
+        using var tone = audio ? Tone() : null;
+        using var player = tone is not null ? new SoundPlayer(tone) : null;
+        if (audio)
+        {
+            Pump(250);
+            player!.Play();
+        }
+        Pump(550);
+        Click(controls, "暂停");
+        Color(Brushes.Blue);
+        Pump(500);
+        Color(Brushes.LimeGreen);
+        Click(controls, "继续");
+        Pump(650);
+        Click(controls, "停止录制");
+        var deadline = DateTime.UtcNow.AddSeconds(12);
+        while (DateTime.UtcNow < deadline && !Application.Current.Windows.OfType<RecordingPreview>().Any())
+            Pump(100);
+        Check(Application.Current.Windows.OfType<RecordingPreview>().Any(),
+            "停止录制后回放窗口未出现，状态 " + string.Join(" / ", All<TextBlock>(controls).Select(block => block.Text)));
+        var playback = Application.Current.Windows.OfType<RecordingPreview>().Single();
+        var video = Child<MediaElement>(playback)!;
+        while (DateTime.UtcNow < deadline && !video.NaturalDuration.HasTimeSpan)
+            Pump(150);
+        Check(video.NaturalDuration.HasTimeSpan && video.Source is not null, "本机回放未打开刚录制的 MP4");
+        Check(video.NaturalVideoWidth > 0 && video.NaturalVideoHeight > 0, "回放未读取真实录制区域的尺寸");
+        var clip = new RecordedClip(video.Source!.LocalPath, video.NaturalVideoWidth, video.NaturalVideoHeight,
+            24, video.NaturalDuration.TimeSpan, audio);
+        using (var foundation = new MediaFoundation())
+        using (var readback = new ClipReader(clip, audio, 0))
+        {
+            var colors = new List<(byte B, byte G, byte R)>();
+            int peak = 0;
+            foreach (var frame in readback.Samples(audio, clip.Duration.Ticks))
+            {
+                if (frame.IsVideo)
+                {
+                    int pixel = (6 * clip.Width + 6) * 4;
+                    colors.Add((frame.Data[pixel], frame.Data[pixel + 1], frame.Data[pixel + 2]));
+                }
+                else
+                    for (int i = 0; i + 1 < frame.Data.Length; i += 2)
+                        peak = Math.Max(peak, Math.Abs((int)BitConverter.ToInt16(frame.Data, i)));
+            }
+            Check(colors.Any(p => p.R > 200 && p.B < 30) && colors.Any(p => p.G > 160 && p.R < 80),
+                "录制文件没有读回实际桌面的前后两种颜色");
+            Check(colors.All(p => p.B < 160), "暂停期间的画面进入了录屏");
+            if (audio)
+            {
+                Check(peak >= 200, "系统声音录制未读回公开测试音");
+                Console.WriteLine($"通过：WASAPI 系统声音录到本机公开测试音并解码，采样峰值 {peak}。");
+            }
+        }
+        int evidence = Array.IndexOf(args, "--recording-evidence");
+        if (evidence >= 0)
+        {
+            var files = Directory.CreateDirectory(args[evidence + 1]);
+            foreach (var format in Enum.GetValues<RecordingFormat>())
+                RecordingExport.Save(clip, Path.Combine(files.FullName, $"live-region.{format.ToString().ToLowerInvariant()}"),
+                    format, TimeSpan.Zero, clip.Duration, CancellationToken.None);
+        }
+        Click(playback, "播放");
+        Pump(250);
+        Check(video.Position > TimeSpan.Zero, "回放未推进");
+        playback.Shutdown();
+        Console.WriteLine($"通过：Windows 公开桌面实录 {clip.Width}×{clip.Height}，{clip.Duration.TotalSeconds:F2} 秒，读回录制前后画面，暂停画面未写入。");
+    }
+
+    private static RecordingWindow PrepareRecording(CaptureTools tools, PixelPoint current)
+    {
+        var desktop = DesktopFrame.Freeze().Bounds;
+        tools.Invoke(ShotAction.Record);
+        Pump();
+        var overlay = Application.Current.Windows.OfType<ShotWindow>().Single(w => w.Selecting);
+        Child<ShotSurface>(overlay)!.SelectWindowAt(new(current.X - desktop.Left, current.Y - desktop.Top));
+        Pump();
+        Click(overlay, "录制屏幕");
+        return Application.Current.Windows.OfType<RecordingWindow>().Single();
+    }
+
+    private static void VerifyQuickRecording(CaptureTools tools, Window fixture, PixelPoint point, string path)
+    {
+        fixture.Content = null;
+        fixture.Background = Brushes.OrangeRed;
+        Pump();
+        var area = Native.VisibleRect(new WindowInteropHelper(fixture).Handle);
+        var controls = PrepareRecording(tools, point);
+        All<ComboBox>(controls).Single(field => AutomationProperties.GetName(field) == "模式").SelectedIndex = 1;
+        Console.WriteLine("快速录制正在打开保存录屏对话框。");
+        Click(controls, "开始录制");
+        var deadline = DateTime.UtcNow.AddSeconds(15);
+        while (DateTime.UtcNow < deadline &&
+            !All<Button>(controls).Any(button => button.IsEnabled && Equals(button.Content, "停止录制"))) Pump();
+        Pump(550);
+        Click(controls, "停止录制");
+        while (controls.IsVisible && DateTime.UtcNow < deadline) Pump();
+        Check(File.Exists(path) && !controls.IsVisible && !Application.Current.Windows.OfType<RecordingPreview>().Any(),
+            "快速录制未直接保存目标 MP4");
+        using var media = new MediaFoundation();
+        int width = area.Width & ~1, height = area.Height & ~1;
+        using var reader = new ClipReader(new RecordedClip(path, width, height, 24, TimeSpan.FromSeconds(2), false), false, 0);
+        var first = reader.Samples(false, TimeSpan.FromSeconds(2).Ticks).First();
+        int pixel = (6 * width + 6) * 4;
+        Check(first.Data[pixel + 2] > 200 && first.Data[pixel] < 30, "快速录制未读回实际桌面画面");
+        Console.WriteLine($"通过：原生另存为、快速 MP4 直存和录制画面读回，{width}×{height}。");
+    }
+
+    private static MemoryStream Tone()
+    {
+        const int rate = 48000, samples = rate / 3;
+        var wave = new MemoryStream();
+        using (var writer = new BinaryWriter(wave, System.Text.Encoding.UTF8, leaveOpen: true))
+        {
+            writer.Write("RIFF"u8);
+            writer.Write(36 + samples * 2);
+            writer.Write("WAVEfmt "u8);
+            writer.Write(16);
+            writer.Write((short)1);
+            writer.Write((short)1);
+            writer.Write(rate);
+            writer.Write(rate * 2);
+            writer.Write((short)2);
+            writer.Write((short)16);
+            writer.Write("data"u8);
+            writer.Write(samples * 2);
+            for (int n = 0; n < samples; n++)
+                writer.Write((short)(2600 * Math.Sin(2 * Math.PI * 480 * n / rate) * Math.Sin(Math.PI * n / samples)));
+        }
+        wave.Position = 0;
+        return wave;
+    }
+
+    private static void VerifyScrolling(CaptureTools tools, Window fixture, PixelPoint center)
+    {
+        var hwnd = new WindowInteropHelper(fixture).Handle;
+        var area = Native.VisibleRect(hwnd);
+        int span = area.Height, width = area.Width, offset = span / 3;
+        byte[] colors = new byte[width * 4 * (span + offset)];
+        new Random(8).NextBytes(colors);
+        var source = BitmapSource.Create(width, span + offset, 96, 96, PixelFormats.Bgr32, null, colors, width * 4);
+        var image = new Image { Stretch = Stretch.Fill };
+        RenderOptions.SetBitmapScalingMode(image, BitmapScalingMode.NearestNeighbor);
+        fixture.Content = image;
+        void Frame(int y)
+        {
+            image.Source = new CroppedBitmap(source, new Int32Rect(0, y, width, span));
+            Pump(140);
+            DwmFlush();
+        }
+        Frame(0);
+        var scene = DesktopFrame.Freeze();
+        tools.Invoke(ShotAction.Start);
+        Pump();
+        var overlay = Application.Current.Windows.OfType<ShotWindow>().Single(w => w.Selecting);
+        Child<ShotSurface>(overlay)!.SelectWindowAt(new(center.X - scene.Bounds.Left, center.Y - scene.Bounds.Top));
+        Pump();
+        Click(overlay, "滚动长截图");
+        var window = Application.Current.Windows.OfType<ScrollWindow>().Single();
+        var ready = All<Button>(window).Single(b => Equals(b.Content, "完成长截图"));
+        var deadline = DateTime.UtcNow.AddSeconds(8);
+        while (!ready.IsEnabled && DateTime.UtcNow < deadline) Pump();
+        var auto = All<CheckBox>(window).Single(b => Equals(b.Content, "滚动后自动拼接"));
+        var peer = UIElementAutomationPeer.CreatePeerForElement(auto)!;
+        ((IToggleProvider)peer.GetPattern(PatternInterface.Toggle)!).Toggle();
+        Pump();
+        Frame(offset);
+        var next = All<Button>(window).Single(b => Equals(b.Content, "拼接下一屏"));
+        if (next.IsEnabled) Click(window, "拼接下一屏");
+        while (!ready.IsEnabled && DateTime.UtcNow < deadline) Pump();
+        Click(window, "完成长截图");
+        while (DateTime.UtcNow < deadline && !Application.Current.Windows.OfType<ShotWindow>().Any()) Pump();
+        var pin = Application.Current.Windows.OfType<ShotWindow>().Single();
+        var document = Child<ShotSurface>(pin)!.Document;
+        Check(document.Width == width && document.Height == span + offset,
+            $"真实桌面长截图预期 {width} × {span + offset}，实际 {document.Width} × {document.Height}");
+        pin.Close();
+        Console.WriteLine($"通过：Windows 桌面长截图拼接为 {width}×{span + offset}，回到置顶贴图。");
+    }
+
+    private static void Click(DependencyObject window, string name)
+    {
+        var button = All<Button>(window).Single(b => b.IsVisible &&
+            (Equals(b.Content, name) || AutomationProperties.GetName(b) == name));
+        Check(button.IsEnabled, name + "不可用");
+        var peer = UIElementAutomationPeer.CreatePeerForElement(button)!;
+        ((IInvokeProvider)peer.GetPattern(PatternInterface.Invoke)!).Invoke();
+        Pump();
     }
 
     // Load the app's own styles without starting its calendar singleton or reading personal settings.

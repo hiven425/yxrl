@@ -19,21 +19,29 @@
 
 0.2.1 会跟随任务栏收放，并复用已经识别的原时钟位置。首次启动时，Windows 展开系统任务栏后会识别一次原时间控件。自定义可试用上行 `HH:mm:ss ddd {节日}`、下行 `M月d日 {农历} 第{周数}周`，任务栏按空格优先折行，内容越长会使用越小的字号。
 
-## 截图、贴图和文字翻译
+## 截图、贴图、录屏和翻译
 
-按 **Ctrl+1** 冻结桌面。拖出矩形，或单击一个窗口。选区上方显示位置和像素尺寸，拖动八个手柄调整边界。工具栏提供矩形、箭头、画笔、文字和马赛克。按 Ctrl+Z 撤销、Ctrl+Y 重做、Enter 复制，或点「保存」导出原尺寸 PNG。
+按 **Ctrl+1** 冻结桌面。拖选矩形或点选窗口，拖动手柄调整边界。工具栏提供矩形、椭圆、箭头、线段、画笔、荧光笔、文字、序号和马赛克。按 Ctrl+Z 撤销、Ctrl+Y 重做、Enter 复制，或点「保存」导出原尺寸 PNG。
 
 | 操作 | 默认快捷键 | 可以在哪里用 |
 | --- | --- | --- |
 | 开始截图 | Ctrl+1 | 桌面任意应用 |
 | 钉住剪贴板图片 | Ctrl+2 | 桌面任意应用，剪贴板中需有图片 |
 | 钉住当前截图 | Ctrl+T | 已选定的截图区域 |
+| 录制屏幕 | G | 已选定的截图区域 |
+| 滚动长截图 | L | 已选定的截图区域 |
+| 添加连续序号 | Shift+4 | 截图选区或贴图标注模式 |
+| 添加文字 | Shift+8 | 截图选区或贴图标注模式 |
 | 提取文字 | Shift+C | 截图选区或贴图 |
 | 打开翻译 | Ctrl+Q | 截图选区或贴图 |
 
 剪贴板同时提供 PNG 和 Windows 位图时，Ctrl+2 优先读取原始 PNG，贴图与导出均保留它的颜色和透明度。只有位图时也可钉住图片。
 
 贴图可同时打开多张，拖动移动，滚轮缩放，空格切换标注，Esc 关闭当前图。月历底栏的「截图工具」也提供鼠标入口。到「设置 → 截图与翻译」可修改或逐项停用快捷键，关闭总开关会释放全局快捷键。点「应用设置」生效。
+
+点「序号」后在画面依次单击，得到 1、2、3。选择已有编号可改数值或拖动，双击可写说明。点击「文字」后在画面放置文字，Enter 换行，Ctrl+Enter 提交，双击已有文字继续编辑。
+
+长截图选中会滚动的内容后按 L。按纵向向下或横向向右滚动，保留两屏重叠，点「完成长截图」得到置顶长图。录屏从选区按 G 开始配置。停止后可回放、剪头尾、裁画面、调倍速，再另存 MP4、GIF 或 WebP。快速模式在录制前选路径，停止后直接保存 MP4。[截图和录屏操作](capture-recording.md)
 
 文字提取使用随 EXE 提供的中英文 PP-OCRv5 mobile 小模型。首次使用会在当前用户的 Yxrl 数据目录解包模型，可离线识别。识别面板保留原图和可编辑的原文，马赛克区域在识别前会遮盖。
 
@@ -63,6 +71,8 @@ YXRL 在运行期间会按设定时间弹框，月历可以收起。同一时间
 <img src="screens/windows-clock-settings.png" width="730" alt="Windows 设置窗口中的九种双行时钟预设、示例日期切换和实际时间预览">
 
 ## 本机验收
+
+0.4.0 在 Windows 桌面捕获公开测试窗口，读回 544 × 170 的 MP4、暂停前后的画面和系统测试音。原生保存对话框的快速 MP4 直存通过，长截图把 545 × 170 的窗口拼成 545 × 226 的置顶长图。编码回归覆盖裁画面、倍速以及 GIF、WebP 的帧数和尺寸。
 
 0.3.0 在 Windows 11 25H2 x64 上验证了月历的截图工具菜单、设置改键与停用、全局热键冲突回滚、原像素 PNG 回读，以及选区、置顶贴图和文字窗口。给 WPF 选区输入 560 × 130 的公开样例，随包 OCR 读出「项目会议 14:30」和「Room B Design review」。对 1314 × 1089 的 PixPin 参考图，OCR 返回 483 个字符，包含 screenshot 和 toolbar。临时本机 Qwen2.5-0.5B-Instruct 实际收到选中的英文句子，返回「会议从下午2点开始。」。11 月 26 日的感恩节、10 月 10 日的补班和离线原型回归均通过。
 
@@ -113,6 +123,8 @@ Windows 11 25H2 x64（26200.7840），屏幕缩放 150%，任务栏自动隐藏�
 .\.tools\dotnet\dotnet.exe run --project tests/Yxrl.Checks -c Release
 .\.tools\dotnet\dotnet.exe run --project tests/Yxrl.Checks -c Release -- --ocr --capture-ui
 .\.tools\dotnet\dotnet.exe run --project tests/Yxrl.Checks -c Release -- --capture-windows
+.\.tools\dotnet\dotnet.exe run --project tests/Yxrl.Checks -c Release -- --recording
+.\.tools\dotnet\dotnet.exe run --project tests/Yxrl.Checks -c Release -- --recording --capture-windows
 .\.tools\dotnet\dotnet.exe run --project tests/Yxrl.Checks -c Release -- --weather --direct
 node --test docs/prototype/tests/week-range.test.cjs tests/catalog-parity.test.cjs
 .\.tools\dotnet\dotnet.exe run --project tests/Yxrl.Checks -c Release -- --taskbar

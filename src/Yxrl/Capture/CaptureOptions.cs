@@ -9,10 +9,13 @@ internal enum ShotAction
     Clipboard,
     Pin,
     Ocr,
-    Translate
+    Translate,
+    Record,
+    LongShot
 }
 
-internal sealed record ShotShortcuts(string Start = "Ctrl+1", string Clipboard = "Ctrl+2", string Pin = "Ctrl+T", string Ocr = "Shift+C", string Translate = "Ctrl+Q")
+internal sealed record ShotShortcuts(string Start = "Ctrl+1", string Clipboard = "Ctrl+2", string Pin = "Ctrl+T", string Ocr = "Shift+C",
+    string Translate = "Ctrl+Q", string Record = "G", string LongShot = "L")
 {
     public string this[ShotAction action] => action switch
     {
@@ -21,6 +24,8 @@ internal sealed record ShotShortcuts(string Start = "Ctrl+1", string Clipboard =
         ShotAction.Pin => Pin,
         ShotAction.Ocr => Ocr,
         ShotAction.Translate => Translate,
+        ShotAction.Record => Record,
+        ShotAction.LongShot => LongShot,
         _ => throw new ArgumentOutOfRangeException(nameof(action))};
     public ShotShortcuts Bind(ShotAction action, string value) => action switch
     {
@@ -44,6 +49,14 @@ internal sealed record ShotShortcuts(string Start = "Ctrl+1", string Clipboard =
         {
             Translate = value
         },
+        ShotAction.Record => this with
+        {
+            Record = value
+        },
+        ShotAction.LongShot => this with
+        {
+            LongShot = value
+        },
         _ => throw new ArgumentOutOfRangeException(nameof(action))};
 }
 
@@ -58,8 +71,14 @@ internal sealed record CaptureOptions
         ShotAction.Clipboard => "钉住剪贴板图片",
         ShotAction.Pin => "钉住选区",
         ShotAction.Ocr => "提取文字",
-        _ => "打开翻译"
+        ShotAction.Record => "录制屏幕",
+        ShotAction.LongShot => "滚动长截图",
+        ShotAction.Translate => "打开翻译",
+        _ => throw new ArgumentOutOfRangeException(nameof(action))
     };
+
+    public static bool AllowsSingleKey(ShotAction action) => action is ShotAction.Record or ShotAction.LongShot;
+
     public void Validate()
     {
         if (Shortcuts is null)
@@ -70,11 +89,12 @@ internal sealed record CaptureOptions
             var value = Shortcuts[action];
             if (value == "")
                 continue;
-            if (!ShotChord.TryParse(value, out var key))
-                throw new FormatException($"「{Label(action)}」需要修饰键搭配字母、数字或功能键。");
+            if (!ShotChord.TryParse(value, out var key, AllowsSingleKey(action)))
+                throw new FormatException(AllowsSingleKey(action) ? $"「{Label(action)}」可使用字母、数字、功能键或组合键。" :
+                    $"「{Label(action)}」需要修饰键搭配字母、数字或功能键。");
             if (!used.Add(key))
                 throw new FormatException($"「{Label(action)}」的快捷键与其他截图动作重复。");
-            if (key.ToString() is "Ctrl+C" or "Ctrl+S" or "Ctrl+Z" or "Ctrl+Y")
+            if (key.ToString() is "Ctrl+C" or "Ctrl+S" or "Ctrl+Z" or "Ctrl+Y" or "C")
                 throw new FormatException($"「{Label(action)}」与编辑和保存快捷键重复。");
         }
     }
@@ -82,16 +102,17 @@ internal sealed record CaptureOptions
 
 internal readonly record struct ShotChord(ModifierKeys Mods, Key Key)
 {
-    public static bool FromEvent(KeyEventArgs e, out ShotChord value)
+    public static bool FromEvent(KeyEventArgs e, out ShotChord value, bool allowUnmodified = false)
     {
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
         value = new(Keyboard.Modifiers, key);
-        return value.Valid;
+        return value.Valid(allowUnmodified);
     }
 
-    private bool Valid => Mods != ModifierKeys.None && (Key is >= Key.A and <= Key.Z or >= Key.D0 and <= Key.D9 or >= Key.F1 and <= Key.F24);
+    private bool Valid(bool allowUnmodified) => (allowUnmodified || Mods != ModifierKeys.None) &&
+        (Key is >= Key.A and <= Key.Z or >= Key.D0 and <= Key.D9 or >= Key.F1 and <= Key.F24);
 
-    public static bool TryParse(string? input, out ShotChord value)
+    public static bool TryParse(string? input, out ShotChord value, bool allowUnmodified = false)
     {
         value = default;
         if (string.IsNullOrWhiteSpace(input))
@@ -119,7 +140,7 @@ internal readonly record struct ShotChord(ModifierKeys Mods, Key Key)
         if (!Enum.TryParse<Key>(last, true, out var key) || !string.Equals(key.ToString(), last, StringComparison.OrdinalIgnoreCase))
             return false;
         value = new(modifiers, key);
-        return value.Valid;
+        return value.Valid(allowUnmodified);
     }
 
     public override string ToString()

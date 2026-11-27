@@ -148,7 +148,8 @@ internal sealed class CaptureSettingsPage : StackPanel
     private void Refresh()
     {
         foreach (var (action, b) in recorders)
-            b.Content = recording == action ? "请按组合键" : keys[action].Length == 0 ? "已停用" : keys[action];
+            b.Content = recording == action ? CaptureOptions.AllowsSingleKey(action) ? "请按快捷键" : "请按组合键"
+                : keys[action].Length == 0 ? "已停用" : keys[action];
     }
 
     private void StartRecording(ShotAction action)
@@ -156,7 +157,7 @@ internal sealed class CaptureSettingsPage : StackPanel
         StopRecording();
         recording = action;
         warnings[action].Visibility = Visibility.Collapsed;
-        feedback.Text = "按组合键录入，Esc 取消。";
+        feedback.Text = CaptureOptions.AllowsSingleKey(action) ? "按单键或组合键录入，Esc 取消。" : "按组合键录入，Esc 取消。";
         if (tools is not null)
             tools.Hotkeys.Recording = Accept;
         recorders[action].Focus();
@@ -204,7 +205,7 @@ internal sealed class CaptureSettingsPage : StackPanel
             return;
         }
 
-        if (ShotChord.FromEvent(e, out var chord))
+        if (ShotChord.FromEvent(e, out var chord, CaptureOptions.AllowsSingleKey(recording.Value)))
             Accept(chord);
         e.Handled = true;
     }

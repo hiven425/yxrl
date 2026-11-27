@@ -2,7 +2,7 @@
 
 ## 截图工具
 
-从月历底栏的「截图工具」选「开始截图」。拖选或点选窗口后，可标注、复制、保存、钉住或识别。贴图可拖动、缩放或按空格继续标注。文字面板支持逐段校对、复制和翻译，手动粘贴可直接从菜单进入。快捷键和模型接口在「截图与翻译」设置中调整。
+从月历底栏的「截图工具」选「开始截图」。拖选或点选窗口后，可放置连续序号、多行文字和图形，也可复制、保存、贴图、识别、长截图或录屏。贴图按空格继续标注。快捷键和模型接口在「截图与翻译」设置中调整。[截图和录屏功能清单](capture-recording.md)
 
 ![截图选区、信息条和工具栏](prototype/screens/12-capture.png)
 
@@ -12,7 +12,15 @@
 
 ![截图快捷键与翻译设置](prototype/screens/15-capture-settings.png)
 
-原型使用离线示例画面和标明来源的演示文字。桌面版从实际屏幕、剪贴板和用户配置的模型读取结果。交互参考 [PixPin 截图](https://pixpin.com/docs/screenshot/basics)、[贴图](https://pixpin.com/docs/pin/basics)、[标注](https://pixpin.com/docs/annotation/basics) 与 [文字提取](https://pixpin.com/docs/recognition/text-recognition)。
+![连续编号、编号说明和多行文字](prototype/screens/16-annotations.png)
+
+![录屏已暂停](prototype/screens/17-recording.png)
+
+![裁剪和导出录屏回放](prototype/screens/18-recording-preview.png)
+
+![横向长截图拼接](prototype/screens/19-scroll.png)
+
+原型使用离线画面和演示文字。桌面版读取实际屏幕、剪贴板和用户配置的模型，录屏可在本机导出。[PixPin 截图](https://pixpin.com/docs/screenshot/basics) · [贴图](https://pixpin.com/docs/pin/basics) · [标注](https://pixpin.com/docs/annotation/basics) · [文字提取](https://pixpin.com/docs/recognition/text-recognition) · [录屏](https://pixpin.com/docs/screenshot/screen-recording)
 
 这套原型围绕一次桌面操作设计：点时间打开月历，选日期看当天事项，需要调整时再开设置窗口。以下八张图均由同一套离线 HTML 渲染。左侧原型导航和演示环境用于评审，正式桌面窗口采用图中实际面板的布局。[打开可点原型](prototype/index.html) · [模块配置](configuration.md)
 
@@ -103,6 +111,6 @@ Windows 月历打开时显示在应用窗口前方，日详情与月历一起显
 - **离线交互**。从 `file://` 入口打开并禁用网络，实际操作选日、时钟样式、事项、节日开关、PIN 锁和声音设置。从月历打开截图工具，拖选、标注、钉住，然后查看示例识别与翻译结果。在设置中改键并停用后重试。
 - **历法与配置**。核对十月十八、ISO 第 48 周、感恩节，以及 2026-10-10 的补班。设置 11-23 至 11-29 后验证月历和详情，检查 「周数日历」 超出区间时不显示周号。用周日开头、邻月日期和逐周滚动检验布局边界。
 - **输入与恢复**。用空标题、非法时钟字段、结束日期早于起始日期、错误 PIN 各试一次。取消时保留原设置；错误 PIN 保持锁定；断网有缓存与无缓存的状态能明确区分。
-- **重新导图**。在 1130 × 780 的浅色桌面视口重载原型，较长的日历设置页扩展到 860 高。第一张保留任务栏右端，第二张同时保留月历和时钟，编辑图选中「周四项目例会」。截图功能的四张图依次取自选区、贴图、识别与翻译面板、快捷键设置。以相同文件名更新 `prototype/screens` 中的 PNG，并复查深色和窄窗口排版。
+- **重新导图**。在 1130 × 780 的浅色桌面视口重载原型，较长的日历设置页扩展到 860 高。第一张保留任务栏右端，第二张同时保留月历和时钟，编辑图选中「周四项目例会」。截图功能的图取自选区、贴图、识别与翻译面板、快捷键设置、编号与文字、录制暂停、录屏回放和长截图。以相同文件名更新 `prototype/screens` 中的 PNG，并复查深色和窄窗口排版。
 - **周号回归**。在仓库根目录运行 `node --test docs/prototype/tests/week-range.test.cjs`，可重复验证周一、周日起始日的区间边缘，以及跨年与时钟字段的显示。
 - **桌面真机另验**。在 Windows 11 25H2 x64 上依次验证原时钟接管与退出恢复、任务栏自动隐藏及 DPI、当前用户登录启动与实际托盘图标、系统身份校验、文件保存读回、真实天气，以及睡眠唤醒后的提醒去重。按约定临时退出优效再测试，测完恢复。

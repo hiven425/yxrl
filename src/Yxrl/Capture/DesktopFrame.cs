@@ -1,6 +1,4 @@
-using System.ComponentModel;
 using System.Runtime.InteropServices;
-using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Yxrl.Desktop;
 
@@ -12,35 +10,15 @@ internal sealed record DesktopFrame(BitmapSource Image, PixelRect Bounds, PixelR
     private static extern int GetSystemMetrics(int index);
     [DllImport("user32")]
     private static extern bool IsIconic(nint hwnd);
+    [DllImport("user32")]
+    private static extern nint MonitorFromPoint(PixelPoint point, uint mode);
+    [DllImport("user32")]
+    private static extern int GetDisplayConfigBufferSizes(uint flags, out uint paths, out uint modes);
     private delegate bool MonitorCallback(nint monitor, nint dc, ref PixelRect rect, nint data);
     [DllImport("user32")]
     private static extern bool EnumDisplayMonitors(nint dc, nint clip, MonitorCallback callback, nint data);
     [DllImport("dwmapi")]
     private static extern int DwmGetWindowAttribute(nint hwnd, int attr, out int value, int bytes);
-    [DllImport("gdi32", SetLastError = true)]
-    private static extern nint CreateCompatibleDC(nint dc);
-    [StructLayout(LayoutKind.Sequential)]
-    private struct BitmapHeader
-    {
-        public int Size, Width, Height;
-        public ushort Planes, Bits;
-        public uint Compression, ImageSize;
-        public int XPixelsPerMeter, YPixelsPerMeter;
-        public uint Used, Important;
-    }
-
-    [DllImport("gdi32", SetLastError = true)]
-    private static extern nint CreateDIBSection(nint dc, ref BitmapHeader info, uint usage, out nint pixels, nint section, uint offset);
-    [DllImport("gdi32")]
-    private static extern bool GdiFlush();
-    [DllImport("gdi32")]
-    private static extern nint SelectObject(nint dc, nint obj);
-    [DllImport("gdi32", SetLastError = true)]
-    private static extern bool BitBlt(nint target, int x, int y, int w, int h, nint src, int sx, int sy, uint rop);
-    [DllImport("gdi32")]
-    private static extern bool DeleteDC(nint dc);
-    [DllImport("gdi32")]
-    private static extern bool DeleteObject(nint obj);
     [DllImport("wtsapi32", EntryPoint = "WTSQuerySessionInformationW")]
     private static extern bool QuerySession(nint server, int session, int kind, out nint buffer, out int bytes);
     [DllImport("wtsapi32")]
@@ -60,6 +38,14 @@ internal sealed record DesktopFrame(BitmapSource Image, PixelRect Bounds, PixelR
             WTSFreeMemory(buffer);
         }
     }
+
+    public static PixelRect WorkAreaAt(PixelPoint point)
+    {
+        var info = new MonitorInfo { Size = Marshal.SizeOf<MonitorInfo>() };
+        return Native.GetMonitorInfo(MonitorFromPoint(point, 2), ref info) ? info.Work : default;
+    }
+
+    internal static bool HasActiveDisplay() => GetDisplayConfigBufferSizes(2, out uint paths, out _) == 0 && paths > 0;
 
     public static DesktopFrame Freeze()
     {
@@ -85,41 +71,8 @@ internal sealed record DesktopFrame(BitmapSource Image, PixelRect Bounds, PixelR
                 windows.Add(rect);
             return true;
         }, 0);
-        nint screen = Native.GetDC(0), memory = 0, bitmap = 0, previous = 0;
-        try
-        {
-            var header = new BitmapHeader
-            {
-                Size = Marshal.SizeOf<BitmapHeader>(),
-                Width = w,
-                Height = -h,
-                Planes = 1,
-                Bits = 32
-            };
-            nint pixels = 0;
-            if (screen == 0 || (memory = CreateCompatibleDC(screen)) == 0 || (bitmap = CreateDIBSection(screen, ref header, 0, out pixels, 0, 0)) == 0 || pixels == 0)
-                throw new Win32Exception(Marshal.GetLastWin32Error(), "无法分配桌面图像。");
-            previous = SelectObject(memory, bitmap);
-            if (previous == 0 || previous == -1 || !BitBlt(memory, 0, 0, w, h, screen, x, y, 0x40CC0020))
-                throw new Win32Exception(Marshal.GetLastWin32Error(), "Windows 未能读取桌面像素。");
-            GdiFlush();
-            // A top-down GDI DIB has BGR pixels and an unused fourth byte.
-            int stride = checked(w * 4);
-            var image = BitmapSource.Create(w, h, 96, 96, PixelFormats.Bgr32, null, pixels, checked(stride * h), stride);
-            image.Freeze();
-            return new(image, bounds, windows.ToArray(), monitors.ToArray());
-        }
-        finally
-        {
-            if (previous != 0 && previous != -1)
-                SelectObject(memory, previous);
-            if (bitmap != 0)
-                DeleteObject(bitmap);
-            if (memory != 0)
-                DeleteDC(memory);
-            if (screen != 0)
-                Native.ReleaseDC(0, screen);
-        }
+        using var pixels = new ScreenPixels(bounds);
+        return new(pixels.Image(), bounds, windows.ToArray(), monitors.ToArray());
     }
 
     internal PixelRect ToolsArea(PixelRect selection)
@@ -133,12 +86,17 @@ internal sealed record DesktopFrame(BitmapSource Image, PixelRect Bounds, PixelR
         return monitor.Offset(-Bounds.Left, -Bounds.Top);
     }
 
+    public PixelRect MonitorAt(PixelPoint local)
+    {
+        var absolute = new PixelPoint(local.X + Bounds.Left, local.Y + Bounds.Top);
+        var monitor = Monitors?.FirstOrDefault(m => m.Contains(absolute)) ?? default;
+        return (monitor.HasArea ? monitor : Bounds).Offset(-Bounds.Left, -Bounds.Top);
+    }
+
     public PixelRect WindowAt(PixelPoint local)
     {
         var absolute = new PixelPoint(local.X + Bounds.Left, local.Y + Bounds.Top);
         var hit = Windows.FirstOrDefault(r => r.Contains(absolute));
-        if (!hit.HasArea)
-            hit = Monitors?.FirstOrDefault(m => m.Contains(absolute)) ?? default;
-        return (hit.HasArea ? hit : Bounds).Offset(-Bounds.Left, -Bounds.Top);
+        return hit.HasArea ? hit.Offset(-Bounds.Left, -Bounds.Top) : MonitorAt(local);
     }
 }

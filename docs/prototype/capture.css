@@ -1,5 +1,6 @@
 .shot-editor,
 .shot-panel,
+.shot-recorder,
 .shot-pin,
 .shot-menu {
   position: absolute;
@@ -19,13 +20,16 @@
   cursor: crosshair;
   touch-action: none;
 }
-.shot-editor [hidden] {
+.shot-editor [hidden],
+.shot-recorder [hidden] {
   display: none;
 }
 .shot-bar,
 .shot-info,
 .shot-menu,
 .shot-panel,
+.shot-recorder,
+.shot-label,
 .shot-pin-actions {
   background: var(--paper);
   border: 1px solid var(--panel-border);
@@ -41,7 +45,10 @@
   padding: 4px 9px;
   font-variant-numeric: tabular-nums;
 }
-.shot-bar,
+.shot-tool-buttons,
+.shot-style-options,
+.shot-video-options,
+.shot-video-trim,
 .shot-row,
 .shot-pin-actions {
   display: flex;
@@ -50,8 +57,29 @@
   gap: 3px;
 }
 .shot-bar {
+  display: grid;
   padding: 4px;
   max-width: calc(100% - 4px);
+}
+.shot-style-options {
+  border-top: 1px solid var(--line);
+  gap: 8px;
+  padding: 5px 4px 1px;
+}
+.shot-style-options input[type="number"],
+.shot-video-trim input[type="number"] {
+  width: 62px;
+}
+.shot-label {
+  z-index: 2;
+  display: grid;
+  gap: 4px;
+  width: min(306px, calc(100% - 16px));
+  padding: 8px;
+}
+.shot-label textarea {
+  width: 100%;
+  resize: vertical;
 }
 .shot-btn {
   font: inherit;
@@ -67,6 +95,10 @@
 .shot-btn[aria-pressed="true"] {
   background: var(--accent-fill);
   color: var(--accent);
+}
+.shot-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 .shot-menu {
   display: grid;
@@ -93,7 +125,8 @@
 .shot-pin-actions button {
   font-size: 12px;
 }
-.shot-panel {
+.shot-panel,
+.shot-recorder {
   z-index: 57;
   top: 15%;
   left: 50%;
@@ -104,16 +137,89 @@
   overflow: auto;
 }
 .shot-panel header,
+.shot-recorder header,
 .shot-setting-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
-.shot-panel header {
+.shot-panel header,
+.shot-recorder header {
   border-bottom: 1px solid var(--line);
   padding-bottom: 7px;
   font-size: 16px;
+}
+.shot-recorder {
+  width: min(568px, 96%);
+}
+.shot-video-image {
+  position: relative;
+  margin: 10px 0;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #15212b;
+}
+.shot-video-image img {
+  display: block;
+  width: 100%;
+  min-height: 68px;
+  max-height: 38vh;
+  object-fit: contain;
+}
+.shot-video-position {
+  position: absolute;
+  width: 17px;
+  height: 17px;
+  border: 2px solid white;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.shot-video-options,
+.shot-video-trim {
+  gap: 7px 12px;
+}
+.shot-video-trim label:first-child {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+}
+.shot-video-trim input[type="range"] {
+  flex: 1;
+}
+.shot-video-status {
+  margin: 0;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.shot-video-status[data-live="true"] {
+  color: var(--danger, #b42d37);
+}
+.shot-scroll-source {
+  max-height: 27vh;
+  margin: 10px 0;
+  overflow: auto;
+  border: 1px solid var(--panel-border);
+  border-radius: 6px;
+}
+.shot-scroll-source canvas {
+  display: block;
+  max-width: 100%;
+}
+.shot-scroll-source.horizontal {
+  display: flex;
+}
+.shot-scroll-source.horizontal canvas {
+  flex: none;
+}
+.shot-recorder .shot-row .shot-btn {
+  border-color: var(--line);
+}
+.shot-recorder .shot-btn[data-shot="video-start"] {
+  color: var(--on-accent);
+  background: var(--accent);
 }
 .shot-columns {
   display: flex;
