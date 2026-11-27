@@ -27,7 +27,7 @@ internal static class Native
     internal delegate bool EnumProc(nint hwnd, nint param);
     internal delegate nint MouseProc(int code, nint message, nint data);
     internal static readonly nint Topmost = -1, NoTopmost = -2;
-    internal const nint WsExLayered = 0x80000, WsExTransparent = 0x20;
+    internal const nint WsExLayered = 0x80000, WsExTransparent = 0x20, WsExToolWindow = 0x80, WsExNoActivate = 0x08000000;
     internal const uint NoSize = 1, NoMove = 2, NoActivate = 0x10, NoZOrder = 4, Show = 0x40, NoOwnerZOrder = 0x200;
     private const int DwmwaExtendedFrameBounds = 9, DwmwaUseImmersiveDarkMode = 20, DwmwaWindowCornerPreference = 33,
         DwmwaBorderColor = 34, DwmwaSystemBackdropType = 38, DwmwcpRound = 2;
@@ -61,6 +61,8 @@ internal static class Native
         if (layered)
             SetLayeredWindowAttributes(hwnd, 0, (byte)Math.Clamp(Math.Round(opacity * 255), 25, 255), lwaAlpha);
     }
+    [DllImport("user32")] private static extern bool SetWindowDisplayAffinity(nint window, uint affinity);
+    internal static bool ExcludeFromCapture(nint hwnd) => hwnd != 0 && SetWindowDisplayAffinity(hwnd, 0x11);
     [DllImport("user32", SetLastError=true, CharSet=CharSet.Unicode)] internal static extern nint SetWindowsHookEx(int id, MouseProc proc, nint module, uint thread);
     [DllImport("kernel32", CharSet=CharSet.Unicode)] internal static extern nint GetModuleHandle(string? module);
     [DllImport("user32")] internal static extern bool UnhookWindowsHookEx(nint hook);

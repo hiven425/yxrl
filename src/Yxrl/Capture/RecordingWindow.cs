@@ -34,6 +34,8 @@ internal sealed class RecordingWindow : Window
     private CancellationTokenSource? countdown;
     private RegionRecording? recording;
     internal RecordingSession? ActiveSession => recording?.Session;
+    private readonly RecordingRegionFrame regionFrame;
+    internal RecordingRegionFrame RegionFrame => regionFrame;
     private RecordingInput? inputCapture;
     private bool paused, abandoned, closing, forceClose, placeOk, stopping;
 
@@ -42,6 +44,7 @@ internal sealed class RecordingWindow : Window
         this.area = area;
         this.sessionRoot = sessionRoot;
         this.showPreview = showPreview;
+        regionFrame = new RecordingRegionFrame(area);
         Title = "YXRL 屏幕录制";
         AutomationProperties.SetAutomationId(this, "YxrlRecorder");
         AutomationProperties.SetLiveSetting(status, AutomationLiveSetting.Polite);
@@ -118,6 +121,7 @@ internal sealed class RecordingWindow : Window
         column.Children.Add(status);
         SetStatus("就绪");
         timer.Tick += (_, _) => elapsed.Text = $"{area.Width} × {area.Height} px   ·   {TimeLabel(recording?.Elapsed ?? TimeSpan.Zero)}";
+        SourceInitialized += (_, _) => regionFrame.Show();
         ContentRendered += (_, _) => PositionControls();
         SizeChanged += (_, _) => { if (IsLoaded) PositionControls(); };
         PreviewKeyDown += (_, e) =>
@@ -133,6 +137,7 @@ internal sealed class RecordingWindow : Window
         {
             timer.Stop();
             inputCapture?.Dispose();
+            regionFrame.CloseSafely();
         };
     }
 
@@ -230,10 +235,12 @@ internal sealed class RecordingWindow : Window
                 throw new InvalidOperationException("Windows 没有活动显示器。请点亮屏幕后重新录制。");
             for (int seconds = (int)delay.SelectedItem; seconds > 0; seconds--)
             {
+                regionFrame.UpdateState(RecordingFrameState.Countdown, seconds);
                 SetStatus($"{seconds} 秒后开始录制");
                 await Task.Delay(TimeSpan.FromSeconds(1), session.Token);
             }
             session.Token.ThrowIfCancellationRequested();
+            regionFrame.UpdateState(RecordingFrameState.Live);
             var preferences = new RecordingOptions((int)fps.SelectedItem, cursor.IsChecked == true,
                 system.IsChecked == true, microphone.IsChecked == true,
                 mouseCues.IsChecked == true, keyCues.IsChecked == true, cameraOptions, (microphoneDevice.SelectedItem as RecordingMicrophone)?.Id);
@@ -298,6 +305,7 @@ internal sealed class RecordingWindow : Window
             timer.Stop();
             if (!closing)
             {
+                regionFrame.UpdateState(RecordingFrameState.Ready);
                 options.IsEnabled = start.IsEnabled = cancel.IsEnabled = true;
                 start.Content = "开始录制";
                 pause.Content = "暂停";
@@ -313,6 +321,7 @@ internal sealed class RecordingWindow : Window
             return;
         paused = !paused;
         recording.Pause(paused);
+        regionFrame.UpdateState(paused ? RecordingFrameState.Paused : RecordingFrameState.Live);
         pause.Content = paused ? "继续" : "暂停";
         SetStatus(paused ? "已暂停" : "● 正在录制", !paused);
     }
@@ -370,6 +379,7 @@ internal sealed class RecordingWindow : Window
             try { running.Completion.Wait(TimeSpan.FromSeconds(2)); }
             catch (AggregateException) { } // Earlier sealed parts remain available for recovery.
         }
+        regionFrame.CloseSafely();
         Close();
     }
 

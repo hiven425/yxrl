@@ -74,6 +74,8 @@ YXRL 在运行期间会按设定时间弹框，月历可以收起。同一时间
 
 ## 本机验收
 
+本轮「录制范围框」更新完成 `dist/win-x64/Yxrl.exe`（`99,574,327` 字节）单文件发布与多项实测校验：`RecordingRegionFrame` 真实 WPF 透明置顶窗口在 Windows 11 实机上确认已生效 `WS_EX_TRANSPARENT | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE` 与 DWM `WDA_EXCLUDEFROMCAPTURE`（`CaptureExcluded == true`），`CalculateBounds` 四场景外扩/钳位逻辑、`Countdown`/`Live`/`Paused`/`Ready` 状态切换、控制窗退出同步销毁零残留及 `RenderTargetBitmap` 离屏红色边界与中心全透明检查全部通过；`RecordingChecks` H.264/AAC/GIF/WebP 编码与中断恢复及无头 Edge 离线原型（`ready`/`live`/`paused`/回放隐藏及导出 `17-recording.png`，`2026-11-26` 感恩节、`2026-10-10` 补班）零报错通过。因验证末尾 Windows 会话处于锁屏状态，解锁后的真实 GDI 桌面实录叠加 `WDA_EXCLUDEFROMCAPTURE` 边角无污染像素回读（`--ocr --capture-windows --recording`）待桌面解锁后复验。
+
 本轮截图、贴图与 OCR 交互完善在 Windows 11 25H2 x64（150% 缩放，DPI 144）完成单文件 `dist/win-x64/Yxrl.exe`（`99,568,695` 字节）真机复验：启动 `--settings` 打开 Mica「截图与翻译」页，分组卡片、「全局」/「工具内」范围徽章、`Ctrl+3` 恢复贴图快捷键及「测试连接」按钮渲染与 UIA 校验通过；在真实桌面及微软拼音环境下，按下全局热键 `Ctrl+2` 从剪贴板钉住「YXRL 桌面贴图」（无虚线焦点框），`Shift+C` 唤起随包 PP-OCRv5「YXRL 提取文字」窗口并读回「项目会议 14:30 / Room B · Design review / YXRL Real Desktop Pin & OCR」与左图包围盒标注，关闭后按 `Ctrl+3` 恢复已关闭贴图，`Ctrl+1` 框选真实屏幕 `560 × 260 px` 并显示 `SurfaceGlass` 玻璃工具栏。`Yxrl.Checks --ocr --capture-windows` 在真实 GDI 桌面（`545 × 170 px`）全数通过，`node --test` 与无头 Edge 离线原型（含 `2026-11-26` 感恩节、`2026-10-10` 补班与导出图 12–16）零报错通过。
 
 0.5.0 在 Windows 桌面同时录制系统声音和麦克风阵列，分别试验混音、系统声音 35% 且麦克风静音、麦克风 45% 且系统声音静音。三份 584 × 286 的 H.264/AAC MP4 均在 Windows 播放到结束，解码后的两路增益与所选音量一致。摄像头实机读帧并合成通过。中断验收在第二段写入时直接退出测试进程，随后从第一段读回 72 帧。

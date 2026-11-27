@@ -467,6 +467,92 @@
   background: var(--accent);
   color: var(--on-accent);
 }
+.shot-record-frame {
+  position: absolute;
+  z-index: 44;
+  pointer-events: none;
+  box-sizing: border-box;
+  border: 2px dashed #1893ee;
+  box-shadow: 0 0 0 1px rgb(14 20 28 / 48%), inset 0 0 0 1px rgb(14 20 28 / 32%);
+  --frame-accent: #1893ee;
+}
+.shot-record-frame[data-stage="delay"] {
+  border-style: solid;
+  border-color: #f97316;
+  --frame-accent: #f97316;
+}
+.shot-record-frame[data-stage="live"] {
+  border-style: solid;
+  border-color: #e03131;
+  --frame-accent: #e03131;
+  animation: shot-rec-pulse 1.4s ease-in-out infinite;
+}
+.shot-record-frame[data-stage="paused"] {
+  border-style: dashed;
+  border-color: #d97706;
+  --frame-accent: #d97706;
+}
+.shot-record-frame .c {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-color: var(--frame-accent);
+  border-style: solid;
+  border-width: 0;
+}
+.shot-record-frame .c.tl { top: -2px; left: -2px; border-top-width: 3px; border-left-width: 3px; }
+.shot-record-frame .c.tr { top: -2px; right: -2px; border-top-width: 3px; border-right-width: 3px; }
+.shot-record-frame .c.bl { bottom: -2px; left: -2px; border-bottom-width: 3px; border-left-width: 3px; }
+.shot-record-frame .c.br { bottom: -2px; right: -2px; border-bottom-width: 3px; border-right-width: 3px; }
+.shot-record-badge {
+  position: absolute;
+  left: -2px;
+  top: -24px;
+  padding: 2px 8px;
+  border-radius: 5px;
+  background: rgb(22 30 38 / 86%);
+  color: #fff;
+  font-size: 11.5px;
+  line-height: 1.4;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--frame-accent);
+}
+.shot-record-badge[data-inside="true"] {
+  top: 6px;
+  left: 6px;
+}
+.shot-record-countdown {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  min-width: 44px;
+  height: 40px;
+  padding: 0 12px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: rgb(18 25 34 / 82%);
+  border: 1.5px solid #f97316;
+  color: #fff;
+  font-size: 24px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.shot-video-image[data-stage="live"] {
+  box-shadow: inset 0 0 0 2px #e03131;
+}
+.shot-video-image[data-stage="paused"] {
+  box-shadow: inset 0 0 0 2px #d97706;
+}
+.shot-video-image[data-stage="delay"] {
+  box-shadow: inset 0 0 0 2px #f97316;
+}
+@keyframes shot-rec-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.72; }
+}
 @media (max-width: 650px) {
   .shot-columns {
     flex-direction: column;

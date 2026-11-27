@@ -226,6 +226,7 @@ internal static class CaptureWindowsChecks
                 if (Array.IndexOf(args, "--recording-quick") is int quick && quick >= 0)
                     VerifyQuickRecording(tools, fixture, current, args[quick + 1]);
             }
+            VerifyRecordingFrameUi(directory);
             VerifyCalendarMenu(store, tools);
             string source = liveScreen ? "真实 GDI 桌面" : "公开样例像素";
             Console.WriteLine($"{source} / Windows 选区 / 置顶贴图 / OCR，{selected.Width}×{selected.Height} px，DPI {Native.GetDpiForWindow(hwnd)}。");
@@ -247,12 +248,27 @@ internal static class CaptureWindowsChecks
             Pump();
             DwmFlush();
         }
+        fixture.Content = null;
         Color(Brushes.OrangeRed);
         var controls = PrepareRecording(tools, current);
+        var frame = Application.Current.Windows.OfType<RecordingRegionFrame>().Single();
+        Pump();
+        var frameHwnd = new WindowInteropHelper(frame).Handle;
+        nint frameStyle = Native.GetStyle(frameHwnd, -20);
+        Check(frame.IsVisible && frame.Topmost && frame.CaptureExcluded && frame.State == RecordingFrameState.Ready, "录制范围框未在就绪态置顶且免捕获显示");
+        Check((frameStyle & (Native.WsExTransparent | Native.WsExToolWindow | Native.WsExNoActivate)) ==
+            (Native.WsExTransparent | Native.WsExToolWindow | Native.WsExNoActivate), "录制范围框未启用鼠标穿透、工具窗与免激活样式");
+        var recArea = Native.VisibleRect(new WindowInteropHelper(fixture).Handle);
+        Check(frame.FrameBounds.Left <= recArea.Left && frame.FrameBounds.Top <= recArea.Top &&
+            frame.FrameBounds.Right >= recArea.Right && frame.FrameBounds.Bottom >= recArea.Bottom,
+            $"录制范围框 {frame.FrameBounds} 未包围录制区 {recArea}");
+
         bool audio = args.Contains("--recording-device-audio");
         if (audio)
             All<CheckBox>(controls).Single(button => Equals(button.Content, "系统声音")).IsChecked = true;
         Click(controls, "开始录制");
+        Pump(80);
+        Check(frame.State == RecordingFrameState.Live, "开始录制后录制范围框未切换为录制红框状态");
         using var tone = audio ? Tone() : null;
         using var player = tone is not null ? new SoundPlayer(tone) : null;
         if (audio)
@@ -262,15 +278,19 @@ internal static class CaptureWindowsChecks
         }
         Pump(550);
         Click(controls, "暂停");
+        Check(frame.State == RecordingFrameState.Paused, "暂停后录制范围框未切换为暂停状态");
         Color(Brushes.Blue);
         Pump(500);
         Color(Brushes.LimeGreen);
         Click(controls, "继续");
+        Check(frame.State == RecordingFrameState.Live, "继续录制后录制范围框未恢复录制状态");
         Pump(650);
         Click(controls, "停止录制");
         var deadline = DateTime.UtcNow.AddSeconds(12);
         while (DateTime.UtcNow < deadline && !Application.Current.Windows.OfType<RecordingPreview>().Any())
             Pump(100);
+        Pump(40);
+        Check(!Application.Current.Windows.OfType<RecordingRegionFrame>().Any(), "停止录制后录制范围框未销毁");
         Check(Application.Current.Windows.OfType<RecordingPreview>().Any(),
             "停止录制后回放窗口未出现，状态 " + string.Join(" / ", All<TextBlock>(controls).Select(block => block.Text)));
         var playback = Application.Current.Windows.OfType<RecordingPreview>().Single();
@@ -292,21 +312,36 @@ internal static class CaptureWindowsChecks
         using (var readback = new ClipReader(clip, audio, 0))
         {
             var colors = new List<(byte B, byte G, byte R)>();
+            var cornerColors = new List<((byte B, byte G, byte R) TL, (byte B, byte G, byte R) TR, (byte B, byte G, byte R) BL, (byte B, byte G, byte R) BR)>();
             int peak = 0;
-            foreach (var frame in readback.Samples(audio, clip.Duration.Ticks))
+            static (byte B, byte G, byte R) ReadAt(byte[] buf, int width, int x, int y)
             {
-                if (frame.IsVideo)
+                int i = (y * width + x) * 4;
+                return (buf[i], buf[i + 1], buf[i + 2]);
+            }
+            foreach (var frameData in readback.Samples(audio, clip.Duration.Ticks))
+            {
+                if (frameData.IsVideo)
                 {
                     int pixel = (6 * clip.Width + 6) * 4;
-                    colors.Add((frame.Data[pixel], frame.Data[pixel + 1], frame.Data[pixel + 2]));
+                    colors.Add((frameData.Data[pixel], frameData.Data[pixel + 1], frameData.Data[pixel + 2]));
+                    var tl = ReadAt(frameData.Data, clip.Width, 0, 0);
+                    var tr = ReadAt(frameData.Data, clip.Width, clip.Width - 1, 0);
+                    var bl = ReadAt(frameData.Data, clip.Width, 0, clip.Height - 1);
+                    var br = ReadAt(frameData.Data, clip.Width, clip.Width - 1, clip.Height - 1);
+                    cornerColors.Add((tl, tr, bl, br));
                 }
                 else
-                    for (int i = 0; i + 1 < frame.Data.Length; i += 2)
-                        peak = Math.Max(peak, Math.Abs((int)BitConverter.ToInt16(frame.Data, i)));
+                    for (int i = 0; i + 1 < frameData.Data.Length; i += 2)
+                        peak = Math.Max(peak, Math.Abs((int)BitConverter.ToInt16(frameData.Data, i)));
             }
             Check(colors.Any(p => p.R > 200 && p.B < 30) && colors.Any(p => p.G > 160 && p.R < 80),
                 "录制文件没有读回实际桌面的前后两种颜色");
             Check(colors.All(p => p.B < 160), "暂停期间的画面进入了录屏");
+            Check(cornerColors.Any(c => c.TL.R > 200 && c.TR.R > 200 && c.BL.R > 200 && c.BR.R > 200) &&
+                cornerColors.Any(c => c.TL.G > 160 && c.TR.G > 160 && c.BL.G > 160 && c.BR.G > 160) &&
+                cornerColors.All(c => c.TL.B < 160 && c.TR.B < 160 && c.BL.B < 160 && c.BR.B < 160),
+                "录制画面边角存在边框颜色污染");
             if (audio)
             {
                 Check(peak >= 200, "系统声音录制未读回公开测试音");
@@ -327,6 +362,59 @@ internal static class CaptureWindowsChecks
         Check(video.Position > TimeSpan.Zero, "回放未推进");
         playback.Shutdown(preserveRecording: false);
         Console.WriteLine($"通过：Windows 公开桌面实录 {clip.Width}×{clip.Height}，{clip.Duration.TotalSeconds:F2} 秒，读回录制前后画面，暂停画面未写入。");
+    }
+
+    private static void VerifyRecordingFrameUi(string directory)
+    {
+        var app = Application.Current;
+        var area = new PixelRect(200, 180, 640, 420);
+        var recWin = new RecordingWindow(area, Path.Combine(directory, "rec-ui"), _ => { });
+        recWin.Show();
+        Pump(100);
+        var frame = app.Windows.OfType<RecordingRegionFrame>().Single();
+        var frameHwnd = new WindowInteropHelper(frame).Handle;
+        nint frameStyle = Native.GetStyle(frameHwnd, -20);
+        Check(frame.IsVisible && frame.Topmost && frame.CaptureExcluded && frame.State == RecordingFrameState.Ready,
+            "UI 用例：录制范围框应可见、置顶、排除捕获且初始为就绪状态");
+        Check((frameStyle & (Native.WsExTransparent | Native.WsExToolWindow | Native.WsExNoActivate)) ==
+            (Native.WsExTransparent | Native.WsExToolWindow | Native.WsExNoActivate),
+            "UI 用例：录制范围框缺少鼠标穿透、工具窗或免激活扩展样式");
+        Check(frame.FrameBounds.Left <= area.Left && frame.FrameBounds.Top <= area.Top &&
+            frame.FrameBounds.Right >= area.Right && frame.FrameBounds.Bottom >= area.Bottom &&
+            frame.ActualWidth > 0 && frame.ActualHeight > 0,
+            $"UI 用例：录制范围框尺寸与物理定位异常 {frame.FrameBounds} ({frame.ActualWidth}x{frame.ActualHeight})");
+
+        frame.UpdateState(RecordingFrameState.Countdown, 3);
+        Check(frame.State == RecordingFrameState.Countdown && frame.Opacity == 1.0, "UI 用例：倒计时状态不符");
+        frame.UpdateState(RecordingFrameState.Live);
+        Pump(220);
+        Check(frame.State == RecordingFrameState.Live && frame.Opacity is >= 0.7 and <= 1.0, "UI 用例：录制中呼吸态不符");
+
+        int rw = Math.Max(1, (int)Math.Round(frame.ActualWidth)), rh = Math.Max(1, (int)Math.Round(frame.ActualHeight));
+        var rtb = new RenderTargetBitmap(rw, rh, 96, 96, PixelFormats.Pbgra32);
+        rtb.Render((Visual)frame.Content);
+        var buf = new byte[rw * rh * 4];
+        rtb.CopyPixels(buf, rw * 4, 0);
+        bool hasRedBorder = false;
+        for (int y = 0; y < Math.Min(6, rh) && !hasRedBorder; y++)
+            for (int x = 0; x < rw; x++)
+            {
+                int i = (y * rw + x) * 4;
+                if (buf[i + 3] > 180 && buf[i + 2] > 180 && buf[i + 1] < 100 && buf[i] < 100)
+                {
+                    hasRedBorder = true;
+                    break;
+                }
+            }
+        int center = ((rh / 2) * rw + (rw / 2)) * 4;
+        Check(hasRedBorder && buf[center + 3] == 0, "UI 用例：录制框离屏渲染未绘出红框或中心非全透明");
+
+        frame.UpdateState(RecordingFrameState.Paused);
+        Check(frame.State == RecordingFrameState.Paused && frame.Opacity == 1.0, "UI 用例：暂停状态应停止呼吸并恢复不透明");
+        frame.UpdateState(RecordingFrameState.Ready);
+        recWin.Shutdown();
+        Pump(50);
+        Check(!app.Windows.OfType<RecordingRegionFrame>().Any(), "UI 用例：控制窗退出后录制范围框未关闭");
     }
 
     private static RecordingWindow PrepareRecording(CaptureTools tools, PixelPoint current)

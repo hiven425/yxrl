@@ -117,6 +117,7 @@ internal static class CaptureChecks
         CheckClipboardImage(directory);
         CheckEditableMarks();
         CheckOcrLayout();
+        CheckRecordingFrameBounds();
         CheckScrollStitch();
         var image = TestImage();
         var doc = new ShotDocument(image);
@@ -308,6 +309,21 @@ internal static class CaptureChecks
         data.SetData("PNG", broken, autoConvert: false);
         Check(CaptureTools.ReadClipboardImage(data) == emptyBitmap, "PNG 损坏时没有读取同一份剪贴板里的位图");
         Check(CaptureTools.ReadClipboardImage(new DataObject()) is null, "空剪贴板产生了贴图");
+    }
+
+    private static void CheckRecordingFrameBounds()
+    {
+        var desktop = new PixelRect(0, 0, 1920, 1080);
+        // 1. 居中区域：四边外扩 outset 像素
+        Check(RecordingRegionFrame.CalculateBounds(new(100, 100, 500, 300), desktop, 5) == new PixelRect(95, 95, 505, 305), "录制框居中外扩");
+        // 2. 全屏区域：四边钳位在虚拟桌面内部
+        Check(RecordingRegionFrame.CalculateBounds(desktop, desktop, 5) == desktop, "录制框全屏贴边钳位");
+        // 3. 半贴边区域：左/上贴边，右/下外扩
+        Check(RecordingRegionFrame.CalculateBounds(new(0, 0, 600, 400), desktop, 4) == new PixelRect(0, 0, 604, 404), "录制框半贴边钳位");
+        // 4. 负坐标副屏区域
+        var dualDesktop = new PixelRect(-1920, 0, 1920, 1080);
+        Check(RecordingRegionFrame.CalculateBounds(new(-1000, 200, -400, 600), dualDesktop, 6) == new PixelRect(-1006, 194, -394, 606), "录制框负坐标副屏外扩");
+        Check(RecordingRegionFrame.CalculateBounds(new(-1920, 0, -1200, 1080), dualDesktop, 6) == new PixelRect(-1920, 0, -1194, 1080), "录制框负坐标边界钳位");
     }
 
     private static async Task CheckTranslation()

@@ -45,14 +45,19 @@ internal sealed record DesktopFrame(BitmapSource Image, PixelRect Bounds, PixelR
         return Native.GetMonitorInfo(MonitorFromPoint(point, 2), ref info) ? info.Work : default;
     }
 
+    internal static PixelRect VirtualBounds()
+    {
+        int x = GetSystemMetrics(76), y = GetSystemMetrics(77), w = GetSystemMetrics(78), h = GetSystemMetrics(79);
+        return w > 0 && h > 0 ? new PixelRect(x, y, x + w, y + h) : default;
+    }
+
     internal static bool HasActiveDisplay() => GetDisplayConfigBufferSizes(2, out uint paths, out _) == 0 && paths > 0;
 
     public static DesktopFrame Freeze()
     {
         if (SessionLocked())
             throw new InvalidOperationException("Windows 桌面已锁定，请解锁后重新截图。");
-        int x = GetSystemMetrics(76), y = GetSystemMetrics(77), w = GetSystemMetrics(78), h = GetSystemMetrics(79);
-        var bounds = new PixelRect(x, y, x + w, y + h);
+        var bounds = VirtualBounds();
         if (!bounds.HasArea)
             throw new InvalidOperationException("Windows 没有可捕获的桌面。");
         var monitors = new List<PixelRect>();

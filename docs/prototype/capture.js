@@ -92,6 +92,7 @@ const CapturePreview = (function createPreview() {
   function reset() {
     finish();
     closeRecording();
+    desk()?.querySelectorAll(".shot-record-frame").forEach(el => el.remove());
     recoverySample = null;
     closeScroll();
     panel?.remove();
@@ -999,11 +1000,67 @@ const CapturePreview = (function createPreview() {
   function closeRecording() {
     if (!recordingClip) return;
     clearInterval(recordingClip.timer);
+    recordingClip.frame?.remove();
     recordingClip.view.remove();
     recordingClip = null;
   }
-  function recordingPanel(shot, recovered = null) {
+  function createRecordFrame(rect) {
+    if (!rect) return null;
+    const host = desk();
+    if (!host) return null;
+    const hw = host.clientWidth || 926, hh = host.clientHeight || 780;
+    const outset = 3;
+    const left = Math.max(0, Math.round(rect.x - outset));
+    const top = Math.max(0, Math.round(rect.y - outset));
+    const right = Math.min(hw, Math.round(rect.x + rect.w + outset));
+    const bottom = Math.min(hh, Math.round(rect.y + rect.h + outset));
+    const frame = element("div", "shot-record-frame", host);
+    frame.setAttribute("aria-hidden", "true");
+    frame.dataset.stage = "ready";
+    frame.style.left = left + "px";
+    frame.style.top = top + "px";
+    frame.style.width = Math.max(12, right - left) + "px";
+    frame.style.height = Math.max(12, bottom - top) + "px";
+    frame.innerHTML = `<i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i><span class="shot-record-badge">录制范围 · ${Math.round(rect.w)} × ${Math.round(rect.h)}</span><span class="shot-record-countdown" hidden></span>`;
+    if (top < 28) frame.querySelector(".shot-record-badge").dataset.inside = "true";
+    return frame;
+  }
+  function positionRecorder(view, rect, stage) {
+    if (!rect || stage === "review") {
+      view.style.top = "";
+      view.style.left = "";
+      view.style.transform = "";
+      return;
+    }
+    const host = desk();
+    if (!host) return;
+    const hw = host.clientWidth || 926, hh = host.clientHeight || 780;
+    const vw = view.offsetWidth || 568, vh = view.offsetHeight || 360;
+    const candidates = [
+      { left: clamp(rect.x, 8, Math.max(8, hw - vw - 8)), top: rect.y + rect.h + 12 },
+      { left: clamp(rect.x, 8, Math.max(8, hw - vw - 8)), top: rect.y - vh - 12 },
+      { left: rect.x + rect.w + 12, top: clamp(rect.y, 8, Math.max(8, hh - vh - 8)) },
+      { left: rect.x - vw - 12, top: clamp(rect.y, 8, Math.max(8, hh - vh - 8)) },
+    ];
+    for (const pos of candidates) {
+      const fits = pos.left >= 4 && pos.top >= 4 && pos.left + vw <= hw - 4 && pos.top + vh <= hh - 4;
+      const overlap = !(pos.left + vw <= rect.x - 4 || pos.left >= rect.x + rect.w + 4 || pos.top + vh <= rect.y - 4 || pos.top >= rect.y + rect.h + 4);
+      if (fits && !overlap) {
+        view.style.left = Math.round(pos.left) + "px";
+        view.style.top = Math.round(pos.top) + "px";
+        view.style.transform = "none";
+        return;
+      }
+    }
+    view.style.top = "";
+    view.style.left = "";
+    view.style.transform = "";
+  }
+  function recordingPanel(shot, recovered = null, rect = null) {
     closeRecording();
+    const areaRect = rect || shot?.rect || null;
+    if (shot && areaRect) shot.rect = areaRect;
+    const frame = createRecordFrame(areaRect);
     const view = element("section", "shot-recorder", desk());
     view.setAttribute("aria-label", "屏幕录制演示");
     view.innerHTML = `<header><b>屏幕录制</b>${button("video-close", "关闭录屏", "×")}</header>
@@ -1018,7 +1075,7 @@ const CapturePreview = (function createPreview() {
       <div class="shot-camera-fields" hidden><label>摄像头设备 <select><option>本机摄像头（示例）</option></select></label>
       <label>位置 <select id="shot-camera-corner" aria-label="摄像头位置"><option>右下</option><option>左下</option><option>右上</option><option>左上</option></select></label><label><input type="checkbox" id="shot-camera-circle"> 圆形</label></div></div>
       <div class="shot-video-trim" hidden><label>回放进度 <input id="shot-playhead" type="range" min="0" step="0.1"></label>
-      <label>开始（秒） <input type="number" min="0" value="0" step=".1"></label><label>结束（秒） <input type="number" min="0" step=".1"></label>
+      <label>开始（秒） <input type="number" min="0" value="0" step=".1"></label><label>结束（秒） <input id="shot-video-end" type="number" min="0" step=".1"></label>
       <label>倍速 <select id="shot-speed">${[.25,.5,1,1.25,1.5,2].map(speed => `<option ${speed === 1 ? "selected" : ""}>${speed}</option>`).join("")}</select></label>
       <label>导出格式 <select><option>MP4</option><option>GIF</option><option>WebP</option></select></label>
       ${["左", "上", "右", "下"].map(side => `<label>裁${side} <input type="number" min="0" value="0" data-crop="${side}"></label>`).join("")}</div>
@@ -1028,7 +1085,7 @@ const CapturePreview = (function createPreview() {
       <div class="shot-row">${button("video-start", "开始录制")}${button("video-pause", "暂停")}${button("video-save", "另存为")}${button("video-repeat", "重新录制")}${button("video-interrupt", "模拟中断")}</div>
       <p class="shot-video-status" role="status"></p>`;
     view.querySelector("img").src = shot.image.toDataURL();
-    recordingClip = { view, shot, stage: recovered ? "review" : "ready", elapsed: recovered?.elapsed || 0, left: 0, position: 0,
+    recordingClip = { view, frame, rect: areaRect, shot, stage: recovered ? "review" : "ready", elapsed: recovered?.elapsed || 0, left: 0, position: 0,
       options: recovered?.options || {}, timer: null };
     if (recovered) {
       view.querySelector("#shot-video-end").value = recovered.elapsed.toFixed(1);
@@ -1091,6 +1148,22 @@ const CapturePreview = (function createPreview() {
     const status = view.querySelector(".shot-video-status");
     status.textContent = `${label} · ${(review ? clip.position : clip.elapsed).toFixed(1)} 秒 · 离线演示`;
     status.dataset.live = String(live);
+    view.querySelector(".shot-video-image").dataset.stage = stage;
+    if (clip.frame) {
+      clip.frame.hidden = review;
+      clip.frame.dataset.stage = stage;
+      const badge = clip.frame.querySelector(".shot-record-badge");
+      if (badge && clip.rect) {
+        const prefix = live ? "● 录制中" : paused ? "已暂停" : stage === "delay" ? "准备录制" : "录制范围";
+        badge.textContent = `${prefix} · ${Math.round(clip.rect.w)} × ${Math.round(clip.rect.h)}`;
+      }
+      const cd = clip.frame.querySelector(".shot-record-countdown");
+      if (cd) {
+        cd.hidden = stage !== "delay";
+        if (stage === "delay") cd.textContent = String(Math.max(1, Math.ceil(clip.left)));
+      }
+    }
+    positionRecorder(view, clip.rect, stage);
     const marker = view.querySelector(".shot-video-position");
     marker.hidden = !(clip.options.mouse && (review || live || paused)) ||
       (review && !mixer.querySelector('[data-effect="mouse"] input').checked);
@@ -1363,7 +1436,19 @@ const CapturePreview = (function createPreview() {
       if (selHistory.length > 20) selHistory.shift();
     }
     const shot = ed ? flat(ed) : pin.shot;
-    if (id === "record" && ed && !ed.pin) { finish(); return recordingPanel(shot); }
+    if (id === "record" && ed && !ed.pin) {
+      const box = ed.c.getBoundingClientRect(), d = desk().getBoundingClientRect();
+      const sx = box.width / ed.c.width, sy = box.height / ed.c.height;
+      const rect = {
+        x: Math.round(box.left - d.left + ed.sel.x * sx),
+        y: Math.round(box.top - d.top + ed.sel.y * sy),
+        w: Math.round(ed.sel.w * sx),
+        h: Math.round(ed.sel.h * sy),
+      };
+      shot.rect = rect;
+      finish();
+      return recordingPanel(shot, null, rect);
+    }
     if (id === "scroll" && ed && !ed.pin) { finish(); return scrollingPanel(shot); }
     if (id === "apply") {
       ed.pin.shot = shot;
