@@ -46,6 +46,7 @@ internal sealed class RecordingWindow : Window
         this.showPreview = showPreview;
         regionFrame = new RecordingRegionFrame(area);
         Title = "YXRL 屏幕录制";
+        if (Views.Theme.AppIcon is { } appIcon) Icon = appIcon;
         AutomationProperties.SetAutomationId(this, "YxrlRecorder");
         AutomationProperties.SetLiveSetting(status, AutomationLiveSetting.Polite);
         Topmost = true;

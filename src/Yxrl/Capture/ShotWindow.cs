@@ -4,11 +4,13 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Data;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Effects;
+using System.Windows.Shapes;
 using System.Windows.Threading;
 using Yxrl.Desktop;
 
@@ -42,7 +44,7 @@ internal sealed class ShotWindow : Window
     private readonly Grid root = new() { Background = Brushes.Transparent };
     private readonly Canvas chrome = new() { ClipToBounds = true };
     private readonly TextBlock dimensions = new() { Margin = new Thickness(6, 2, 6, 2), FontSize = 12 };
-    private readonly Border info, toolbar, inlineHost, pinHudBorder;
+    private readonly Border info, toolbar, styleBarHost, inlineHost, pinHudBorder;
     private readonly TextBlock pinHudText = new() { FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = Brushes.White };
     private readonly TextBox inlineEditor = new()
     {
@@ -59,14 +61,14 @@ internal sealed class ShotWindow : Window
     private readonly ComboBox size = new() { MinHeight = 26, Padding = new Thickness(7, 2, 22, 2) };
     private readonly ComboBox font = new() { Width = 104, MinHeight = 26, Padding = new Thickness(7, 2, 22, 2) };
     private readonly TextBox number = new() { Width = 48, MinHeight = 26, MaxLength = 4, Padding = new Thickness(5, 2, 5, 2) };
-    private readonly CheckBox bold = new() { Content = "粗体", Margin = new Thickness(4, 0, 4, 0) };
-    private readonly CheckBox back = new() { Content = "背景", Margin = new Thickness(4, 0, 4, 0) };
-    private readonly CheckBox square = new() { Content = "方形", Margin = new Thickness(4, 0, 4, 0) };
-    private readonly CheckBox italic = new() { Content = "斜体", Margin = new Thickness(4, 0, 4, 0) };
-    private readonly CheckBox outline = new() { Content = "描边", Margin = new Thickness(4, 0, 4, 0) };
-    private readonly Button numberNote = new() { Content = "编号说明", Padding = new Thickness(7, 2, 7, 2), MinHeight = 26 };
+    private readonly ToggleButton bold = new() { Content = new TextBlock { Text = "B", FontWeight = FontWeights.Bold }, ToolTip = "粗体", Margin = new Thickness(2, 0, 2, 0), Padding = new Thickness(8, 2, 8, 2), MinHeight = 26 };
+    private readonly ToggleButton italic = new() { Content = new TextBlock { Text = "I", FontStyle = FontStyles.Italic, FontFamily = new FontFamily("Georgia, Segoe UI") }, ToolTip = "斜体", Margin = new Thickness(2, 0, 2, 0), Padding = new Thickness(9, 2, 9, 2), MinHeight = 26 };
+    private readonly ToggleButton outline = new() { Content = "描边", Margin = new Thickness(2, 0, 2, 0), Padding = new Thickness(8, 2, 8, 2), MinHeight = 26 };
+    private readonly ToggleButton back = new() { Content = "背景", Margin = new Thickness(2, 0, 2, 0), Padding = new Thickness(8, 2, 8, 2), MinHeight = 26 };
+    private readonly ToggleButton square = new() { Content = "方形", Margin = new Thickness(2, 0, 2, 0), Padding = new Thickness(8, 2, 8, 2), MinHeight = 26 };
+    private readonly Button numberNote = new() { Content = "编号说明", Padding = new Thickness(8, 2, 8, 2), MinHeight = 26, FontSize = 12 };
     private readonly TextBlock numberLabel = new() { VerticalAlignment = VerticalAlignment.Center, FontSize = 12 };
-    private readonly List<(Button Button, Color Color)> colorSwatches = [];
+    private readonly List<(Border Ring, Color Color)> colorSwatches = [];
     private readonly Dictionary<MarkKind, Button> marks = new();
     private Button undo = null!, redo = null!, clearMarks = null!;
     private Button? refreshButton;
@@ -157,17 +159,27 @@ internal sealed class ShotWindow : Window
         root.Children.Add(surface);
         root.Children.Add(chrome);
 
+        dimensions.Foreground = Brushes.White;
+        dimensions.Margin = new Thickness(4, 1, 6, 1);
         var infoRow = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         infoRow.Children.Add(dimensions);
         if (Selecting)
         {
-            refreshButton = SmallBarButton("↻", "刷新画面", RefreshDesktop);
+            refreshButton = SmallBarButton("M 20 11 A 8 8 0 1 0 18.2 16 M 20 4 V 11 H 13", "刷新画面", RefreshDesktop);
             infoRow.Children.Add(refreshButton);
         }
-        info = Panel(infoRow);
+        info = DarkPillPanel(infoRow);
+        styleBarHost = new Border
+        {
+            Child = styleControls,
+            BorderThickness = new Thickness(0, 1, 0, 0),
+            Margin = new Thickness(0, 5, 0, 0),
+            Padding = new Thickness(2, 6, 2, 1)
+        };
+        styleBarHost.SetResourceReference(Border.BorderBrushProperty, "Line");
         var toolsPanel = new StackPanel();
         toolsPanel.Children.Add(buttons);
-        toolsPanel.Children.Add(styleControls);
+        toolsPanel.Children.Add(styleBarHost);
         toolbar = Panel(toolsPanel);
         chrome.Children.Add(info);
         chrome.Children.Add(toolbar);
@@ -251,7 +263,7 @@ internal sealed class ShotWindow : Window
         var border = new Border
         {
             Child = child,
-            Padding = new Thickness(5, 4, 5, 4),
+            Padding = new Thickness(6, 5, 6, 5),
             CornerRadius = new CornerRadius(10),
             BorderThickness = new Thickness(1),
             Effect = SoftShadow()
@@ -261,17 +273,73 @@ internal sealed class ShotWindow : Window
         return border;
     }
 
-    private static Button SmallBarButton(string glyph, string name, Action click)
+    private static Border DarkPillPanel(UIElement child) => new()
+    {
+        Child = child,
+        Padding = new Thickness(6, 3, 5, 3),
+        CornerRadius = new CornerRadius(8),
+        BorderThickness = new Thickness(1),
+        Background = new SolidColorBrush(Color.FromArgb(224, 22, 31, 41)),
+        BorderBrush = new SolidColorBrush(Color.FromArgb(46, 255, 255, 255)),
+        Effect = SoftShadow()
+    };
+
+    private static Viewbox VectorIcon(string geometryData, double iconSize = 14)
+    {
+        var path = new System.Windows.Shapes.Path
+        {
+            Width = 24,
+            Height = 24,
+            Data = Geometry.Parse(geometryData),
+            StrokeThickness = 1.85,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+            StrokeLineJoin = PenLineJoin.Round
+        };
+        path.SetBinding(Shape.StrokeProperty, new Binding
+        {
+            Path = new PropertyPath(TextElement.ForegroundProperty),
+            RelativeSource = RelativeSource.Self
+        });
+        return new Viewbox
+        {
+            Width = iconSize,
+            Height = iconSize,
+            Stretch = Stretch.Uniform,
+            Child = path
+        };
+    }
+
+    private static Button SmallBarButton(string iconData, string name, Action click)
     {
         var b = new Button
         {
-            Content = glyph,
+            Content = VectorIcon(iconData, 13),
+            Foreground = Brushes.White,
+            Background = Brushes.Transparent,
+            BorderBrush = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Cursor = Cursors.Hand,
             ToolTip = $"{name}（F5）",
-            Padding = new Thickness(5, 1, 5, 1),
+            Padding = new Thickness(4, 2, 4, 2),
             MinWidth = 24,
-            MinHeight = 22,
-            FontSize = 12
+            MinHeight = 22
         };
+        var template = new ControlTemplate(typeof(Button));
+        var box = new FrameworkElementFactory(typeof(Border));
+        box.Name = "Box";
+        box.SetValue(Border.CornerRadiusProperty, new CornerRadius(5));
+        box.SetValue(Border.PaddingProperty, new TemplateBindingExtension(Button.PaddingProperty));
+        box.SetValue(Border.BackgroundProperty, Brushes.Transparent);
+        var presenter = new FrameworkElementFactory(typeof(ContentPresenter));
+        presenter.SetValue(HorizontalAlignmentProperty, HorizontalAlignment.Center);
+        presenter.SetValue(VerticalAlignmentProperty, VerticalAlignment.Center);
+        box.AppendChild(presenter);
+        template.VisualTree = box;
+        var hover = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
+        hover.Setters.Add(new Setter(Border.BackgroundProperty, new SolidColorBrush(Color.FromArgb(46, 255, 255, 255)), "Box"));
+        template.Triggers.Add(hover);
+        b.Template = template;
         AutomationProperties.SetName(b, name);
         b.Click += (_, _) => click();
         return b;
@@ -279,20 +347,20 @@ internal sealed class ShotWindow : Window
 
     private void BuildMainToolbar()
     {
-        foreach (var (tool, label, sign) in new[]
+        foreach (var (tool, label, iconData) in new[]
         {
-            (MarkKind.Rectangle, "矩形", "□"),
-            (MarkKind.Ellipse, "椭圆", "○"),
-            (MarkKind.Arrow, "箭头", "↗"),
-            (MarkKind.Line, "线段", "／"),
-            (MarkKind.Pen, "画笔", "✎"),
-            (MarkKind.Highlight, "荧光笔", "荧光"),
-            (MarkKind.Text, "添加文字", "文字"),
-            (MarkKind.Number, "序号", "序号"),
-            (MarkKind.Mosaic, "马赛克", "▦")
+            (MarkKind.Rectangle, "矩形", "M 4 6 H 20 V 18 H 4 Z"),
+            (MarkKind.Ellipse, "椭圆", "M 12 5 A 8 7 0 1 0 12 19 A 8 7 0 1 0 12 5 Z"),
+            (MarkKind.Arrow, "箭头", "M 5 19 L 19 5 M 11 5 H 19 V 13"),
+            (MarkKind.Line, "线段", "M 5 19 L 19 5"),
+            (MarkKind.Pen, "画笔", "M 16 4 L 20 8 L 8 20 L 4 20 L 4 16 Z M 13.5 6.5 L 17.5 10.5"),
+            (MarkKind.Highlight, "荧光笔", "M 9 11 L 13 15 L 20 8 L 16 4 Z M 8 12 L 4 16 L 8 20 L 12 16 M 4 21 H 13"),
+            (MarkKind.Text, "添加文字", "M 5 6 H 19 M 12 6 V 19 M 8.5 19 H 15.5"),
+            (MarkKind.Number, "序号", "M 12 3 A 9 9 0 1 1 12 21 A 9 9 0 1 1 12 3 M 10 9.5 L 12.5 8 V 16 M 10 16 H 15"),
+            (MarkKind.Mosaic, "马赛克", "M 4 4 H 20 V 20 H 4 Z M 4 9.3 H 20 M 4 14.7 H 20 M 9.3 4 V 20 M 14.7 4 V 20")
         })
         {
-            marks[tool] = AddToolButton(sign, label, () =>
+            marks[tool] = AddToolButton(VectorIcon(iconData, 14), label, () =>
             {
                 CommitInlineText();
                 surface.UseTool(surface.Tool == tool ? null : tool);
@@ -301,12 +369,12 @@ internal sealed class ShotWindow : Window
         }
 
         AddSeparator();
-        undo = AddToolButton("↶", "撤销", () =>
+        undo = AddToolButton(VectorIcon("M 9 14 L 4 9 L 9 4 M 4 9 H 14.5 A 5.5 5.5 0 0 1 14.5 20 H 11", 13.5), "撤销", () =>
         {
             CommitInlineText();
             surface.History(false);
         });
-        redo = AddToolButton("↷", "重做", () =>
+        redo = AddToolButton(VectorIcon("M 15 14 L 20 9 L 15 4 M 20 9 H 9.5 A 5.5 5.5 0 0 0 9.5 20 H 13", 13.5), "重做", () =>
         {
             CommitInlineText();
             surface.History(true);
@@ -326,18 +394,21 @@ internal sealed class ShotWindow : Window
             AddToolButton("录屏", "录制屏幕", OpenRecorder);
         }
         AddToolButton("保存", "保存 PNG", () => Run(ImageAction.Save));
-        AddToolButton("复制", "复制图片", () => Run(ImageAction.Copy));
-        AddToolButton(Selecting ? "×" : "完成", Selecting ? "取消截图" : "完成标注", () =>
-        {
-            CommitInlineText();
-            if (Selecting)
-                Close();
-            else
-                ToggleEditing();
-        });
+        AddToolButton("复制", "复制图片", () => Run(ImageAction.Copy), primary: true);
+        AddToolButton(
+            Selecting ? VectorIcon("M 6 6 L 18 18 M 18 6 L 6 18", 13) : (object)"完成",
+            Selecting ? "取消截图" : "完成标注",
+            () =>
+            {
+                CommitInlineText();
+                if (Selecting)
+                    Close();
+                else
+                    ToggleEditing();
+            });
     }
 
-    private void AddSeparator()
+    private void AddSeparator(WrapPanel? host = null)
     {
         var sep = new Border
         {
@@ -347,21 +418,28 @@ internal sealed class ShotWindow : Window
             VerticalAlignment = VerticalAlignment.Center
         };
         sep.SetResourceReference(Border.BackgroundProperty, "Line");
-        buttons.Children.Add(sep);
+        (host ?? buttons).Children.Add(sep);
     }
 
-    private Button AddToolButton(string text, string name, Action action)
+    private Button AddToolButton(object content, string name, Action action, bool primary = false)
     {
         var b = new Button
         {
-            Content = text,
+            Content = content,
             ToolTip = name,
-            Padding = new Thickness(7, 3, 7, 3),
-            Margin = new Thickness(1, 0, 1, 0),
+            Padding = content is UIElement ? new Thickness(7, 4, 7, 4) : new Thickness(9, 3, 9, 3),
+            Margin = new Thickness(1.5, 0, 1.5, 0),
             MinWidth = 28,
             MinHeight = 28,
             FontSize = 12.5
         };
+        if (primary)
+        {
+            b.SetResourceReference(StyleProperty, "PrimaryButton");
+            b.Padding = new Thickness(12, 3, 12, 3);
+            b.MinHeight = 28;
+            b.Margin = new Thickness(3, 0, 1.5, 0);
+        }
         AutomationProperties.SetName(b, name);
         b.ToolTipOpening += (_, _) =>
         {
@@ -394,41 +472,56 @@ internal sealed class ShotWindow : Window
         {
             Orientation = Orientation.Horizontal,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(2, 4, 6, 1)
+            Margin = new Thickness(1, 0, 4, 0)
         };
         foreach (var (name, value) in PaletteColors)
         {
             var dot = new Border
             {
-                Width = 14,
-                Height = 14,
-                CornerRadius = new CornerRadius(7),
+                Width = 13,
+                Height = 13,
+                CornerRadius = new CornerRadius(6.5),
                 Background = new SolidColorBrush(value),
                 BorderThickness = new Thickness(1),
-                BorderBrush = new SolidColorBrush(value == Colors.White ? Color.FromRgb(160, 175, 188) : Color.FromArgb(80, 0, 0, 0))
+                BorderBrush = new SolidColorBrush(value == Colors.White ? Color.FromRgb(160, 175, 188) : Color.FromArgb(72, 0, 0, 0))
+            };
+            var ring = new Border
+            {
+                Width = 21,
+                Height = 21,
+                CornerRadius = new CornerRadius(10.5),
+                BorderThickness = new Thickness(1.8),
+                BorderBrush = Brushes.Transparent,
+                Background = Brushes.Transparent,
+                Padding = new Thickness(2),
+                Child = dot
             };
             var btn = new Button
             {
-                Content = dot,
-                Width = 22,
-                Height = 22,
-                MinWidth = 22,
-                MinHeight = 22,
-                Padding = new Thickness(2),
+                Content = ring,
+                Width = 24,
+                Height = 24,
+                MinWidth = 24,
+                MinHeight = 24,
+                Padding = new Thickness(0),
                 Margin = new Thickness(1, 0, 1, 0),
-                BorderThickness = new Thickness(1.5),
+                Background = Brushes.Transparent,
                 BorderBrush = Brushes.Transparent,
                 ToolTip = name
             };
             AutomationProperties.SetName(btn, $"颜色：{name}");
             btn.Click += (_, _) => ApplyStyleChange(overrideColor: value);
-            colorSwatches.Add((btn, value));
+            colorSwatches.Add((ring, value));
             swatchPanel.Children.Add(btn);
         }
         styleControls.Children.Add(swatchPanel);
+        AddSeparator(styleControls);
 
         foreach (int option in new[] { 1, 2, 3, 4, 6, 8, 12, 16, 18, 20, 24, 28, 32, 40, 48, 64, 80 })
             size.Items.Add(option);
+        foreach (var toggle in new[] { bold, italic, outline, back, square })
+            toggle.SetResourceReference(StyleProperty, "PillToggle");
+        numberNote.SetResourceReference(StyleProperty, "SecondaryButton");
         foreach (var (control, name) in new (Control, string)[]
         {
             (number, "标注序号"), (size, "标注大小"), (bold, "文字粗体"),
@@ -437,10 +530,11 @@ internal sealed class ShotWindow : Window
         })
         {
             AutomationProperties.SetName(control, name);
-            control.ToolTip = name;
-            control.Margin = new Thickness(3, 4, 3, 1);
+            if (control.ToolTip is null) control.ToolTip = name;
+            control.Margin = new Thickness(2, 0, 2, 0);
             control.VerticalAlignment = VerticalAlignment.Center;
         }
+        numberLabel.Margin = new Thickness(2, 0, 4, 0);
         styleControls.Children.Add(numberLabel);
         foreach (var control in new Control[] { number, size, font, bold, italic, outline, back, square, numberNote })
             styleControls.Children.Add(control);
@@ -974,10 +1068,11 @@ internal sealed class ShotWindow : Window
         var exitBtn = new Button
         {
             Content = "退出鼠标穿透",
-            Padding = new Thickness(8, 3, 8, 3),
-            MinHeight = 24,
+            Padding = new Thickness(9, 3, 9, 3),
+            MinHeight = 26,
             FontSize = 11.5
         };
+        exitBtn.SetResourceReference(StyleProperty, "SecondaryButton");
         exitBtn.Click += (_, _) =>
         {
             if (isPassthrough)
@@ -988,11 +1083,12 @@ internal sealed class ShotWindow : Window
         var host = new Border
         {
             Child = panel,
-            CornerRadius = new CornerRadius(8),
+            CornerRadius = new CornerRadius(9),
             BorderThickness = new Thickness(1),
-            Padding = new Thickness(3)
+            Padding = new Thickness(4, 3, 4, 3),
+            Effect = SoftShadow()
         };
-        host.SetResourceReference(Border.BackgroundProperty, "Paper");
+        host.SetResourceReference(Border.BackgroundProperty, "SurfaceGlass");
         host.SetResourceReference(Border.BorderBrushProperty, "PanelBorder");
         passthroughBar = new Window
         {
@@ -1159,9 +1255,18 @@ internal sealed class ShotWindow : Window
         foreach (var (kind, b) in marks)
         {
             bool active = surface.Tool == kind;
-            b.SetResourceReference(Control.BackgroundProperty, active ? "Hot" : "Paper");
-            b.SetResourceReference(Control.ForegroundProperty, active ? "Accent" : "Ink");
-            b.SetResourceReference(Control.BorderBrushProperty, active ? "Accent" : "Line");
+            if (active)
+            {
+                b.SetResourceReference(Control.BackgroundProperty, "Hot");
+                b.SetResourceReference(Control.ForegroundProperty, "Accent");
+                b.SetResourceReference(Control.BorderBrushProperty, "Accent");
+            }
+            else
+            {
+                b.Background = Brushes.Transparent;
+                b.BorderBrush = Brushes.Transparent;
+                b.SetResourceReference(Control.ForegroundProperty, "Ink");
+            }
             AutomationProperties.SetItemStatus(b, active ? "已选中" : "");
         }
         UpdateStyleControls(show);
@@ -1181,25 +1286,25 @@ internal sealed class ShotWindow : Window
         var style = surface.MarkAppearance;
         var kind = surface.Tool;
         bool isText = kind == MarkKind.Text, isNumber = kind == MarkKind.Number;
-        styleControls.Visibility = show && kind is not null and not MarkKind.Mosaic ? Visibility.Visible : Visibility.Collapsed;
+        styleBarHost.Visibility = show && kind is not null and not MarkKind.Mosaic ? Visibility.Visible : Visibility.Collapsed;
         numberLabel.Visibility = number.Visibility = square.Visibility = isNumber ? Visibility.Visible : Visibility.Collapsed;
         numberNote.Visibility = isNumber && surface.Selected is not null ? Visibility.Visible : Visibility.Collapsed;
         bold.Visibility = back.Visibility = italic.Visibility = outline.Visibility = font.Visibility = isText ? Visibility.Visible : Visibility.Collapsed;
         updatingStyles = true;
         try
         {
-            foreach (var (btn, col) in colorSwatches)
+            foreach (var (ring, col) in colorSwatches)
             {
                 bool match = col == style.Color;
                 if (match)
                 {
-                    btn.SetResourceReference(Control.BorderBrushProperty, "Accent");
-                    btn.SetResourceReference(Control.BackgroundProperty, "Hot");
+                    ring.SetResourceReference(Border.BorderBrushProperty, "Accent");
+                    ring.SetResourceReference(Border.BackgroundProperty, "Hot");
                 }
                 else
                 {
-                    btn.BorderBrush = Brushes.Transparent;
-                    btn.Background = Brushes.Transparent;
+                    ring.BorderBrush = Brushes.Transparent;
+                    ring.Background = Brushes.Transparent;
                 }
             }
             if (!number.IsKeyboardFocusWithin)

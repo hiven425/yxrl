@@ -1,4 +1,4 @@
-# YXRL · Windows 个人日历
+# <img src="assets/yxrl-logo.svg" width="56" height="56" align="absmiddle" alt="YXRL 图标"> YXRL · Windows 个人日历
 
 点一下任务栏原来的时间，打开一张带农历、节气和休班标记的月历。点日期在左侧查看日详情，再点同一天收起。可点原型还可以看日程、勾选待办。界面为个人自用设计，无广告和会员入口。
 

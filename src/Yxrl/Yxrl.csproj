@@ -22,6 +22,7 @@
     <PackageReference Include="RapidOcrNet" Version="[4.2.0]" GeneratePathProperty="true" ExcludeAssets="contentFiles;build;buildTransitive" />
     <InternalsVisibleTo Include="Yxrl.Checks" />
     <EmbeddedResource Include="Calendar/CalendarData.json" />
+    <Resource Include="app.ico" />
     <EmbeddedResource Include="Capture/Models/*.onnx;Capture/Models/ppocrv5_dict.txt;$(PkgRapidOcrNet)/models/v5/ch_PP-OCRv5_mobile_det.onnx;$(PkgRapidOcrNet)/models/v5/ch_PP-LCNet_x0_25_textline_ori_cls_mobile.onnx" LogicalName="Ocr.%(Filename)%(Extension)" />
     <EmbeddedResource Include="Capture/Models/LICENSE-PaddleOCR.txt" LogicalName="License.PaddleOCR" />
     <EmbeddedResource Include="Capture/Models/LICENSE-RapidOCR.txt" LogicalName="License.RapidOCR" />

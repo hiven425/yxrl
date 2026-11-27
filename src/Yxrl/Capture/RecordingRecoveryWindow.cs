@@ -24,6 +24,7 @@ internal sealed class RecordingRecoveryWindow : Window
     public RecordingRecoveryWindow(IEnumerable<RecordingSession> sessions, Action<RecordedClip> open)
     {
         Title = "YXRL 恢复录屏";
+        if (Views.Theme.AppIcon is { } appIcon) Icon = appIcon;
         AutomationProperties.SetAutomationId(this, "YxrlRecordingRecovery");
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         SizeToContent = SizeToContent.Height;

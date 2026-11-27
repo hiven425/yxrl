@@ -11,7 +11,8 @@ namespace Yxrl.Capture;
 internal sealed class ShotSurface : FrameworkElement
 {
     private static readonly Brush Shade = new SolidColorBrush(Color.FromArgb(120, 16, 24, 32));
-    private static readonly Pen Outline = new(new SolidColorBrush(Color.FromRgb(24, 147, 238)), 1.5);
+    private static readonly Pen Outline = new(new SolidColorBrush(Color.FromRgb(24, 147, 238)), 1.6);
+    private static readonly Brush HandleShadow = new SolidColorBrush(Color.FromArgb(90, 12, 20, 28));
     private static readonly Pen GuidePen = new(new SolidColorBrush(Color.FromArgb(145, 24, 147, 238)), 1) { DashStyle = DashStyles.Dash };
     private static readonly Brush LoupeBg = new SolidColorBrush(Color.FromArgb(232, 22, 30, 38));
     private static readonly Pen LoupeBorder = new(new SolidColorBrush(Color.FromArgb(200, 180, 200, 220)), 1);
@@ -19,6 +20,7 @@ internal sealed class ShotSurface : FrameworkElement
     {
         Shade.Freeze();
         Outline.Freeze();
+        HandleShadow.Freeze();
         GuidePen.Freeze();
         LoupeBg.Freeze();
         LoupeBorder.Freeze();
@@ -294,7 +296,8 @@ internal sealed class ShotSurface : FrameworkElement
             foreach (var (_, hp) in ShotDocument.MarkHandles(mark))
             {
                 var hv = View(hp);
-                dc.DrawRectangle(Brushes.White, Outline, new Rect(hv.X - 3, hv.Y - 3, 6, 6));
+                dc.DrawEllipse(HandleShadow, null, hv, 5.2, 5.2);
+                dc.DrawEllipse(Brushes.White, Outline, hv, 4.0, 4.0);
             }
         }
         if (desktop is null)
@@ -315,7 +318,8 @@ internal sealed class ShotSurface : FrameworkElement
                 foreach (var h in ShotSelection.Handles(r))
                 {
                     var v = View(h.Point);
-                    dc.DrawRectangle(Brushes.White, Outline, new Rect(v.X - 3, v.Y - 3, 6, 6));
+                    dc.DrawEllipse(HandleShadow, null, v, 5.2, 5.2);
+                    dc.DrawEllipse(Brushes.White, Outline, v, 4.0, 4.0);
                 }
         }
 

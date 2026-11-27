@@ -1,13 +1,36 @@
 using Microsoft.Win32;
+using System.IO;
 using System.Windows;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using Yxrl.Desktop;
 
 namespace Yxrl.Views;
 
 internal static class Theme
 {
+    private static ImageSource? appIcon;
+    internal static ImageSource? AppIcon
+    {
+        get
+        {
+            if (appIcon is not null) return appIcon;
+            if (Application.Current is null) return null;
+            try
+            {
+                var uri = new Uri("pack://application:,,,/Yxrl;component/app.ico", UriKind.Absolute);
+                var frame = BitmapFrame.Create(uri);
+                frame.Freeze();
+                appIcon = frame;
+            }
+            catch (Exception ex) when (ex is UriFormatException or NotSupportedException or IOException or InvalidOperationException)
+            {
+            }
+            return appIcon;
+        }
+    }
+
     private const string Key = @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize";
     private static readonly string[] Keys = [
         "Surface", "SurfaceGlass", "Paper", "Card", "HoverFill",

@@ -37,6 +37,7 @@ internal sealed class RecordingPreview : Window
     {
         this.clip = clip;
         Title = "YXRL 录屏回放";
+        if (Views.Theme.AppIcon is { } appIcon) Icon = appIcon;
         AutomationProperties.SetAutomationId(this, "YxrlRecordingPreview");
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         var work = SystemParameters.WorkArea;

@@ -41,6 +41,7 @@ internal partial class CalendarWindow : Window
         ReminderStore reminderStore, Action<int> openSettings, Capture.CaptureTools captureTools)
     {
         InitializeComponent();
+        if (Theme.AppIcon is { } appIcon) Icon = appIcon;
         Width = DefaultSize.Width;
         Height = DefaultSize.Height;
         (this.store, this.calendar, this.weather, this.openSettings) = (store, calendar, weather, openSettings);

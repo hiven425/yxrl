@@ -275,9 +275,127 @@
           <StackPanel x:Name="AboutPage" Visibility="Collapsed">
             <Border Style="{StaticResource GroupCard}">
               <StackPanel>
-                <TextBlock Text="YXRL 个人日历" FontSize="17" FontWeight="SemiBold"/>
-                <TextBlock Text="Windows 11 任务栏时钟、中文月历与日期提醒" Style="{StaticResource Subtle}" FontSize="12.5" Margin="0,3,0,0"/>
-                <Expander Header="开源许可" Margin="0,14,0,12" Expanded="ReadLicenses" Foreground="{DynamicResource Ink}">
+                <DockPanel>
+                  <Viewbox DockPanel.Dock="Left" Width="56" Height="56" Margin="0,0,14,0" VerticalAlignment="Center" Stretch="Uniform">
+                    <Canvas Width="256" Height="256">
+                      <Border Canvas.Left="26" Canvas.Top="32" Width="204" Height="200" CornerRadius="42" BorderThickness="1.5">
+                        <Border.Background>
+                          <LinearGradientBrush StartPoint="0.5,0" EndPoint="0.5,1">
+                            <GradientStop Color="#FFFFFFFF" Offset="0"/>
+                            <GradientStop Color="#FFF5F9FE" Offset="0.68"/>
+                            <GradientStop Color="#FFE3EFFB" Offset="1"/>
+                          </LinearGradientBrush>
+                        </Border.Background>
+                        <Border.BorderBrush>
+                          <LinearGradientBrush StartPoint="0.1,0" EndPoint="0.9,1">
+                            <GradientStop Color="#FFD7E8F9" Offset="0"/>
+                            <GradientStop Color="#FF9AC1E5" Offset="1"/>
+                          </LinearGradientBrush>
+                        </Border.BorderBrush>
+                        <Border.Effect>
+                          <DropShadowEffect Direction="270" ShadowDepth="4" BlurRadius="12" Opacity="0.18" Color="#0A233D"/>
+                        </Border.Effect>
+                      </Border>
+                      <Path Data="M 26,90 L 26,74 A 42,42 0 0 1 68,32 L 188,32 A 42,42 0 0 1 230,74 L 230,90 Z">
+                        <Path.Fill>
+                          <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                            <GradientStop Color="#FF0052A3" Offset="0"/>
+                            <GradientStop Color="#FF0B75D1" Offset="0.55"/>
+                            <GradientStop Color="#FF1A98F0" Offset="1"/>
+                          </LinearGradientBrush>
+                        </Path.Fill>
+                      </Path>
+                      <Rectangle Canvas.Left="26" Canvas.Top="88.5" Width="204" Height="2" Fill="#3800448A"/>
+                      <Ellipse Canvas.Left="71.5" Canvas.Top="41.5" Width="21" Height="21" Fill="#8500356B"/>
+                      <Ellipse Canvas.Left="163.5" Canvas.Top="41.5" Width="21" Height="21" Fill="#8500356B"/>
+                      <Path Data="M 68,32 L 164,32 L 92,232 L 68,232 A 42,42 0 0 1 26,190 L 26,74 A 42,42 0 0 1 68,32 Z">
+                        <Path.Fill>
+                          <LinearGradientBrush StartPoint="0,0" EndPoint="1,0.9">
+                            <GradientStop Color="#4CFFFFFF" Offset="0"/>
+                            <GradientStop Color="#10FFFFFF" Offset="0.45"/>
+                            <GradientStop Color="#00FFFFFF" Offset="1"/>
+                          </LinearGradientBrush>
+                        </Path.Fill>
+                      </Path>
+                      <Rectangle Canvas.Left="74" Canvas.Top="16" Width="16" Height="39" RadiusX="8" RadiusY="8" Stroke="#FF7EAAD4" StrokeThickness="1.4">
+                        <Rectangle.Fill>
+                          <LinearGradientBrush StartPoint="0.5,0" EndPoint="0.5,1">
+                            <GradientStop Color="#FFFFFFFF" Offset="0"/>
+                            <GradientStop Color="#FFDCEAF7" Offset="0.55"/>
+                            <GradientStop Color="#FF9BBBD9" Offset="1"/>
+                          </LinearGradientBrush>
+                        </Rectangle.Fill>
+                      </Rectangle>
+                      <Rectangle Canvas.Left="166" Canvas.Top="16" Width="16" Height="39" RadiusX="8" RadiusY="8" Stroke="#FF7EAAD4" StrokeThickness="1.4">
+                        <Rectangle.Fill>
+                          <LinearGradientBrush StartPoint="0.5,0" EndPoint="0.5,1">
+                            <GradientStop Color="#FFFFFFFF" Offset="0"/>
+                            <GradientStop Color="#FFDCEAF7" Offset="0.55"/>
+                            <GradientStop Color="#FF9BBBD9" Offset="1"/>
+                          </LinearGradientBrush>
+                        </Rectangle.Fill>
+                      </Rectangle>
+                      <Path StrokeThickness="7.5" StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
+                            Data="M 51,128 V 116 A 10,10 0 0 1 61,106 H 73 M 183,106 H 195 A 10,10 0 0 1 205,116 V 128 M 51,190 V 202 A 10,10 0 0 0 61,212 H 73 M 183,212 H 195 A 10,10 0 0 0 205,202 V 190">
+                        <Path.Stroke>
+                          <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                            <GradientStop Color="#FF005FB8" Offset="0"/>
+                            <GradientStop Color="#FF1893EE" Offset="1"/>
+                          </LinearGradientBrush>
+                        </Path.Stroke>
+                      </Path>
+                      <Ellipse Canvas.Left="119" Canvas.Top="103" Width="72" Height="72">
+                        <Ellipse.Fill>
+                          <RadialGradientBrush Center="0.5,0.5" GradientOrigin="0.5,0.5" RadiusX="0.5" RadiusY="0.5">
+                            <GradientStop Color="#85FFCA4B" Offset="0"/>
+                            <GradientStop Color="#2EFFB02E" Offset="0.55"/>
+                            <GradientStop Color="#00FFB02E" Offset="1"/>
+                          </RadialGradientBrush>
+                        </Ellipse.Fill>
+                      </Ellipse>
+                      <Ellipse Canvas.Left="131.5" Canvas.Top="115.5" Width="47" Height="47" Stroke="#FFFFF6BF" StrokeThickness="1.4">
+                        <Ellipse.Fill>
+                          <LinearGradientBrush StartPoint="0.15,0.1" EndPoint="0.85,0.9">
+                            <GradientStop Color="#FFFFF099" Offset="0"/>
+                            <GradientStop Color="#FFFFC233" Offset="0.48"/>
+                            <GradientStop Color="#FFF27D0C" Offset="1"/>
+                          </LinearGradientBrush>
+                        </Ellipse.Fill>
+                      </Ellipse>
+                      <Rectangle Canvas.Left="69" Canvas.Top="140" Width="102" Height="58" RadiusX="16" RadiusY="16" Stroke="#EBFFFFFF" StrokeThickness="1.8">
+                        <Rectangle.Fill>
+                          <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                            <GradientStop Color="#EDFFFFFF" Offset="0"/>
+                            <GradientStop Color="#DBCAE5FB" Offset="1"/>
+                          </LinearGradientBrush>
+                        </Rectangle.Fill>
+                        <Rectangle.Effect>
+                          <DropShadowEffect Direction="270" ShadowDepth="3" BlurRadius="9" Opacity="0.16" Color="#0B3B6B"/>
+                        </Rectangle.Effect>
+                      </Rectangle>
+                      <Rectangle Canvas.Left="85" Canvas.Top="156.5" Width="66" Height="9.5" RadiusX="4.75" RadiusY="4.75">
+                        <Rectangle.Fill>
+                          <LinearGradientBrush StartPoint="0,0.5" EndPoint="1,0.5">
+                            <GradientStop Color="#FF005FB8" Offset="0"/>
+                            <GradientStop Color="#FF1A94EE" Offset="1"/>
+                          </LinearGradientBrush>
+                        </Rectangle.Fill>
+                      </Rectangle>
+                      <Rectangle Canvas.Left="85" Canvas.Top="173.5" Width="44" Height="8.5" RadiusX="4.25" RadiusY="4.25" Fill="#D15D9BE0"/>
+                    </Canvas>
+                  </Viewbox>
+                  <StackPanel VerticalAlignment="Center">
+                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                      <TextBlock Text="YXRL 个人日历" FontSize="17" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                      <Border Background="{DynamicResource Hot}" BorderBrush="{DynamicResource Accent}" BorderThickness="1" CornerRadius="9"
+                              Padding="8,1.5" Margin="8,0,0,0" VerticalAlignment="Center">
+                        <TextBlock Text="v0.5.0" FontSize="11" FontWeight="SemiBold" Foreground="{DynamicResource Accent}" Typography.NumeralAlignment="Tabular"/>
+                      </Border>
+                    </StackPanel>
+                    <TextBlock Text="Windows 11 任务栏时钟、中文月历、天气与截图录屏工具" Style="{StaticResource Subtle}" FontSize="12.5" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                  </StackPanel>
+                </DockPanel>
+                <Expander Header="开源许可" Margin="0,16,0,12" Expanded="ReadLicenses" Foreground="{DynamicResource Ink}">
                   <TextBox x:Name="LicenseText" AutomationProperties.Name="开源许可" IsReadOnly="True" MinHeight="110" MaxHeight="230"
                            TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top" FontSize="12" Margin="0,6,0,0"/>
                 </Expander>

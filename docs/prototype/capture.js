@@ -32,17 +32,22 @@ const CapturePreview = (function createPreview() {
     number: "序号",
     mosaic: "马赛克",
   };
+  const svgIcon = (body, size = 15) =>
+    `<svg aria-hidden="true" focusable="false" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${body}</svg>`;
   const glyphs = {
-    rect: "□",
-    ellipse: "○",
-    arrow: "↗",
-    line: "／",
-    pen: "✎",
-    text: "文字",
-    highlight: "荧光",
-    mosaic: "▦",
-    undo: "↶",
-    redo: "↷",
+    rect: svgIcon('<path d="M4 6h16v12H4z"/>'),
+    ellipse: svgIcon('<ellipse cx="12" cy="12" rx="8" ry="6.5"/>'),
+    arrow: svgIcon('<path d="M5 19 19 5M11 5h8v8"/>'),
+    line: svgIcon('<path d="M5 19 19 5"/>'),
+    pen: svgIcon('<path d="M16 4l4 4L8 20H4v-4Z M13.5 6.5l4 4"/>'),
+    highlight: svgIcon('<path d="M9 11l4 4 7-7-4-4Z M8 12l-4 4 4 4 4-4 M4 21h9"/>'),
+    text: svgIcon('<path d="M5 6h14M12 6v13M8.5 19h7"/>'),
+    number: svgIcon('<circle cx="12" cy="12" r="8.5"/><path d="M10.3 9.5 12.5 8v8M10.2 16h4.6"/>'),
+    mosaic: svgIcon('<path d="M4 4h16v16H4zM4 9.3h16M4 14.7h16M9.3 4v16M14.7 4v16"/>'),
+    undo: svgIcon('<path d="M9 14 4 9l5-5M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/>', 14),
+    redo: svgIcon('<path d="M15 14l5-5-5-5M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/>', 14),
+    close: svgIcon('<path d="M6 6l12 12M18 6 6 18"/>', 13.5),
+    refresh: svgIcon('<path d="M20 11a8 8 0 1 0-1.8 5M20 4v7h-7"/>', 13),
     clearMarks: "清空",
   };
   const actions = {
@@ -76,6 +81,7 @@ const CapturePreview = (function createPreview() {
     endpoint,
     model,
     language,
+    apiStatus,
     clipboard,
     editor,
     recording,
@@ -106,6 +112,7 @@ const CapturePreview = (function createPreview() {
     endpoint = "";
     model = "";
     language = "简体中文";
+    apiStatus = { tone: "muted", text: "空配置下也可使用截图、贴图和离线识别" };
     clipboard = null;
     recording = null;
     selHistory = [];
@@ -118,15 +125,16 @@ const CapturePreview = (function createPreview() {
     const rows = Object.entries(keys)
       .map(([id, key]) => {
         const isGlobal = ["start", "clipboard", "restorePin"].includes(id);
-        return `<div class="shot-setting-row"><span class="shot-setting-title">${labels[id]}<em class="shot-scope" data-global="${isGlobal}">${isGlobal ? "全局" : "工具内"}</em></span>${button("record-" + id, labels[id] + "快捷键", recording === id ? "请按快捷键" : e(key || "已停用"), "shot-btn secondary")}${button("clear-" + id, "停用" + labels[id], "停用", "shot-btn secondary")}</div>`;
+        const rec = recording === id;
+        return `<div class="shot-setting-row"><span class="shot-setting-title">${labels[id]}<em class="shot-scope" data-global="${isGlobal}">${isGlobal ? "全局" : "工具内"}</em></span><div class="shot-row-controls">${button("record-" + id, labels[id] + "快捷键", rec ? "请按快捷键…" : e(key || "未设置"), "shot-btn shot-keycap" + (rec ? " is-recording" : ""))}${button("clear-" + id, "停用" + labels[id], "停用", "shot-btn secondary")}</div></div>`;
       })
       .join("");
     return settingsFrame(
       "截图与翻译",
       "captureSettings",
-      `<section class="option-group"><label class="option-row"><span class="option-label shot-enable-label"><span>启用截图工具</span><small class="shot-status">控制全局热键（Ctrl+1 截图、Ctrl+2 贴图、Ctrl+3 恢复贴图）与月历底栏入口</small></span><input id="shot-enabled" type="checkbox" ${enabled ? "checked" : ""}></label></section>
-       <section class="option-group"><h3>快捷键</h3>${rows}<div style="margin-top:8px">${button("restore", "恢复默认快捷键", "恢复默认快捷键", "shot-btn secondary")}</div></section>
-       <section class="option-group"><h3>翻译服务</h3><p class="shot-status" style="margin:2px 0 8px">兼容 OpenAI Chat Completions 接口，密钥保存在 Windows 凭据管理器。</p><label class="field">API 基础地址<input id="shot-url" placeholder="http://localhost:11434/v1" value="${e(endpoint)}"></label><label class="field">模型名<input id="shot-model" placeholder="qwen2.5:7b" value="${e(model)}"></label><label class="field">API 密钥（可选）<input type="password" autocomplete="off" placeholder="原型使用演示样例" disabled></label><div style="margin-top:8px">${button("test-api", "测试连接", "测试连接", "shot-btn secondary")}</div></section>`,
+      `<section class="option-group"><div class="option-row"><span class="option-label shot-enable-label"><strong>启用截图工具</strong><small class="shot-status">开启后可通过全局快捷键（Ctrl+1 截图、Ctrl+2 贴图、Ctrl+3 恢复）与月历入口呼出</small></span><label class="shot-switch-wrap"><input id="shot-enabled" type="checkbox" class="shot-switch-input" ${enabled ? "checked" : ""} aria-label="启用截图工具"><span class="shot-switch-track" aria-hidden="true"><i></i></span></label></div><div class="shot-ocr-banner"><i aria-hidden="true"></i><span>已内置 PP-OCRv5 离线文字识别模型，无需网络或 API 即可直接提取与校对中英文。</span></div></section>
+       <section class="option-group shot-shortcuts-group" data-enabled="${enabled}"><div class="shot-group-head"><div><h3>快捷键</h3><small class="shot-status">点击按键帽后按下新组合键，按 Esc 取消录入</small></div>${button("restore", "恢复默认快捷键", "恢复默认快捷键", "shot-btn secondary")}</div>${rows}</section>
+       <section class="option-group"><div class="shot-group-head"><div><h3>翻译服务（可选）</h3><small class="shot-status">兼容 OpenAI Chat Completions 接口，密钥保存在 Windows 凭据管理器。</small></div><div class="shot-preset-chips">${button("preset-ollama", "填充 Ollama 本机默认参数", "Ollama 本机", "shot-btn secondary shot-preset-chip")}${button("preset-openai", "填充 OpenAI 官方模板", "OpenAI", "shot-btn secondary shot-preset-chip")}</div></div><div class="shot-api-grid"><label class="field span-2">API 基础地址<input id="shot-url" placeholder="http://localhost:11434/v1" value="${e(endpoint)}"></label><label class="field">模型名<input id="shot-model" placeholder="qwen2.5:7b" value="${e(model)}"></label><label class="field">默认目标语言<input id="shot-default-lang" placeholder="简体中文" value="${e(language)}"></label><label class="field span-2">API 密钥（可选）<input type="password" autocomplete="off" placeholder="原型使用演示样例，桌面版存本机凭据" disabled></label></div><div class="shot-api-test-row">${button("test-api", "测试连接", "测试连接", "shot-btn secondary")}<span class="shot-api-status" data-tone="${apiStatus.tone}">${e(apiStatus.text)}</span></div></section>`,
     );
   }
   function element(tag, cls, parent) {
@@ -372,6 +380,21 @@ const CapturePreview = (function createPreview() {
       y: r.y + (k.includes("n") ? 0 : k.includes("s") ? r.h : r.h / 2),
     }));
   }
+  function drawRoundHandle(g, x, y) {
+    g.save();
+    g.beginPath();
+    g.arc(x, y + 0.8, 4.4, 0, Math.PI * 2);
+    g.fillStyle = "rgb(14 22 32 / 28%)";
+    g.fill();
+    g.beginPath();
+    g.arc(x, y, 3.8, 0, Math.PI * 2);
+    g.fillStyle = "#fff";
+    g.fill();
+    g.lineWidth = 1.5;
+    g.strokeStyle = "#168be2";
+    g.stroke();
+    g.restore();
+  }
   function draw() {
     if (!editor) return;
     const ed = editor,
@@ -397,9 +420,7 @@ const CapturePreview = (function createPreview() {
         g.strokeStyle = "#168be2";
         g.strokeRect(box.x, box.y, box.w, box.h);
         for (const h of markHandles(activeMark)) {
-          g.fillStyle = "#fff";
-          g.fillRect(h.x - 3, h.y - 3, 6, 6);
-          g.strokeRect(h.x - 3, h.y - 3, 6, 6);
+          drawRoundHandle(g, h.x, h.y);
         }
       }
       g.restore();
@@ -413,9 +434,7 @@ const CapturePreview = (function createPreview() {
         g.lineWidth = 2;
         g.strokeRect(r.x, r.y, r.w, r.h);
         for (const p of handles(r)) {
-          g.fillStyle = "#fff";
-          g.fillRect(p.x - 3, p.y - 3, 6, 6);
-          g.strokeRect(p.x - 3, p.y - 3, 6, 6);
+          drawRoundHandle(g, p.x, p.y);
         }
       }
     }
@@ -520,32 +539,35 @@ const CapturePreview = (function createPreview() {
       c = canvas(source.image.width, source.image.height);
     layer.append(c);
     const info = element("output", "shot-info", layer);
-    info.innerHTML = `<span></span>${!pin ? button("refresh", "刷新画面 (F5)", "↻") : ""}`;
+    info.innerHTML = `<span></span>${!pin ? button("refresh", "刷新画面 (F5)", glyphs.refresh, "shot-btn shot-refresh-btn") : ""}`;
     const bar = element("div", "shot-bar", layer);
     const choices = element("div", "shot-tool-buttons", bar);
     choices.setAttribute("role", "toolbar");
-    const toolEntries = Object.entries(names).map(([k, v]) => button(k, v, glyphs[k] || v));
+    const toolEntries = Object.entries(names).map(([k, v]) => button(k, v, glyphs[k] || v, "shot-btn shot-tool-icon"));
     const actionEntries = Object.entries(actions)
       .filter(([k]) => !pin || !["pin", "record", "scroll"].includes(k))
-      .map(([k, v]) => button(k, v, glyphs[k] || v));
+      .map(([k, v]) => {
+        if (k === "undo" || k === "redo") return button(k, v, glyphs[k], "shot-btn shot-tool-icon");
+        if (k === "close") return pin ? button("apply", "完成标注") : button(k, v, glyphs.close, "shot-btn shot-tool-icon");
+        return button(k, v, glyphs[k] || v, k === "copy" ? "shot-btn primary" : "shot-btn");
+      });
     choices.innerHTML =
       toolEntries.join("") +
       '<span class="shot-sep" aria-hidden="true"></span>' +
       actionEntries.slice(0, 3).join("") +
       '<span class="shot-sep" aria-hidden="true"></span>' +
-      actionEntries.slice(3).join("") +
-      (pin ? button("apply", "完成标注") : "");
+      actionEntries.slice(3).join("");
     const styles = element("div", "shot-style-options", bar);
     const swatches = paletteColors.map(([n, hex]) => `<button type="button" class="shot-swatch" data-swatch="${hex}" aria-label="颜色 ${n}" title="${n}"><i style="background:${hex}"></i></button>`).join("");
     styles.innerHTML = `<span class="shot-swatches">${swatches}</span>
       <label data-mark-kind="number"><span id="shot-serial-label">下一号</span> <input id="shot-serial" type="number" min="1" max="9999" aria-label="标注序号"></label>
       <label>大小 <select data-appearance="size" aria-label="标注大小">${[2,3,6,12,16,20,24,28,32,40,48,64,80].map(value => `<option>${value}</option>`).join("")}</select></label>
       <label data-mark-kind="text">字体 <select data-appearance="font" aria-label="标注字体"><option value="">系统字体</option><option>Segoe UI</option><option>Microsoft YaHei UI</option><option>Consolas</option></select></label>
-      <label data-mark-kind="text"><input type="checkbox" data-appearance="bold"> 粗体</label>
-      <label data-mark-kind="text"><input type="checkbox" data-appearance="italic"> 斜体</label>
-      <label data-mark-kind="text"><input type="checkbox" data-appearance="outline"> 描边</label>
-      <label data-mark-kind="text"><input type="checkbox" data-appearance="background"> 背景</label>
-      <label data-mark-kind="number"><input type="checkbox" data-appearance="square"> 方形</label>
+      <label data-mark-kind="text" class="shot-pill-opt"><input type="checkbox" data-appearance="bold"><span>粗体</span></label>
+      <label data-mark-kind="text" class="shot-pill-opt"><input type="checkbox" data-appearance="italic"><span>斜体</span></label>
+      <label data-mark-kind="text" class="shot-pill-opt"><input type="checkbox" data-appearance="outline"><span>描边</span></label>
+      <label data-mark-kind="text" class="shot-pill-opt"><input type="checkbox" data-appearance="background"><span>背景</span></label>
+      <label data-mark-kind="number" class="shot-pill-opt"><input type="checkbox" data-appearance="square"><span>方形</span></label>
       ${button("number-note", "编辑编号说明", "编号说明")}`;
     editor = {
       pin,
@@ -916,12 +938,44 @@ const CapturePreview = (function createPreview() {
     panel = element("section", "shot-panel", desk());
     panel.setAttribute("aria-label", "文字面板");
     const layoutBar = shot
-      ? `<div class="shot-layout-bar"><label>排版 <select class="shot-para"><option value="smart">智能分段</option><option value="merge">合并换行</option><option value="keep">保留换行</option></select></label><label><input type="checkbox" class="shot-nospace"> 去空格</label><label>标点 <select class="shot-punct"><option value="keep">原标点</option><option value="cjk">中文标点</option><option value="en">英文标点</option></select></label><label><input type="checkbox" class="shot-show-orig" checked> 原图</label><label><input type="checkbox" class="shot-copy-close"> 复制后关闭</label><label><input type="checkbox" class="shot-panel-pin"> 置顶</label></div>`
-      : `<div class="shot-layout-bar"><label><input type="checkbox" class="shot-panel-pin"> 置顶</label></div>`;
-    panel.innerHTML = `<header><b>${shot ? "截图文字" : "粘贴文字翻译"}</b>${button("close-panel", "关闭文字面板", "×")}</header>${layoutBar}<div class="shot-columns">${shot ? '<div class="shot-original"><h3>原图（划选高亮对应原文）</h3><div class="shot-original-stage"><img alt="识别原图"><canvas></canvas></div></div>' : ""}<div class="shot-fields"><label class="field">原文<textarea class="shot-source size-medium" rows="4"></textarea></label><div class="shot-row">${button("copy-text", "复制原文", "复制原文", "shot-btn secondary")}<label>目标语言 <input class="shot-language" value="${e(language)}"></label>${button("send", "翻译")}</div><label class="field">译文<textarea class="shot-result size-medium" rows="3" readonly></textarea></label><div class="shot-row">${button("copy-result", "复制译文", "复制译文", "shot-btn secondary")}</div><small role="status" class="shot-status"></small></div></div>`;
+      ? `<div class="shot-layout-bar"><div class="shot-layout-left"><span class="shot-bar-label">排版</span><select class="shot-para" aria-label="段落模式"><option value="smart">智能分段</option><option value="merge">合并换行</option><option value="keep">保留换行</option></select><select class="shot-punct" aria-label="标点转换"><option value="keep">原标点</option><option value="cjk">中文标点</option><option value="en">英文标点</option></select><label class="shot-inline-opt"><input type="checkbox" class="shot-nospace">去空格</label><span class="shot-sep" aria-hidden="true"></span><span class="shot-bar-label">字号</span><div class="segments shot-size-seg" role="group" aria-label="字号"><button type="button" data-font-size="small" aria-pressed="false">小</button><button type="button" data-font-size="medium" aria-pressed="true">中</button><button type="button" data-font-size="large" aria-pressed="false">大</button></div></div><div class="shot-layout-right"><label class="shot-pill-toggle"><input type="checkbox" class="shot-show-orig" checked><span>原图</span></label><label class="shot-pill-toggle"><input type="checkbox" class="shot-panel-pin"><span>置顶</span></label></div></div>`
+      : `<div class="shot-layout-bar"><div class="shot-layout-left"><span class="shot-bar-label">粘贴或输入文本，使用已配置的模型接口进行翻译</span></div><div class="shot-layout-right"><label class="shot-pill-toggle"><input type="checkbox" class="shot-panel-pin"><span>置顶</span></label></div></div>`;
+    panel.innerHTML = `<header><b>${shot ? "截图提取与翻译" : "粘贴文字翻译"}</b>${button("close-panel", "关闭文字面板", glyphs.close, "shot-btn shot-tool-icon")}</header>${layoutBar}<div class="shot-columns">${shot ? '<div class="shot-original"><div class="shot-col-head"><div class="shot-col-title"><h3>识别原图</h3><span class="shot-count-pill" id="shot-ocr-count"></span></div></div><div class="shot-original-stage"><img alt="识别原图"><canvas></canvas></div><small class="shot-pane-hint">点选或拖框文字块可同步右侧选区</small></div>' : ""}<div class="shot-fields"><div class="shot-col-head"><div class="shot-col-title"><label for="shot-source-area">${shot ? "识别与校对原文" : "原文"}</label><span class="shot-count-pill" id="shot-src-count"></span></div><div class="shot-col-actions">${button("copy-text", "复制原文", "复制原文", "shot-btn secondary")}</div></div><textarea id="shot-source-area" class="shot-source size-medium" rows="4" placeholder="在此校对或输入需要翻译的内容"></textarea><div class="shot-translate-bridge"><label class="shot-bridge-lang"><span>目标语言</span><input class="shot-language" list="shot-lang-presets" value="${e(language)}"></label><datalist id="shot-lang-presets"><option value="简体中文"><option value="繁體中文"><option value="英文"><option value="日文"><option value="韩文"><option value="法文"><option value="德文"></datalist>${button("send", "翻译", "翻译", "shot-btn primary")}</div><div class="shot-col-head"><div class="shot-col-title"><label for="shot-result-area">译文</label><span class="shot-count-pill" id="shot-dst-count"></span></div><div class="shot-col-actions">${button("copy-result", "复制译文", "复制译文", "shot-btn secondary")}</div></div><textarea id="shot-result-area" class="shot-result size-medium" rows="3" readonly placeholder="选择目标语言后点击「翻译」，优先翻译当前选中内容"></textarea></div></div><footer class="shot-panel-footer"><div class="shot-status-wrap"><i class="shot-status-dot" data-state="muted" aria-hidden="true"></i><small role="status" class="shot-status"></small></div><div class="shot-footer-right">${shot ? '<label class="shot-inline-opt"><input type="checkbox" class="shot-copy-close">复制全部后关闭</label>' : ""}<span class="shot-esc-hint">Esc 关闭</span></div></footer>`;
 
     const srcArea = panel.querySelector(".shot-source");
+    const dstArea = panel.querySelector(".shot-result");
+    const srcCount = panel.querySelector("#shot-src-count");
+    const dstCount = panel.querySelector("#shot-dst-count");
+    const ocrCount = panel.querySelector("#shot-ocr-count");
+    const copySrcBtn = panel.querySelector('[data-shot="copy-text"]');
+    const copyDstBtn = panel.querySelector('[data-shot="copy-result"]');
+    const statusDot = panel.querySelector(".shot-status-dot");
     let spans = [], hi = new Set();
+
+    function updateCounts() {
+      const selLen = Math.max(0, srcArea.selectionEnd - srcArea.selectionStart);
+      const srcLen = srcArea.value.length;
+      if (srcCount) {
+        srcCount.textContent = selLen > 0 ? `已选 ${selLen} 字` : `${srcLen} 字`;
+        srcCount.hidden = srcLen === 0;
+      }
+      if (copySrcBtn) copySrcBtn.disabled = srcLen === 0;
+      const dstLen = dstArea.value.length;
+      if (dstCount) {
+        dstCount.textContent = `${dstLen} 字`;
+        dstCount.hidden = dstLen === 0;
+      }
+      if (copyDstBtn) copyDstBtn.disabled = dstLen === 0;
+      if (ocrCount && shot) {
+        ocrCount.textContent = hi.size > 0 ? `已选 ${hi.size} / ${shot.words.length}` : `${shot.words.length} 处文本`;
+        ocrCount.hidden = !shot.words.length;
+      }
+    }
+    panel.setStatus = (msg, tone = "muted") => {
+      panel.querySelector(".shot-status").textContent = msg;
+      if (statusDot) statusDot.dataset.state = tone;
+    };
+
     function formatWords() {
       if (!shot) return;
       const para = panel.querySelector(".shot-para")?.value || "smart";
@@ -941,6 +995,7 @@ const CapturePreview = (function createPreview() {
       });
       srcArea.value = out;
       drawBoxes();
+      updateCounts();
     }
     function drawBoxes() {
       if (!shot) return;
@@ -956,10 +1011,26 @@ const CapturePreview = (function createPreview() {
         ctx.fillStyle = active ? "rgb(24 147 238 / 34%)" : "rgb(0 95 184 / 10%)";
         ctx.strokeStyle = active ? "#1893ee" : "rgb(0 95 184 / 45%)";
         ctx.lineWidth = active ? 2 : 1;
-        ctx.fillRect(w.x, w.y, w.w, w.h);
-        ctx.strokeRect(w.x, w.y, w.w, w.h);
+        ctx.beginPath();
+        ctx.roundRect(w.x, w.y, w.w, w.h, 3);
+        ctx.fill();
+        ctx.stroke();
       });
     }
+    panel.querySelectorAll("[data-font-size]").forEach(btn => {
+      btn.onclick = () => {
+        const sz = btn.dataset.fontSize;
+        panel.querySelectorAll("[data-font-size]").forEach(b => b.setAttribute("aria-pressed", String(b === btn)));
+        for (const area of [srcArea, dstArea]) {
+          area.classList.remove("size-small", "size-medium", "size-large");
+          area.classList.add("size-" + sz);
+        }
+      };
+    });
+    srcArea.oninput = () => {
+      dstArea.value = "";
+      updateCounts();
+    };
     if (shot) {
       const imgEl = panel.querySelector("img");
       imgEl.src = shot.image.toDataURL();
@@ -975,6 +1046,7 @@ const CapturePreview = (function createPreview() {
         const s = srcArea.selectionStart, end = srcArea.selectionEnd;
         hi = new Set(s === end ? [] : spans.filter(sp => sp.start < end && sp.start + sp.len > s).map(sp => sp.idx));
         drawBoxes();
+        updateCounts();
       };
       const cvs = panel.querySelector(".shot-original-stage canvas");
       cvs.onclick = ev => {
@@ -987,14 +1059,18 @@ const CapturePreview = (function createPreview() {
           drawBoxes();
           srcArea.focus();
           srcArea.setSelectionRange(spans[idx].start, spans[idx].start + spans[idx].len);
+          updateCounts();
         }
       };
     }
     panel.querySelector(".shot-panel-pin").onchange = ev => {
       panel.dataset.pinned = String(ev.target.checked);
     };
-    panel.querySelector(".shot-status").textContent =
-      shot && !shot.words.length ? "演示选区中没有文字" : "离线演示样例 · 支持图文选区联动";
+    updateCounts();
+    panel.setStatus(
+      shot && !shot.words.length ? "演示选区中没有文字" : shot ? `识别完成（${shot.words.length} 处）· 离线图文选区联动` : "请输入或粘贴需要翻译的文字",
+      shot && !shot.words.length ? "muted" : "positive",
+    );
     panel.querySelector(translate ? ".shot-language" : ".shot-source").focus();
   }
   function closeRecording() {
@@ -1322,7 +1398,21 @@ const CapturePreview = (function createPreview() {
     menu?.remove();
     menu = null;
     if (id === "settings") { go("captureSettings"); return; }
-    if (id === "test-api") return announce(endpoint && model ? "离线原型已校验接口地址格式，桌面版支持实际连调" : "请先填写 API 基础地址与模型名");
+    if (id === "preset-ollama" || id === "preset-openai") {
+      if (id === "preset-ollama") { endpoint = "http://localhost:11434/v1"; model = "qwen2.5:7b"; }
+      else { endpoint = "https://api.openai.com/v1"; model = "gpt-4o-mini"; }
+      apiStatus = { tone: "muted", text: "已填入示例参数，可点击「测试连接」验证" };
+      go("captureSettings");
+      return;
+    }
+    if (id === "test-api") {
+      const ok = !!(endpoint && model);
+      apiStatus = ok
+        ? { tone: "positive", text: "离线原型已校验地址与模型格式，桌面版支持真实连调" }
+        : { tone: "danger", text: "请先填写 API 基础地址与模型名" };
+      go("captureSettings");
+      return announce(ok ? "离线原型已校验接口地址格式，桌面版支持实际连调" : "请先填写 API 基础地址与模型名");
+    }
     if (id === "restore" || id.startsWith("clear-") || id.startsWith("record-")) {
       if (id === "restore") keys = { ...defaults };
       else if (id.startsWith("clear-")) keys[id.slice(6)] = "";
@@ -1386,7 +1476,7 @@ const CapturePreview = (function createPreview() {
       if (id !== "send") {
         if (value) {
           navigator.clipboard?.writeText(value).catch(() => announce("请选中文字后复制"));
-          panel.querySelector(".shot-status").textContent = "已复制文字";
+          panel.setStatus ? panel.setStatus("已复制文字到剪贴板", "positive") : (panel.querySelector(".shot-status").textContent = "已复制文字");
           if (id === "copy-text" && all && panel.querySelector(".shot-copy-close")?.checked) {
             panel.remove(); panel = null;
           }
@@ -1399,12 +1489,17 @@ const CapturePreview = (function createPreview() {
         chinese = /^(zh|简体中文|中文|汉语)/i.test(language);
       const lines = value.split("\n");
       const match = (english || chinese) && lines.every((s) => map.has(s));
-      panel.querySelector(".shot-result").value = match
+      const dstArea = panel.querySelector(".shot-result");
+      dstArea.value = match
         ? lines.map((s) => /[\u3400-\u9fff]/.test(s) === chinese ? s : map.get(s)).join("\n")
         : "";
-      panel.querySelector(".shot-status").textContent = match
-        ? "离线演示译文"
-        : "离线原型仅提供示例句译文，桌面版可翻译自定义原文";
+      dstArea.dispatchEvent(new Event("input"));
+      const dstCount = panel.querySelector("#shot-dst-count");
+      const copyDstBtn = panel.querySelector('[data-shot="copy-result"]');
+      if (dstCount) { dstCount.textContent = `${dstArea.value.length} 字`; dstCount.hidden = !dstArea.value.length; }
+      if (copyDstBtn) copyDstBtn.disabled = !dstArea.value.length;
+      const msg = match ? "翻译完成（离线演示译文）" : "离线原型仅提供示例句译文，桌面版可翻译自定义原文";
+      panel.setStatus ? panel.setStatus(msg, match ? "positive" : "muted") : (panel.querySelector(".shot-status").textContent = msg);
       return;
     }
     if (names[id] && ed) {
@@ -1637,9 +1732,14 @@ const CapturePreview = (function createPreview() {
     document.addEventListener("keyup", keyup, true);
     document.addEventListener("change", (ev) => {
       const el = ev.target;
-      if (el.id === "shot-enabled") enabled = el.checked;
+      if (el.id === "shot-enabled") {
+        enabled = el.checked;
+        const grp = document.querySelector(".shot-shortcuts-group");
+        if (grp) grp.dataset.enabled = String(enabled);
+      }
       if (el.id === "shot-url") endpoint = el.value;
       if (el.id === "shot-model") model = el.value;
+      if (el.id === "shot-default-lang") language = el.value.trim() || "简体中文";
     });
   }
   return { settings, connect, reset, busy: () => !!(editor || menu || panel || recordingClip || scrollClip) };

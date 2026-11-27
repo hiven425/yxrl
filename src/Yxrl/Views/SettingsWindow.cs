@@ -16,6 +16,7 @@ internal sealed class SettingsWindow : Window
         Action applied, Action back, Action quit)
     {
         Title = "YXRL 设置";
+        if (Theme.AppIcon is { } appIcon) Icon = appIcon;
         AutomationProperties.SetAutomationId(this, "YxrlSettingsWindow");
         FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI");
         FontSize = 13;

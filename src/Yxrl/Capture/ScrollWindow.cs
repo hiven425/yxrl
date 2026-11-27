@@ -30,6 +30,7 @@ internal sealed class ScrollWindow : Window
         this.area = area;
         this.showPin = showPin;
         Title = "YXRL 长截图";
+        if (Views.Theme.AppIcon is { } appIcon) Icon = appIcon;
         AutomationProperties.SetAutomationId(this, "YxrlScrollCapture");
         AutomationProperties.SetLiveSetting(status, AutomationLiveSetting.Polite);
         Width = 316;
