@@ -15,6 +15,7 @@ internal partial class ReminderPopup : Window
     public ReminderPopup()
     {
         InitializeComponent();
+        if (Theme.AppIcon is { } appIcon) Icon = appIcon;
         Notices.ItemsSource = entries;
     }
 
@@ -43,7 +44,7 @@ internal partial class ReminderPopup : Window
         double dpiScale = Math.Max(1, Native.GetDpiForWindow(monitorWindow) / 96.0);
         int pad = (int)Math.Round(12 * dpiScale);
         int width = Math.Min((int)Math.Round(344 * dpiScale), Math.Max(1, area.Width - 2 * pad));
-        int height = Math.Min((int)Math.Round((166 + Math.Min(3, entries.Count - 1) * 62) * dpiScale),
+        int height = Math.Min((int)Math.Round((180 + Math.Min(3, entries.Count - 1) * 68) * dpiScale),
             Math.Max(1, area.Height - 2 * pad));
         int x = area.Right - width - pad, y = area.Bottom - height - pad;
         Native.SetWindowPos(hwnd, Native.Topmost, x, y, width, height, Native.NoActivate);

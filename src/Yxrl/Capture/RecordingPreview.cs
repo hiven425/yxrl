@@ -5,11 +5,15 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Documents;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Shapes;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using Yxrl.Desktop;
+using Yxrl.Views;
 
 namespace Yxrl.Capture;
 
@@ -22,45 +26,67 @@ internal sealed class RecordingPreview : Window
     private readonly RecordingTrackView? systemTrack, microphoneTrack;
     private readonly CheckBox mouse = new() { Content = "鼠标动画", IsChecked = true }, keys = new() { Content = "快捷键动画", IsChecked = true };
     private readonly Slider position = new();
-    private readonly TextBox first = new() { Width = 75 }, last = new() { Width = 75 };
+    private readonly TextBox first = new() { Width = 70, MinHeight = 28, Padding = new Thickness(6, 3, 6, 3) },
+        last = new() { Width = 70, MinHeight = 28, Padding = new Thickness(6, 3, 6, 3) };
     private readonly TextBox[] crop = [MarginInput(), MarginInput(), MarginInput(), MarginInput()];
-    private readonly TextBlock time = new(), status = new() { TextWrapping = TextWrapping.Wrap };
+    private readonly TextBlock time = new() { FontSize = 12, VerticalAlignment = VerticalAlignment.Center },
+        status = new() { TextWrapping = TextWrapping.Wrap, FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
+    private readonly Ellipse statusDot = new() { Width = 7, Height = 7, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 7, 0) };
     private readonly Button play = new() { Content = "播放", IsEnabled = false }, save = new() { Content = "另存为" },
         cancel = new() { Content = "取消导出", Visibility = Visibility.Collapsed };
     private readonly ComboBox format = new(), speed = new();
     private readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromMilliseconds(50) };
     private CancellationTokenSource? export;
     private Task? exportJob;
-    private bool playing, updatingSeek, saved, forceClose, preserve;
+    private bool playing, updatingSeek, saved, forceClose, preserve, micaEnabled;
 
     public RecordingPreview(RecordedClip clip, Action repeat)
     {
         this.clip = clip;
         Title = "YXRL 录屏回放";
-        if (Views.Theme.AppIcon is { } appIcon) Icon = appIcon;
+        if (Theme.AppIcon is { } appIcon) Icon = appIcon;
         AutomationProperties.SetAutomationId(this, "YxrlRecordingPreview");
+        FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI");
+        FontSize = 13;
+        UseLayoutRounding = true;
+        SnapsToDevicePixels = true;
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
         var work = SystemParameters.WorkArea;
-        Width = Math.Min(720, work.Width);
-        Height = Math.Min(600, work.Height);
-        MinWidth = Math.Min(440, Width);
-        MinHeight = Math.Min(335, Height);
+        Width = Math.Min(760, work.Width);
+        Height = Math.Min(650, work.Height);
+        MinWidth = Math.Min(480, Width);
+        MinHeight = Math.Min(360, Height);
         SetResourceReference(BackgroundProperty, "Surface");
         SetResourceReference(ForegroundProperty, "Ink");
-        var frame = new DockPanel { Margin = new Thickness(14), LastChildFill = true };
+
+        var frame = new DockPanel { Margin = new Thickness(14, 12, 14, 12), LastChildFill = true };
         Content = frame;
         var controls = new StackPanel();
         DockPanel.SetDock(controls, Dock.Bottom);
         frame.Children.Add(controls);
+
+        // Video stage
         var picture = new Grid();
         picture.Children.Add(video);
         cues = new CuePreview(clip.Width, clip.Height, new CueTimeline(clip.Cues ?? [])) { IsHitTestVisible = false };
         picture.Children.Add(cues);
-        frame.Children.Add(new Border { Background = Brushes.Black, Child = picture, CornerRadius = new CornerRadius(6) });
+        var theater = new Border
+        {
+            Background = new SolidColorBrush(Color.FromRgb(14, 21, 29)),
+            CornerRadius = new CornerRadius(10),
+            BorderThickness = new Thickness(1),
+            Margin = new Thickness(0, 0, 0, 10),
+            ClipToBounds = true,
+            Child = picture
+        };
+        theater.SetResourceReference(Border.BorderBrushProperty, "Line");
+        frame.Children.Add(theater);
 
+        // Playback transport bar card
         position.Maximum = clip.Duration.TotalSeconds;
         position.IsMoveToPointEnabled = true;
         position.IsEnabled = false;
+        position.Margin = new Thickness(10, 0, 10, 0);
         position.ValueChanged += (_, _) =>
         {
             if (!updatingSeek && position.IsEnabled)
@@ -72,30 +98,45 @@ internal sealed class RecordingPreview : Window
             time.Text = $"{RecordingWindow.TimeLabel(TimeSpan.FromSeconds(position.Value))} / {RecordingWindow.TimeLabel(clip.Duration)}";
         };
         AutomationProperties.SetName(position, "回放进度");
-        controls.Children.Add(position);
-        var transport = new WrapPanel { Margin = new Thickness(0, 4, 0, 7) };
-        controls.Children.Add(transport);
+
+        play.SetResourceReference(StyleProperty, "SecondaryButton");
+        play.MinHeight = 28;
+        play.Padding = new Thickness(12, 3, 12, 3);
         play.Click += (_, _) => TogglePlayback();
-        Add(transport, play);
-        time.VerticalAlignment = VerticalAlignment.Center;
+
         time.Text = "00:00 / " + RecordingWindow.TimeLabel(clip.Duration);
-        transport.Children.Add(time);
-        var trim = new WrapPanel { Margin = new Thickness(0, 2, 0, 7) };
-        controls.Children.Add(trim);
-        AddTime(trim, "开始（秒）", first, 0);
-        AddTime(trim, "结束（秒）", last, clip.Duration.TotalSeconds);
-        var spatial = new WrapPanel { Margin = new Thickness(0, 0, 0, 7) };
-        controls.Children.Add(spatial);
-        string[] sides = ["裁左", "裁上", "裁右", "裁下"];
-        for (int i = 0; i < sides.Length; i++)
+        Typography.SetNumeralAlignment(time, FontNumeralAlignment.Tabular);
+        time.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
+        var timePill = new Border
         {
-            AutomationProperties.SetName(crop[i], sides[i] + "（像素）");
-            AddField(spatial, sides[i], crop[i]);
-            crop[i].TextChanged += (_, _) => UpdateCropPreview();
-        }
+            CornerRadius = new CornerRadius(5),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(8, 3, 8, 3),
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = time
+        };
+        timePill.SetResourceReference(Border.BackgroundProperty, "Card");
+        timePill.SetResourceReference(Border.BorderBrushProperty, "Line");
+
+        var transportDock = new DockPanel { LastChildFill = true, VerticalAlignment = VerticalAlignment.Center };
+        DockPanel.SetDock(play, Dock.Left);
+        DockPanel.SetDock(timePill, Dock.Right);
+        transportDock.Children.Add(play);
+        transportDock.Children.Add(timePill);
+        transportDock.Children.Add(position);
+        var transportCard = new Border { Margin = new Thickness(0, 0, 0, 8), Child = transportDock };
+        transportCard.SetResourceReference(StyleProperty, "GroupCard");
+        transportCard.Padding = new Thickness(10, 7, 10, 7);
+        controls.Children.Add(transportCard);
+
+        // Trim, speed & crop editing card
+        var editStack = new StackPanel();
+        var trimRow = new DockPanel { Margin = new Thickness(0, 0, 0, 8) };
         foreach (double ratio in new[] { .25, .5, 1, 1.25, 1.5, 2 })
             speed.Items.Add(new ComboBoxItem { Tag = ratio, Content = $"{ratio:0.##}×" });
         speed.SelectedIndex = 2;
+        speed.MinHeight = 28;
+        speed.Padding = new Thickness(8, 3, 24, 3);
         AutomationProperties.SetName(speed, "倍速");
         speed.SelectionChanged += (_, _) =>
         {
@@ -105,8 +146,41 @@ internal sealed class RecordingPreview : Window
                 SyncTracks(video.Position, playing);
             }
         };
-        AddField(spatial, "倍速", speed);
-        var soundEffects = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
+        var speedGroup = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        var speedLbl = new TextBlock { Text = "倍速", FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) };
+        speedLbl.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
+        speedGroup.Children.Add(speedLbl);
+        speedGroup.Children.Add(speed);
+        DockPanel.SetDock(speedGroup, Dock.Right);
+        trimRow.Children.Add(speedGroup);
+
+        var trimTimes = new WrapPanel { VerticalAlignment = VerticalAlignment.Center };
+        AddTime(trimTimes, "开始（秒）", first, 0);
+        AddTime(trimTimes, "结束（秒）", last, clip.Duration.TotalSeconds);
+        trimRow.Children.Add(trimTimes);
+        editStack.Children.Add(trimRow);
+
+        var editSep = new Border { Height = 1, Margin = new Thickness(0, 0, 0, 8) };
+        editSep.SetResourceReference(Border.BackgroundProperty, "Line");
+        editStack.Children.Add(editSep);
+
+        var spatial = new WrapPanel { VerticalAlignment = VerticalAlignment.Center };
+        string[] sides = ["裁左", "裁上", "裁右", "裁下"];
+        for (int i = 0; i < sides.Length; i++)
+        {
+            AutomationProperties.SetName(crop[i], sides[i] + "（像素）");
+            AddField(spatial, sides[i], crop[i]);
+            crop[i].TextChanged += (_, _) => UpdateCropPreview();
+        }
+        editStack.Children.Add(spatial);
+
+        var editCard = new Border { Margin = new Thickness(0, 0, 0, 8), Child = editStack };
+        editCard.SetResourceReference(StyleProperty, "GroupCard");
+        editCard.Padding = new Thickness(12, 9, 12, 9);
+        controls.Children.Add(editCard);
+
+        // Audio tracks & animation cues
+        var soundEffects = new WrapPanel { Margin = new Thickness(4, 2, 4, 2) };
         if (clip.Tracks?.System is { } systemPath)
         {
             systemTrack = new("系统声音", systemPath, message => SetStatus(message, true));
@@ -121,24 +195,44 @@ internal sealed class RecordingPreview : Window
             (keys, clip.Cues?.Any(c => c.Kind == CueKind.Shortcut) == true) })
         {
             if (!condition) continue;
-            button.Margin = new Thickness(0, 4, 12, 4);
+            button.Margin = new Thickness(0, 3, 14, 3);
             button.Checked += (_, _) => UpdateCues();
             button.Unchecked += (_, _) => UpdateCues();
             soundEffects.Children.Add(button);
         }
         if (soundEffects.Children.Count > 0)
-            controls.Children.Add(new Expander { Header = "音轨与动画", IsExpanded = true, Content = soundEffects, Margin = new Thickness(0, 0, 0, 5) });
-        var actions = new WrapPanel();
-        controls.Children.Add(actions);
+            controls.Children.Add(new Expander { Header = "音轨与动画", IsExpanded = true, Content = soundEffects, Margin = new Thickness(0, 0, 0, 8) });
+
+        // Footer export bar + status
+        var bottomDock = new DockPanel { Margin = new Thickness(0, 2, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        var actions = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
         foreach (string name in new[] { "MP4", "GIF", "WebP" }) format.Items.Add(name);
         format.SelectedIndex = 0;
+        format.MinHeight = 30;
+        format.Padding = new Thickness(9, 3, 24, 3);
         AutomationProperties.SetName(format, "导出格式");
         Add(actions, format);
         save.SetResourceReference(StyleProperty, "PrimaryButton");
+        save.MinHeight = 30;
+        save.Padding = new Thickness(14, 4, 14, 4);
         Add(actions, save);
+        cancel.SetResourceReference(StyleProperty, "SecondaryButton");
+        cancel.MinHeight = 30;
         Add(actions, cancel);
-        var again = new Button { Content = "重新录制" };
-        Add(actions, again);
+        var again = new Button { Content = "重新录制", Margin = new Thickness(0) };
+        again.SetResourceReference(StyleProperty, "SecondaryButton");
+        again.MinHeight = 30;
+        actions.Children.Add(again);
+        DockPanel.SetDock(actions, Dock.Right);
+        bottomDock.Children.Add(actions);
+
+        var statusGroup = new DockPanel { VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(2, 0, 12, 0) };
+        DockPanel.SetDock(statusDot, Dock.Left);
+        statusGroup.Children.Add(statusDot);
+        statusGroup.Children.Add(status);
+        bottomDock.Children.Add(statusGroup);
+        controls.Children.Add(bottomDock);
+
         again.Click += (_, _) =>
         {
             if (export is not null || (!saved && !ConfirmDiscard()))
@@ -149,10 +243,8 @@ internal sealed class RecordingPreview : Window
         };
         save.Click += async (_, _) => await Save();
         cancel.Click += (_, _) => export?.Cancel();
-        status.Margin = new Thickness(0, 7, 0, 0);
         AutomationProperties.SetLiveSetting(status, AutomationLiveSetting.Polite);
-        controls.Children.Add(status);
-        status.Text = $"{clip.Width} × {clip.Height} px · {clip.Fps} 帧/秒" + (clip.HasAudio ? " · 有声音" : "");
+        SetStatus($"{clip.Width} × {clip.Height} px · {clip.Fps} 帧/秒" + (clip.HasAudio ? " · 有声音" : ""));
 
         video.MediaOpened += (_, _) =>
         {
@@ -200,19 +292,41 @@ internal sealed class RecordingPreview : Window
         Closed += (_, _) => ReleaseClip();
     }
 
-    private static void Add(WrapPanel panel, Control control)
+    protected override void OnSourceInitialized(EventArgs e)
     {
-        control.Margin = new Thickness(0, 0, 8, 4);
-        control.MinHeight = 28;
+        base.OnSourceInitialized(e);
+        ApplyChrome();
+    }
+
+    internal void RefreshTheme() => ApplyChrome();
+
+    private void ApplyChrome()
+    {
+        micaEnabled = Theme.ApplyWindowChrome(this, Native.BackdropKind.Mica);
+        if (micaEnabled) Background = Brushes.Transparent;
+        else SetResourceReference(BackgroundProperty, "Surface");
+    }
+
+    private static void Add(Panel panel, Control control)
+    {
+        control.Margin = new Thickness(0, 0, 8, 0);
+        control.MinHeight = 30;
         panel.Children.Add(control);
     }
 
-    private static TextBox MarginInput() => new() { Width = 40, Text = "0", MaxLength = 5 };
+    private static TextBox MarginInput()
+    {
+        var box = new TextBox { Width = 46, Text = "0", MaxLength = 5, MinHeight = 28, Padding = new Thickness(6, 3, 6, 3) };
+        Typography.SetNumeralAlignment(box, FontNumeralAlignment.Tabular);
+        return box;
+    }
 
     private static void AddField(WrapPanel panel, string label, Control input)
     {
-        var field = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 11, 4) };
-        field.Children.Add(new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 3, 0) });
+        var field = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 12, 0), VerticalAlignment = VerticalAlignment.Center };
+        var lbl = new TextBlock { Text = label, FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 5, 0) };
+        lbl.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
+        field.Children.Add(lbl);
         field.Children.Add(input);
         panel.Children.Add(field);
     }
@@ -247,12 +361,16 @@ internal sealed class RecordingPreview : Window
 
     private void AddTime(WrapPanel panel, string label, TextBox field, double seconds)
     {
-        var value = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 12, 0) };
+        var value = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 14, 0), VerticalAlignment = VerticalAlignment.Center };
         AutomationProperties.SetName(field, label);
-        value.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 0, 5, 0), VerticalAlignment = VerticalAlignment.Center });
+        var lbl = new TextBlock { Text = label, FontSize = 12, Margin = new Thickness(0, 0, 6, 0), VerticalAlignment = VerticalAlignment.Center };
+        lbl.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
+        value.Children.Add(lbl);
+        Typography.SetNumeralAlignment(field, FontNumeralAlignment.Tabular);
         field.Text = seconds.ToString("0.###", CultureInfo.CurrentCulture);
         value.Children.Add(field);
-        var now = new Button { Content = "用当前", ToolTip = $"{label}设为播放位置" };
+        var now = new Button { Content = "用当前", ToolTip = $"{label}设为播放位置", Margin = new Thickness(5, 0, 0, 0), MinHeight = 28, Padding = new Thickness(8, 2, 8, 2), FontSize = 12 };
+        now.SetResourceReference(StyleProperty, "SecondaryButton");
         AutomationProperties.SetName(now, now.ToolTip.ToString()!);
         now.Click += (_, _) => field.Text = position.Value.ToString("0.###", CultureInfo.CurrentCulture);
         value.Children.Add(now);
@@ -362,7 +480,7 @@ internal sealed class RecordingPreview : Window
             exportJob = Task.Run(() => RecordingExport.Save(clip, dialog.FileName, kind, start, end, work.Token, progress, edits));
             await exportJob;
             saved = true;
-            SetStatus($"已保存 {Path.GetFileName(dialog.FileName)}");
+            SetStatus($"已保存 {System.IO.Path.GetFileName(dialog.FileName)}");
         }
         catch (OperationCanceledException) when (work.IsCancellationRequested)
         {
@@ -386,6 +504,7 @@ internal sealed class RecordingPreview : Window
     {
         status.Text = message;
         status.SetResourceReference(TextBlock.ForegroundProperty, warning ? "Danger" : "Muted");
+        statusDot.SetResourceReference(Shape.FillProperty, warning ? "Danger" : saved ? "Positive" : "Accent");
     }
 
     private bool ConfirmDiscard() => MessageBox.Show(this, "关闭回放并清理本次录制的临时文件？", Title,

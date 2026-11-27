@@ -165,6 +165,14 @@ internal sealed class CaptureTools : IDisposable
                 text.RefreshTheme();
             else if (win is ShotWindow shot)
                 shot.RefreshTheme();
+            else if (win is RecordingWindow rec)
+                rec.RefreshTheme();
+            else if (win is RecordingPreview preview)
+                preview.RefreshTheme();
+            else if (win is RecordingRecoveryWindow recover)
+                recover.RefreshTheme();
+            else if (win is ScrollWindow scroll)
+                scroll.RefreshTheme();
         }
     }
 

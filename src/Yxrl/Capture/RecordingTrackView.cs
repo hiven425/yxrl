@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Media;
 
 namespace Yxrl.Capture;
@@ -21,12 +22,14 @@ internal sealed class RecordingTrackView : StackPanel
         source = new Uri(path);
         Orientation = Orientation.Horizontal;
         VerticalAlignment = VerticalAlignment.Center;
-        Margin = new Thickness(0, 2, 12, 2);
-        Children.Add(new TextBlock { Text = label, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 6, 0) });
+        Margin = new Thickness(0, 3, 14, 3);
+        var title = new TextBlock { Text = label, FontWeight = FontWeights.Medium, FontSize = 12.5, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
+        Children.Add(title);
         Children.Add(volume);
         AutomationProperties.SetName(volume, label + "音量");
-        var percent = new TextBlock { Text = "100%", MinWidth = 35, VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(5, 0, 4, 0) };
+        var percent = new TextBlock { Text = "100%", MinWidth = 38, FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(6, 0, 4, 0) };
+        percent.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
+        Typography.SetNumeralAlignment(percent, FontNumeralAlignment.Tabular);
         Children.Add(percent);
         muted.Content = "静音";
         muted.VerticalAlignment = VerticalAlignment.Center;

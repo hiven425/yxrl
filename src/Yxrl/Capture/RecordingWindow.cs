@@ -4,11 +4,16 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media;
+using System.Windows.Shapes;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using Yxrl.Desktop;
+using Yxrl.Views;
 
 namespace Yxrl.Capture;
 
@@ -17,7 +22,9 @@ internal sealed class RecordingWindow : Window
     private readonly PixelRect area;
     private readonly string sessionRoot;
     private readonly Action<RecordedClip> showPreview;
-    private readonly TextBlock elapsed = new(), status = new() { TextWrapping = TextWrapping.Wrap };
+    private readonly TextBlock elapsed = new(), status = new() { TextWrapping = TextWrapping.Wrap, FontSize = 12, VerticalAlignment = VerticalAlignment.Center };
+    private readonly Ellipse headerDot = new() { Width = 8, Height = 8, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 8, 0) };
+    private readonly Ellipse statusDot = new() { Width = 7, Height = 7, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 7, 0) };
     private readonly StackPanel options = new() { Orientation = Orientation.Vertical };
     private readonly ComboBox fps = new(), delay = new(), mode = new();
     private readonly CheckBox cursor = new() { Content = "显示光标", IsChecked = true };
@@ -25,9 +32,9 @@ internal sealed class RecordingWindow : Window
     private readonly CheckBox mouseCues = new() { Content = "鼠标点击和滚轮" }, keyCues = new() { Content = "显示快捷键" },
         camera = new() { Content = "摄像头" }, circle = new() { Content = "圆形" };
     private readonly ComboBox device = new() { MinWidth = 120, MaxWidth = 195 }, corner = new();
-    private readonly ComboBox microphoneDevice = new() { MinWidth = 120, MaxWidth = 270, HorizontalAlignment = HorizontalAlignment.Left,
-        Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 0, 8) };
-    private readonly WrapPanel cameraControls = new() { Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 0, 9) };
+    private readonly ComboBox microphoneDevice = new() { MinWidth = 160, HorizontalAlignment = HorizontalAlignment.Stretch };
+    private readonly Border micHost, camHost;
+    private readonly WrapPanel cameraControls = new();
     private readonly Button start = new() { Content = "开始录制" }, pause = new() { Content = "暂停" };
     private readonly Button cancel = new() { Content = "放弃" };
     private readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromMilliseconds(100) };
@@ -37,7 +44,7 @@ internal sealed class RecordingWindow : Window
     private readonly RecordingRegionFrame regionFrame;
     internal RecordingRegionFrame RegionFrame => regionFrame;
     private RecordingInput? inputCapture;
-    private bool paused, abandoned, closing, forceClose, placeOk, stopping;
+    private bool paused, abandoned, closing, forceClose, placeOk, stopping, micaEnabled;
 
     public RecordingWindow(PixelRect area, string sessionRoot, Action<RecordedClip> showPreview)
     {
@@ -46,22 +53,65 @@ internal sealed class RecordingWindow : Window
         this.showPreview = showPreview;
         regionFrame = new RecordingRegionFrame(area);
         Title = "YXRL 屏幕录制";
-        if (Views.Theme.AppIcon is { } appIcon) Icon = appIcon;
+        if (Theme.AppIcon is { } appIcon) Icon = appIcon;
         AutomationProperties.SetAutomationId(this, "YxrlRecorder");
         AutomationProperties.SetLiveSetting(status, AutomationLiveSetting.Polite);
+        FontFamily = new FontFamily("Segoe UI Variable Text, Segoe UI, Microsoft YaHei UI");
+        FontSize = 13;
+        UseLayoutRounding = true;
+        SnapsToDevicePixels = true;
         Topmost = true;
         WindowStartupLocation = WindowStartupLocation.Manual;
         ResizeMode = ResizeMode.NoResize;
-        Width = 362;
+        Width = 392;
         SizeToContent = SizeToContent.Height;
         SetResourceReference(BackgroundProperty, "Surface");
         SetResourceReference(ForegroundProperty, "Ink");
-        var column = new StackPanel { Margin = new Thickness(14) };
+
+        var column = new StackPanel { Margin = new Thickness(14, 12, 14, 12) };
         Content = column;
-        elapsed.FontSize = 19;
-        elapsed.Text = $"{area.Width} × {area.Height} px   ·   00:00";
-        column.Children.Add(elapsed);
-        column.Children.Add(options);
+
+        // Header card: live clock + region size badge
+        elapsed.FontSize = 20;
+        elapsed.FontWeight = FontWeights.SemiBold;
+        elapsed.VerticalAlignment = VerticalAlignment.Center;
+        elapsed.Text = "00:00";
+        Typography.SetNumeralAlignment(elapsed, FontNumeralAlignment.Tabular);
+
+        var sizeText = new TextBlock
+        {
+            Text = $"{area.Width} × {area.Height} px",
+            FontSize = 11.5,
+            FontWeight = FontWeights.Medium,
+            VerticalAlignment = VerticalAlignment.Center
+        };
+        sizeText.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
+        Typography.SetNumeralAlignment(sizeText, FontNumeralAlignment.Tabular);
+        var sizePill = new Border
+        {
+            CornerRadius = new CornerRadius(6),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(8, 3, 8, 3),
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = sizeText
+        };
+        sizePill.SetResourceReference(Border.BackgroundProperty, "Card");
+        sizePill.SetResourceReference(Border.BorderBrushProperty, "Line");
+
+        var headerDock = new DockPanel();
+        DockPanel.SetDock(sizePill, Dock.Right);
+        headerDock.Children.Add(sizePill);
+        var clockGroup = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+        clockGroup.Children.Add(headerDot);
+        clockGroup.Children.Add(elapsed);
+        headerDock.Children.Add(clockGroup);
+
+        var headerCard = new Border { Margin = new Thickness(0, 0, 0, 10), Child = headerDock };
+        headerCard.SetResourceReference(StyleProperty, "GroupCard");
+        headerCard.Padding = new Thickness(12, 9, 12, 9);
+        column.Children.Add(headerCard);
+
+        // Options card
         foreach (int value in new[] { 5, 16, 24, 30, 60 }) fps.Items.Add(value);
         foreach (int value in new[] { 0, 1, 2, 3, 5, 10 }) delay.Items.Add(value);
         mode.Items.Add("普通录制");
@@ -69,60 +119,100 @@ internal sealed class RecordingWindow : Window
         fps.SelectedItem = 24;
         delay.SelectedItem = 0;
         mode.SelectedIndex = 0;
-        var fields = new WrapPanel { Margin = new Thickness(0, 9, 0, 5) };
-        foreach (var (label, menu) in new[] { ("帧率", fps), ("延时（秒）", delay), ("模式", mode) })
+
+        var fields = new UniformGrid { Columns = 3, Margin = new Thickness(0, 0, 0, 10) };
+        var fieldDefs = new[] { ("帧率", fps), ("延时（秒）", delay), ("模式", mode) };
+        for (int i = 0; i < fieldDefs.Length; i++)
         {
+            var (label, menu) = fieldDefs[i];
             AutomationProperties.SetName(menu, label);
-            var field = new StackPanel { Margin = new Thickness(0, 0, 9, 0) };
-            field.Children.Add(new TextBlock { Text = label, Margin = new Thickness(0, 0, 0, 4) });
-            menu.MinWidth = 53;
+            var field = new StackPanel { Margin = new Thickness(0, 0, i < 2 ? 8 : 0, 0) };
+            var lbl = new TextBlock { Text = label, FontSize = 11.5, Margin = new Thickness(0, 0, 0, 4) };
+            lbl.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
+            field.Children.Add(lbl);
+            menu.MinHeight = 30;
+            menu.Padding = new Thickness(8, 3, 24, 3);
             field.Children.Add(menu);
             fields.Children.Add(field);
         }
         options.Children.Add(fields);
-        var inputs = new WrapPanel { Margin = new Thickness(0, 5, 0, 10) };
+
+        var optSep = new Border { Height = 1, Margin = new Thickness(0, 0, 0, 8) };
+        optSep.SetResourceReference(Border.BackgroundProperty, "Line");
+        options.Children.Add(optSep);
+
+        var inputs = new UniformGrid { Columns = 2 };
         foreach (var control in new[] { cursor, system, microphone, mouseCues, keyCues, camera })
         {
-            control.Margin = new Thickness(0, 2, 13, 2);
+            control.Margin = new Thickness(0, 3, 8, 3);
             inputs.Children.Add(control);
         }
         options.Children.Add(inputs);
+
         AutomationProperties.SetName(microphoneDevice, "麦克风设备");
         microphoneDevice.ToolTip = "麦克风设备";
+        var micStack = new StackPanel();
+        var micLbl = new TextBlock { Text = "麦克风输入", FontSize = 11.5, Margin = new Thickness(0, 0, 0, 4) };
+        micLbl.SetResourceReference(TextBlock.ForegroundProperty, "Muted");
+        micStack.Children.Add(micLbl);
+        micStack.Children.Add(microphoneDevice);
+        micHost = SubCard(micStack, Visibility.Collapsed);
         microphone.Checked += (_, _) => ChooseMicrophone();
-        microphone.Unchecked += (_, _) => microphoneDevice.Visibility = Visibility.Collapsed;
-        options.Children.Add(microphoneDevice);
+        microphone.Unchecked += (_, _) => micHost.Visibility = Visibility.Collapsed;
+        options.Children.Add(micHost);
+
         foreach (string value in new[] { "右下", "左下", "右上", "左上" }) corner.Items.Add(value);
         corner.SelectedIndex = 0;
         foreach (var (control, name) in new (Control, string)[] { (device, "摄像头设备"), (corner, "摄像头位置"), (circle, "圆形摄像头") })
         {
             AutomationProperties.SetName(control, name);
-            control.Margin = new Thickness(0, 0, 8, 0);
+            control.Margin = new Thickness(0, 2, 8, 2);
             cameraControls.Children.Add(control);
         }
+        camHost = SubCard(cameraControls, Visibility.Collapsed);
         camera.Checked += async (_, _) => await ChooseCamera();
         camera.Unchecked += async (_, _) => await ChooseCamera();
-        options.Children.Add(cameraControls);
-        var actions = new WrapPanel();
-        column.Children.Add(actions);
+        options.Children.Add(camHost);
+
+        var optionsCard = new Border { Margin = new Thickness(0, 0, 0, 10), Child = options };
+        optionsCard.SetResourceReference(StyleProperty, "GroupCard");
+        optionsCard.Padding = new Thickness(12, 10, 12, 10);
+        column.Children.Add(optionsCard);
+
+        // Action strip
+        var actions = new DockPanel();
+        var actionLeft = new WrapPanel { VerticalAlignment = VerticalAlignment.Center };
         start.SetResourceReference(StyleProperty, "PrimaryButton");
+        pause.SetResourceReference(StyleProperty, "SecondaryButton");
+        cancel.SetResourceReference(StyleProperty, "SecondaryButton");
         foreach (var button in new[] { start, pause, cancel })
         {
             button.MinHeight = 30;
-            button.Padding = new Thickness(10, 2, 10, 2);
+            button.Padding = new Thickness(13, 4, 13, 4);
             button.Margin = new Thickness(0, 0, 8, 0);
-            actions.Children.Add(button);
+            actionLeft.Children.Add(button);
         }
         pause.Visibility = Visibility.Collapsed;
         cancel.Visibility = Visibility.Collapsed;
         start.Click += async (_, _) => await StartOrStop();
         pause.Click += (_, _) => TogglePause();
         cancel.Click += (_, _) => Close();
-        status.Margin = new Thickness(0, 9, 0, 0);
-        column.Children.Add(status);
+        actions.Children.Add(actionLeft);
+        column.Children.Add(actions);
+
+        var statusRow = new DockPanel { Margin = new Thickness(2, 9, 0, 0), VerticalAlignment = VerticalAlignment.Center };
+        DockPanel.SetDock(statusDot, Dock.Left);
+        statusRow.Children.Add(statusDot);
+        statusRow.Children.Add(status);
+        column.Children.Add(statusRow);
+
         SetStatus("就绪");
-        timer.Tick += (_, _) => elapsed.Text = $"{area.Width} × {area.Height} px   ·   {TimeLabel(recording?.Elapsed ?? TimeSpan.Zero)}";
-        SourceInitialized += (_, _) => regionFrame.Show();
+        timer.Tick += (_, _) => elapsed.Text = TimeLabel(recording?.Elapsed ?? TimeSpan.Zero);
+        SourceInitialized += (_, _) =>
+        {
+            ApplyChrome();
+            regionFrame.Show();
+        };
         ContentRendered += (_, _) => PositionControls();
         SizeChanged += (_, _) => { if (IsLoaded) PositionControls(); };
         PreviewKeyDown += (_, e) =>
@@ -142,6 +232,31 @@ internal sealed class RecordingWindow : Window
         };
     }
 
+    internal void RefreshTheme() => ApplyChrome();
+
+    private void ApplyChrome()
+    {
+        micaEnabled = Theme.ApplyWindowChrome(this, Native.BackdropKind.Mica);
+        if (micaEnabled) Background = Brushes.Transparent;
+        else SetResourceReference(BackgroundProperty, "Surface");
+    }
+
+    private static Border SubCard(UIElement child, Visibility initial)
+    {
+        var border = new Border
+        {
+            CornerRadius = new CornerRadius(7),
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness(10, 7, 10, 7),
+            Margin = new Thickness(0, 8, 0, 0),
+            Visibility = initial,
+            Child = child
+        };
+        border.SetResourceReference(Border.BackgroundProperty, "Card");
+        border.SetResourceReference(Border.BorderBrushProperty, "Line");
+        return border;
+    }
+
     private void ChooseMicrophone()
     {
         var previous = (microphoneDevice.SelectedItem as RecordingMicrophone)?.Id;
@@ -149,12 +264,12 @@ internal sealed class RecordingWindow : Window
         catch (ExternalException) { microphoneDevice.ItemsSource = new[] { new RecordingMicrophone(null, "Windows 默认麦克风") }; }
         microphoneDevice.SelectedItem = microphoneDevice.Items.OfType<RecordingMicrophone>().FirstOrDefault(item => item.Id == previous)
             ?? microphoneDevice.Items[0];
-        microphoneDevice.Visibility = Visibility.Visible;
+        micHost.Visibility = Visibility.Visible;
     }
 
     private async Task ChooseCamera()
     {
-        cameraControls.Visibility = camera.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        camHost.Visibility = camera.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
         if (camera.IsChecked != true)
         {
             SetStatus("就绪");
@@ -188,10 +303,13 @@ internal sealed class RecordingWindow : Window
     internal static string TimeLabel(TimeSpan value) => value.TotalHours >= 1
         ? $"{(int)value.TotalHours:00}:{value.Minutes:00}:{value.Seconds:00}" : value.ToString(@"mm\:ss");
 
-    private void SetStatus(string message, bool warning = false)
+    private void SetStatus(string message, bool warning = false, string? stateDotKey = null)
     {
         status.Text = message;
         status.SetResourceReference(TextBlock.ForegroundProperty, warning ? "Danger" : "Muted");
+        string dotKey = stateDotKey ?? (warning ? "Danger" : "Accent");
+        statusDot.SetResourceReference(Shape.FillProperty, dotKey);
+        headerDot.SetResourceReference(Shape.FillProperty, stateDotKey ?? (warning ? "Warning" : "Accent"));
     }
 
     private async Task StartOrStop()
@@ -237,7 +355,7 @@ internal sealed class RecordingWindow : Window
             for (int seconds = (int)delay.SelectedItem; seconds > 0; seconds--)
             {
                 regionFrame.UpdateState(RecordingFrameState.Countdown, seconds);
-                SetStatus($"{seconds} 秒后开始录制");
+                SetStatus($"{seconds} 秒后开始录制", stateDotKey: "Warning");
                 await Task.Delay(TimeSpan.FromSeconds(1), session.Token);
             }
             session.Token.ThrowIfCancellationRequested();
@@ -250,10 +368,11 @@ internal sealed class RecordingWindow : Window
             if (preferences.MouseCues || preferences.KeyCues)
                 inputCapture = new RecordingInput(area, new WindowInteropHelper(this).Handle, preferences.MouseCues, preferences.KeyCues,
                     newRecording.CueTime, newRecording.AddCue);
+            start.SetResourceReference(StyleProperty, "DangerButton");
             start.Content = "停止录制";
             start.IsEnabled = pause.IsEnabled = true;
             pause.Visibility = Visibility.Visible;
-            SetStatus("● 正在录制", true);
+            SetStatus("● 正在录制", warning: true, stateDotKey: "DangerFill");
             timer.Start();
             var result = await recording.Completion;
             if (abandoned || closing)
@@ -308,6 +427,7 @@ internal sealed class RecordingWindow : Window
             {
                 regionFrame.UpdateState(RecordingFrameState.Ready);
                 options.IsEnabled = start.IsEnabled = cancel.IsEnabled = true;
+                start.SetResourceReference(StyleProperty, "PrimaryButton");
                 start.Content = "开始录制";
                 pause.Content = "暂停";
                 pause.Visibility = cancel.Visibility = Visibility.Collapsed;
@@ -324,7 +444,7 @@ internal sealed class RecordingWindow : Window
         recording.Pause(paused);
         regionFrame.UpdateState(paused ? RecordingFrameState.Paused : RecordingFrameState.Live);
         pause.Content = paused ? "继续" : "暂停";
-        SetStatus(paused ? "已暂停" : "● 正在录制", !paused);
+        SetStatus(paused ? "已暂停" : "● 正在录制", warning: !paused, stateDotKey: paused ? "Warning" : "DangerFill");
     }
 
     private void ConfirmClose(object? sender, CancelEventArgs e)

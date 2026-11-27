@@ -1,29 +1,37 @@
 /* Windows 桌面与纸面式月历，共用明暗语义色。 */
 :root {
   color-scheme: light;
-  --text: #182430;
-  --muted: #4f6373;
-  --faint: #5a6f80;
+  --text: #14202b;
+  --muted: #4b6073;
+  --faint: #566d80;
   --accent: #005fb8;
-  --accent-hover: #0052a0;
+  --accent-hover: #004e9a;
+  --accent-top: #0b6ed0;
+  --accent-bottom: #0057ad;
   --on-accent: #fff;
-  --accent-fill: #e6f2ff;
-  --surface: #f9fbfd;
-  --surface-glass: rgb(249 251 253 / 93%);
+  --accent-fill: #e4f1ff;
+  --surface: #f5f8fc;
+  --surface-glass: rgb(245 249 253 / 92%);
   --paper: #fff;
-  --subtle: #e6eef5;
-  --line: #dce4ec;
-  --rail: #f4f7fa;
-  --panel-border: #c2d0dc;
+  --card: #ecf3f9;
+  --subtle: #e2ecf6;
+  --line: #d8e3ee;
+  --rail: #f1f6fb;
+  --panel-border: #bdd0e1;
   --danger: #b42d37;
+  --danger-fill: #d13438;
+  --danger-hover: #b6282c;
   --rest: #b83232;
   --positive: #0e6f54;
+  --warning: #b45309;
+  --warning-bg: #fef3c7;
   --rest-bg: #ffe9e7;
   --positive-bg: #e3f5ee;
-  --glass-fill: rgb(255 255 255 / 80%);
-  --glass-hover: rgb(255 255 255 / 92%);
-  --glass-border: rgb(214 231 245 / 75%);
+  --glass-fill: rgb(255 255 255 / 85%);
+  --glass-hover: rgb(255 255 255 / 95%);
+  --glass-border: rgb(207 226 242 / 78%);
   --shadow: 0 12px 38px #152b3b24, 0 2px 8px #0d2c4814;
+  --elevation-sm: 0 2px 8px #0d263a0e, inset 0 1px 0 #ffffff85;
   --sky: #e4eff4;
   --sky-fade: #c4d9e4;
   --ridge-1: #bfd7e1;
@@ -35,40 +43,49 @@
   --round: 12px;
   --control: 6px;
   --space: 8px;
+  --ease: 130ms cubic-bezier(0.2, 0, 0, 1);
   --font: "Segoe UI Variable Text", "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --text: #eef4f9;
-  --muted: #a9bccb;
-  --faint: #96aab9;
+  --text: #eef4fa;
+  --muted: #a5b9ca;
+  --faint: #90a6b8;
   --accent: #76c7ff;
   --accent-hover: #8fd2ff;
+  --accent-top: #87ceff;
+  --accent-bottom: #65bcfa;
   --on-accent: #07243d;
-  --accent-fill: #1e3b52;
-  --surface: #1d2730;
-  --surface-glass: rgb(29 39 48 / 91%);
-  --paper: #24313c;
-  --subtle: #2e3f4d;
-  --line: #374957;
-  --rail: #172028;
-  --panel-border: #4e6474;
+  --accent-fill: #1b3952;
+  --surface: #16202a;
+  --surface-glass: rgb(22 32 42 / 90%);
+  --paper: #1e2b37;
+  --card: #243442;
+  --subtle: #2b3e4f;
+  --line: #304354;
+  --rail: #121b24;
+  --panel-border: #465f74;
   --danger: #ff9492;
+  --danger-fill: #c83a3e;
+  --danger-hover: #de4b4f;
   --rest: #ff8f8a;
   --positive: #7cdcc0;
+  --warning: #fbbf24;
+  --warning-bg: #423015;
   --rest-bg: #4a2b2c;
   --positive-bg: #1e3d34;
-  --glass-fill: rgb(52 71 87 / 35%);
-  --glass-hover: rgb(62 84 102 / 52%);
-  --glass-border: rgb(158 197 226 / 32%);
+  --glass-fill: rgb(36 53 69 / 44%);
+  --glass-hover: rgb(46 67 87 / 58%);
+  --glass-border: rgb(164 206 232 / 33%);
   --shadow: 0 14px 44px #01080c6b, 0 2px 10px #0005;
-  --sky: #182b38;
-  --sky-fade: #233f4d;
-  --ridge-1: #2b4756;
-  --ridge-2: #355765;
-  --ridge-3: #365f6d;
-  --ridge-4: #416c79;
-  --bar: #1d2a35e6;
+  --elevation-sm: 0 2px 10px #0004, inset 0 1px 0 #ffffff1a;
+  --sky: #162734;
+  --sky-fade: #203948;
+  --ridge-1: #284252;
+  --ridge-2: #315261;
+  --ridge-3: #335a68;
+  --ridge-4: #3e6775;
+  --bar: #1a2732e6;
   --ring: #8fd2ff;
 }
 * {
@@ -480,7 +497,8 @@ dialog {
   padding: 5px 10px 5px 6px;
   text-align: left;
   backdrop-filter: blur(12px);
-  box-shadow: inset 0 1px 0 #ffffff5c, 0 2px 6px #0f26380a;
+  box-shadow: var(--elevation-sm);
+  transition: background var(--ease), border-color var(--ease), transform var(--ease);
 }
 .weather-badge:hover {
   background: var(--glass-hover);
@@ -634,8 +652,10 @@ dialog {
   background: var(--accent-fill);
 }
 .date-cell.today {
-  background: var(--accent);
+  background: linear-gradient(180deg, var(--accent-top), var(--accent-bottom));
+  border-color: var(--accent);
   color: var(--on-accent);
+  box-shadow: inset 0 1px 0 #ffffff38;
 }
 .date-cell.today.selected {
   box-shadow: inset 0 0 0 1.5px var(--surface);
@@ -741,14 +761,18 @@ h3 {
 }
 .primary {
   color: var(--on-accent);
-  background: var(--accent);
+  background: linear-gradient(180deg, var(--accent-top), var(--accent-bottom));
+  border-color: var(--accent);
+  box-shadow: inset 0 1px 0 #ffffff38;
 }
 .primary:hover {
   background: var(--accent-hover);
+  border-color: var(--accent-hover);
 }
 .secondary {
   background: var(--paper);
   border-color: var(--panel-border);
+  border-bottom-width: 1.5px;
 }
 .empty-line,
 .muted,
@@ -787,7 +811,7 @@ h3 {
 }
 .date-tile small {
   display: block;
-  background: var(--accent);
+  background: linear-gradient(180deg, var(--accent-top), var(--accent-bottom));
   color: var(--on-accent);
   font-size: 11px;
   padding: 2px;
@@ -1350,21 +1374,23 @@ body:not([data-page="clock"]) .taskbar-calendar::after {
   align-items: center;
   padding: 2px;
   flex: none;
+  transition: background-color var(--ease), border-color var(--ease);
 }
 .switch i {
   display: block;
-  width: 13px;
-  height: 13px;
+  width: 14px;
+  height: 14px;
   border-radius: 100%;
   background: var(--faint);
+  transition: transform var(--ease), background-color var(--ease);
 }
 .switch[aria-checked="true"] {
-  justify-content: flex-end;
   background: var(--accent);
   border-color: var(--accent);
 }
 .switch[aria-checked="true"] i {
   background: var(--on-accent);
+  transform: translateX(16px);
 }
 .festival-footer {
   padding-top: 12px;
@@ -1769,6 +1795,16 @@ dialog::backdrop {
   .taskbar-apps > svg:nth-child(3) {
     display: none;
   }
+}
+button,
+.option-row,
+.date-cell,
+.style-card,
+.nav button,
+.settings-nav button,
+input,
+select {
+  transition: background-color var(--ease), border-color var(--ease), color var(--ease), box-shadow var(--ease), opacity var(--ease);
 }
 @media (prefers-reduced-motion: reduce) {
   *,

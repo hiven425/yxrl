@@ -21,6 +21,9 @@
             <Grid>
               <Border x:Name="Box" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
                       BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="10" Padding="{TemplateBinding Padding}">
+                <Border.Effect>
+                  <DropShadowEffect Direction="270" ShadowDepth="2" BlurRadius="12" Opacity="0.09" Color="#0B2239"/>
+                </Border.Effect>
                 <ContentPresenter TextElement.Foreground="{TemplateBinding Foreground}"/>
               </Border>
               <Border x:Name="FocusRing" BorderBrush="{DynamicResource Accent}" BorderThickness="1.5" CornerRadius="11"
@@ -73,7 +76,20 @@
             </Grid>
             <ControlTemplate.Triggers>
               <Trigger Property="IsMouseOver" Value="True">
-                <Setter TargetName="HoverOverlay" Property="Opacity" Value="0.22"/>
+                <Trigger.EnterActions>
+                  <BeginStoryboard>
+                    <Storyboard>
+                      <DoubleAnimation Storyboard.TargetName="HoverOverlay" Storyboard.TargetProperty="Opacity" To="0.38" Duration="0:0:0.11"/>
+                    </Storyboard>
+                  </BeginStoryboard>
+                </Trigger.EnterActions>
+                <Trigger.ExitActions>
+                  <BeginStoryboard>
+                    <Storyboard>
+                      <DoubleAnimation Storyboard.TargetName="HoverOverlay" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.13"/>
+                    </Storyboard>
+                  </BeginStoryboard>
+                </Trigger.ExitActions>
               </Trigger>
               <Trigger Property="IsKeyboardFocused" Value="True">
                 <Setter TargetName="FocusRing" Property="Visibility" Value="Visible"/>
@@ -145,8 +161,9 @@
           <Border Grid.Row="2" Background="{DynamicResource Card}" BorderBrush="{DynamicResource Line}" BorderThickness="1" CornerRadius="10" Padding="11,8">
             <DockPanel>
               <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" VerticalAlignment="Center" Margin="8,0,0,0">
-                <Button x:Name="DetailToggleButton" Click="DetailToggleClick" Padding="7,4" MinHeight="28"
-                        Foreground="{DynamicResource Accent}" FontSize="12" ToolTip="展开或收起当日详情" Margin="0,0,2,0"/>
+                <Button x:Name="DetailToggleButton" Click="DetailToggleClick" Style="{StaticResource SecondaryButton}"
+                        Padding="9,3" MinHeight="28" Foreground="{DynamicResource Accent}" FontSize="12"
+                        ToolTip="展开或收起当日详情" Margin="0,0,4,0"/>
                 <Button x:Name="CaptureEntry" AutomationProperties.Name="截图工具" ToolTip="截图工具" Width="30" Height="30"
                         Click="CaptureMenuClick" Style="{StaticResource IconButton}" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" Content="&#xE722;">
                   <Button.ContextMenu>

@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Media.Animation;
 using Yxrl.Desktop;
 
 namespace Yxrl.Views;
@@ -15,7 +16,12 @@ internal partial class DayDetailWindow : Window
     public DayDetailWindow(Action closeDetails)
     {
         InitializeComponent();
+        if (Theme.AppIcon is { } appIcon) Icon = appIcon;
         this.closeDetails = closeDetails;
+        IsVisibleChanged += (_, e) => {
+            if (e.NewValue is true && SystemParameters.ClientAreaAnimation && RootBorder.Child is UIElement content)
+                content.BeginAnimation(OpacityProperty, new DoubleAnimation(0.55, 1.0, TimeSpan.FromMilliseconds(130)) { FillBehavior = FillBehavior.Stop });
+        };
     }
 
     protected override void OnSourceInitialized(EventArgs e)

@@ -25,6 +25,7 @@ internal partial class ReminderEditorWindow : Window
         id = original?.Id ?? Guid.NewGuid();
         ResultDate = date;
         InitializeComponent();
+        if (Theme.AppIcon is { } appIcon) Icon = appIcon;
         DateField.Language = XmlLanguage.GetLanguage(CultureInfo.CurrentCulture.IetfLanguageTag);
         DateField.DisplayDateStart = CalendarService.First.ToDateTime(TimeOnly.MinValue);
         DateField.DisplayDateEnd = CalendarService.Last.ToDateTime(TimeOnly.MinValue);

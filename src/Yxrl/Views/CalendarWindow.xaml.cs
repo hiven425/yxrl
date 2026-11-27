@@ -7,6 +7,7 @@ using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using Yxrl.Desktop;
 
 namespace Yxrl.Views;
@@ -24,6 +25,7 @@ internal partial class CalendarWindow : Window
     private readonly Action<int> openSettings;
     private readonly Capture.CaptureTools captureTools;
     private DateOnly today;
+    private DateOnly? renderedMonth;
     private bool presented;
     private bool backdropActive;
     private Size preferredSize = DefaultSize;
@@ -479,6 +481,8 @@ internal partial class CalendarWindow : Window
     private void RenderMonth()
     {
         bool restoreFocus = selectedDayButton?.IsKeyboardFocused == true;
+        bool monthChanged = renderedMonth is { } prev && prev != vm.Month;
+        renderedMonth = vm.Month;
         selectedDayButton = null;
         var opt = store.Current.Calendar;
         MonthYear.Text = vm.Month.Year.ToString();
@@ -555,13 +559,14 @@ internal partial class CalendarWindow : Window
                         IsHitTestVisible = false
                     });
                 }
+                var todayFill = TryFindResource("AccentGradient") as Brush ?? ColorOf("Selected");
                 var button = new Button {
                     Style = cellStyle,
                     Content = host,
                     Focusable = true,
                     IsTabStop = cell.IsSelected,
                     Opacity = cell.Outside ? 0.72 : 1,
-                    Background = cell.IsToday ? ColorOf("Selected") : cell.IsSelected ? ColorOf("Hot") : Brushes.Transparent,
+                    Background = cell.IsToday ? todayFill : cell.IsSelected ? ColorOf("Hot") : Brushes.Transparent,
                     BorderBrush = cell.IsToday ? ColorOf("Selected") : cell.IsSelected ? ColorOf("Accent") : Brushes.Transparent,
                     BorderThickness = new Thickness(cell.IsSelected && !cell.IsToday ? 1.2 : 1),
                     ToolTip = $"{date:yyyy-MM-dd} {info.LunarDate} {info.Festivals}".TrimEnd()
@@ -594,5 +599,9 @@ internal partial class CalendarWindow : Window
         UpdateDetailToggleLabel();
         if (details?.IsVisible == true) UpdateDetails(d, num);
         if (restoreFocus) selectedDayButton?.Focus();
+        if (monthChanged && IsVisible && SystemParameters.ClientAreaAnimation) {
+            var anim = new DoubleAnimation(0.68, 1.0, TimeSpan.FromMilliseconds(125)) { FillBehavior = FillBehavior.Stop };
+            DaysGrid.BeginAnimation(OpacityProperty, anim);
+        }
     }
 }

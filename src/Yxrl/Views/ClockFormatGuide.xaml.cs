@@ -9,6 +9,7 @@ internal partial class ClockFormatGuide : Window
     public ClockFormatGuide()
     {
         InitializeComponent();
+        if (Theme.AppIcon is { } appIcon) Icon = appIcon;
         Loaded += (_, _) => {
             if (Owner is null) return;
             MaxWidth = Math.Max(MinWidth, Owner.ActualWidth - 12);

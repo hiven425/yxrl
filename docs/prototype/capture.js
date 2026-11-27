@@ -1347,27 +1347,52 @@ const CapturePreview = (function createPreview() {
     const frame = createRecordFrame(areaRect);
     const view = element("section", "shot-recorder", desk());
     view.setAttribute("aria-label", "屏幕录制演示");
-    view.innerHTML = `<header><b>屏幕录制</b>${button("video-close", "关闭录屏", "×")}</header>
+    const sizePill = areaRect ? `<span class="shot-count-pill">${Math.round(areaRect.w)} × ${Math.round(areaRect.h)} px</span>` : "";
+    view.innerHTML = `<header><div class="shot-col-title"><b>屏幕录制</b>${sizePill}</div>${button("video-close", "关闭录屏", glyphs.close, "shot-btn shot-tool-icon")}</header>
       <div class="shot-video-image"><img alt="录制区域"><span class="shot-video-position" hidden></span><kbd class="shot-video-key" hidden>Ctrl+T</kbd><span class="shot-video-camera" hidden>摄像头示例</span></div>
-      <div class="shot-video-options"><label>帧率 <select id="shot-fps">${[5, 16, 24, 30, 60].map(value => `<option ${value === 24 ? "selected" : ""}>${value}</option>`).join("")}</select></label>
-      <label>延时（秒） <select id="shot-delay">${[0, 1, 2, 3, 5, 10].map(value => `<option>${value}</option>`).join("")}</select></label>
-      <label>模式 <select id="shot-mode"><option>普通录制</option><option>快速保存 MP4</option></select></label>
-      <label><input type="checkbox" checked> 显示光标</label><label><input type="checkbox" id="shot-video-system"> 系统声音</label><label><input type="checkbox" id="shot-video-mic"> 麦克风</label>
-      <label><input type="checkbox" id="shot-video-mouse"> 鼠标点击和滚轮</label><label><input type="checkbox" id="shot-video-keys"> 显示快捷键</label>
-      <label><input type="checkbox" id="shot-video-camera"> 摄像头</label>
-      <label class="shot-microphone-field" hidden>麦克风设备 <select aria-label="麦克风设备"><option>Windows 默认麦克风</option><option>内置麦克风阵列（示例）</option></select></label>
-      <div class="shot-camera-fields" hidden><label>摄像头设备 <select><option>本机摄像头（示例）</option></select></label>
-      <label>位置 <select id="shot-camera-corner" aria-label="摄像头位置"><option>右下</option><option>左下</option><option>右上</option><option>左上</option></select></label><label><input type="checkbox" id="shot-camera-circle"> 圆形</label></div></div>
-      <div class="shot-video-trim" hidden><label>回放进度 <input id="shot-playhead" type="range" min="0" step="0.1"></label>
-      <label>开始（秒） <input type="number" min="0" value="0" step=".1"></label><label>结束（秒） <input id="shot-video-end" type="number" min="0" step=".1"></label>
-      <label>倍速 <select id="shot-speed">${[.25,.5,1,1.25,1.5,2].map(speed => `<option ${speed === 1 ? "selected" : ""}>${speed}</option>`).join("")}</select></label>
-      <label>导出格式 <select><option>MP4</option><option>GIF</option><option>WebP</option></select></label>
-      ${["左", "上", "右", "下"].map(side => `<label>裁${side} <input type="number" min="0" value="0" data-crop="${side}"></label>`).join("")}</div>
-      <fieldset class="shot-video-mixer" hidden><legend>音轨与动画</legend>
-      ${[["system","系统声音"],["mic","麦克风"]].map(([id,label]) => `<div data-track="${id}"><label>${label} <input type="range" min="0" max="100" value="100" aria-label="${label}音量"></label><output>100%</output><label><input type="checkbox" aria-label="${label}静音"> 静音</label></div>`).join("")}
-      <label data-effect="mouse"><input type="checkbox" checked> 鼠标动画</label><label data-effect="keys"><input type="checkbox" checked> 快捷键动画</label></fieldset>
-      <div class="shot-row">${button("video-start", "开始录制")}${button("video-pause", "暂停")}${button("video-save", "另存为")}${button("video-repeat", "重新录制")}${button("video-interrupt", "模拟中断")}</div>
-      <p class="shot-video-status" role="status"></p>`;
+      <div class="shot-rec-card shot-video-options">
+        <div class="shot-rec-params">
+          <label class="field">帧率<select id="shot-fps">${[5, 16, 24, 30, 60].map(value => `<option ${value === 24 ? "selected" : ""}>${value}</option>`).join("")}</select></label>
+          <label class="field">延时（秒）<select id="shot-delay">${[0, 1, 2, 3, 5, 10].map(value => `<option>${value}</option>`).join("")}</select></label>
+          <label class="field">模式<select id="shot-mode"><option>普通录制</option><option>快速保存 MP4</option></select></label>
+        </div>
+        <div class="shot-rec-toggles">
+          <label class="shot-inline-opt"><input type="checkbox" checked>显示光标</label>
+          <label class="shot-inline-opt"><input type="checkbox" id="shot-video-system">系统声音</label>
+          <label class="shot-inline-opt"><input type="checkbox" id="shot-video-mic">麦克风</label>
+          <label class="shot-inline-opt"><input type="checkbox" id="shot-video-mouse">鼠标点击和滚轮</label>
+          <label class="shot-inline-opt"><input type="checkbox" id="shot-video-keys">显示快捷键</label>
+          <label class="shot-inline-opt"><input type="checkbox" id="shot-video-camera">摄像头</label>
+        </div>
+        <label class="shot-rec-sub shot-microphone-field" hidden>麦克风设备 <select aria-label="麦克风设备"><option>Windows 默认麦克风</option><option>内置麦克风阵列（示例）</option></select></label>
+        <div class="shot-rec-sub shot-camera-fields" hidden>
+          <label>摄像头设备 <select><option>本机摄像头（示例）</option></select></label>
+          <label>位置 <select id="shot-camera-corner" aria-label="摄像头位置"><option>右下</option><option>左下</option><option>右上</option><option>左上</option></select></label>
+          <label class="shot-inline-opt"><input type="checkbox" id="shot-camera-circle">圆形</label>
+        </div>
+      </div>
+      <div class="shot-rec-card shot-video-trim" hidden>
+        <label class="shot-trim-seek"><span>回放进度</span><input id="shot-playhead" class="shot-slider" type="range" min="0" step="0.1"></label>
+        <div class="shot-trim-row">
+          <label>开始（秒）<input type="number" min="0" value="0" step=".1"></label>
+          <label>结束（秒）<input id="shot-video-end" type="number" min="0" step=".1"></label>
+          <label>倍速<select id="shot-speed">${[.25,.5,1,1.25,1.5,2].map(speed => `<option ${speed === 1 ? "selected" : ""}>${speed}×</option>`).join("")}</select></label>
+          <label>导出格式<select><option>MP4</option><option>GIF</option><option>WebP</option></select></label>
+        </div>
+        <div class="shot-trim-row">
+          ${["左", "上", "右", "下"].map(side => `<label>裁${side}<input type="number" min="0" value="0" data-crop="${side}"></label>`).join("")}
+        </div>
+      </div>
+      <div class="shot-rec-card shot-video-mixer" hidden>
+        <span class="shot-mixer-title">音轨与动画</span>
+        ${[["system","系统声音"],["mic","麦克风"]].map(([id,label]) => `<div data-track="${id}"><label>${label}<input class="shot-slider" type="range" min="0" max="100" value="100" aria-label="${label}音量"></label><output>100%</output><label class="shot-inline-opt"><input type="checkbox" aria-label="${label}静音">静音</label></div>`).join("")}
+        <label class="shot-inline-opt" data-effect="mouse"><input type="checkbox" checked>鼠标动画</label>
+        <label class="shot-inline-opt" data-effect="keys"><input type="checkbox" checked>快捷键动画</label>
+      </div>
+      <div class="shot-panel-footer shot-rec-footer">
+        <div class="shot-status-wrap"><i class="shot-status-dot" data-state="accent" aria-hidden="true"></i><p class="shot-video-status" role="status"></p></div>
+        <div class="shot-row">${button("video-start", "开始录制", "开始录制", "shot-btn primary")}${button("video-pause", "暂停", "暂停", "shot-btn secondary")}${button("video-save", "另存为", "另存为", "shot-btn primary")}${button("video-repeat", "重新录制", "重新录制", "shot-btn secondary")}${button("video-interrupt", "模拟中断", "模拟中断", "shot-btn secondary")}</div>
+      </div>`;
     view.querySelector("img").src = shot.image.toDataURL();
     recordingClip = { view, frame, rect: areaRect, shot, stage: recovered ? "review" : "ready", elapsed: recovered?.elapsed || 0, left: 0, position: 0,
       options: recovered?.options || {}, timer: null };
@@ -1418,6 +1443,7 @@ const CapturePreview = (function createPreview() {
     const title = review ? (clip.playing ? "暂停播放" : "播放") : live || paused ? "停止录制" : "开始录制";
     primary.textContent = title;
     primary.setAttribute("aria-label", title);
+    primary.className = live || paused ? "shot-btn danger-fill" : review ? "shot-btn secondary" : "shot-btn primary";
     for (const [id, visible] of [["pause", live || paused], ["save", review], ["repeat", review], ["interrupt", live || paused]]) {
       const control = view.querySelector(`[data-shot="video-${id}"]`);
       control.hidden = !visible;
@@ -1432,6 +1458,8 @@ const CapturePreview = (function createPreview() {
     const status = view.querySelector(".shot-video-status");
     status.textContent = `${label} · ${(review ? clip.position : clip.elapsed).toFixed(1)} 秒 · 离线演示`;
     status.dataset.live = String(live);
+    const dot = view.querySelector(".shot-rec-footer .shot-status-dot");
+    if (dot) dot.dataset.state = live ? "danger" : paused || stage === "delay" ? "warning" : review ? "positive" : "accent";
     view.querySelector(".shot-video-image").dataset.stage = stage;
     if (clip.frame) {
       clip.frame.hidden = review;
@@ -1506,7 +1534,7 @@ const CapturePreview = (function createPreview() {
       if (clip.stage === "delay" && (clip.left -= delta) <= 0) clip.stage = "live";
       else if (clip.stage === "live") clip.elapsed += delta;
       else if (clip.stage === "review" && clip.playing) {
-        clip.position = Math.min(clip.elapsed, clip.position + delta * Number(clip.view.querySelector("#shot-speed").value));
+        clip.position = Math.min(clip.elapsed, clip.position + delta * parseFloat(clip.view.querySelector("#shot-speed").value));
         if (clip.position >= clip.elapsed) clip.playing = false;
       } else if (clip.stage === "paused" || clip.stage === "review") return;
       updateRecording();
@@ -1520,12 +1548,20 @@ const CapturePreview = (function createPreview() {
     closeScroll();
     const view = element("section", "shot-recorder", desk());
     view.setAttribute("aria-label", "长截图演示");
-    view.innerHTML = `<header><b>长截图</b>${button("scroll-close", "关闭长截图", "×")}</header>
-      <div class="shot-video-options"><label>滚动方向 <select id="shot-scroll-axis"><option>纵向向下</option><option>横向向右</option></select></label>
-      <label><input id="shot-scroll-auto" type="checkbox" checked> 滚动后自动拼接</label></div>
-      <div class="shot-scroll-source" tabindex="0" aria-label="可滚动示例区域"></div>
-      <div class="shot-row">${button("scroll-add", "拼接下一屏")}${button("scroll-finish", "完成长截图")}</div>
-      <p class="shot-video-status" role="status"></p>`;
+    view.innerHTML = `<header><div class="shot-col-title"><b>长截图</b><span class="shot-count-pill" id="shot-scroll-count">1 屏</span></div>${button("scroll-close", "关闭长截图", glyphs.close, "shot-btn shot-tool-icon")}</header>
+      <div class="shot-rec-card shot-scroll-bar">
+        <div class="shot-video-options">
+          <label>滚动方向 <select id="shot-scroll-axis"><option>纵向向下</option><option>横向向右</option></select></label>
+          <label class="shot-inline-opt"><input id="shot-scroll-auto" type="checkbox" checked>滚动后自动拼接</label>
+        </div>
+      </div>
+      <div class="shot-scroll-stage">
+        <div class="shot-scroll-source" tabindex="0" aria-label="可滚动示例区域"></div>
+      </div>
+      <div class="shot-panel-footer shot-rec-footer">
+        <div class="shot-status-wrap"><i class="shot-status-dot" data-state="positive" aria-hidden="true"></i><p class="shot-video-status" role="status"></p></div>
+        <div class="shot-row">${button("scroll-add", "拼接下一屏", "拼接下一屏", "shot-btn secondary")}${button("scroll-finish", "完成长截图", "完成长截图", "shot-btn primary")}</div>
+      </div>`;
     const images = view.querySelector(".shot-scroll-source");
     for (let page = 1; page <= 5; page++) {
       const canvasPreview = canvas(shot.image.width, shot.image.height);
@@ -1541,7 +1577,10 @@ const CapturePreview = (function createPreview() {
     }
     scrollClip = { view, images, horizontal: false, shot, page: 0 };
     function update() {
-      view.querySelector("p").textContent = `${scrollClip.page + 1} 屏已拼接 · 离线演示`;
+      const n = scrollClip.page + 1;
+      const badge = view.querySelector("#shot-scroll-count");
+      if (badge) badge.textContent = `${n} 屏`;
+      view.querySelector("p").textContent = `${n} 屏已拼接 · 离线演示`;
     }
     view.querySelector("select").onchange = ev => {
       scrollClip.horizontal = ev.target.selectedIndex === 1;
@@ -1568,7 +1607,10 @@ const CapturePreview = (function createPreview() {
       const position = horizontal ? images.scrollLeft : images.scrollTop;
       const span = horizontal ? images.firstElementChild.offsetWidth : images.firstElementChild.offsetHeight;
       scrollClip.page = Math.min(4, Math.max(scrollClip.page, Math.round(position / span)));
-      view.querySelector("p").textContent = `${scrollClip.page + 1} 屏已拼接 · 离线演示`;
+      const n = scrollClip.page + 1;
+      const badge = view.querySelector("#shot-scroll-count");
+      if (badge) badge.textContent = `${n} 屏`;
+      view.querySelector("p").textContent = `${n} 屏已拼接 · 离线演示`;
     }
     if (id === "scroll-finish") {
       const count = scrollClip.page + 1;
