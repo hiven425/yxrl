@@ -2,20 +2,20 @@ using System.ComponentModel;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Interop;
 using System.Windows.Media.Imaging;
 using Microsoft.Win32;
 using Yxrl.Desktop;
 
 namespace Yxrl.Capture;
 
-internal sealed record ClosedPin(ShotDocument Document, PixelRect Placement, double Opacity);
-
 internal sealed class CaptureTools : IDisposable
 {
     private readonly SettingsStore settings;
+    private readonly RecognitionModels recognitionModels;
     private readonly HashSet<Window> windows = [];
     private readonly List<PixelRect> selectionHistory = [];
-    private readonly List<ClosedPin> closedPins = [];
+    private readonly List<Func<Window>> closedPins = [];
     private ShotWindow? selection;
     private RecordingWindow? recorder;
     private ScrollWindow? scrolling;
@@ -36,6 +36,7 @@ internal sealed class CaptureTools : IDisposable
         this.settings = settings;
         OpenSettings = openSettings;
         Ocr = new(settings.DirectoryPath);
+        recognitionModels = new(settings.DirectoryPath);
         Hotkeys = new(Invoke);
         Hotkeys.Apply(Options, false);
     }
@@ -78,13 +79,13 @@ internal sealed class CaptureTools : IDisposable
                     Show(selection);
                     break;
                 case ShotAction.Clipboard:
-                    if (ReadClipboardImage(Clipboard.GetDataObject()) is not { } image)
-                    {
-                        Feedback("剪贴板中没有图片。");
-                        return;
-                    }
-
-                    Show(new ShotWindow(this, new(image)));
+                    var data = Clipboard.GetDataObject();
+                    if (ReadClipboardImage(data) is { } image)
+                        Show(new ShotWindow(this, new(image)));
+                    else if (data?.GetData(DataFormats.UnicodeText) is string value && !string.IsNullOrWhiteSpace(value))
+                        Show(ValuePin(value, null));
+                    else
+                        Feedback("剪贴板中没有可钉住的图片或文字。");
                     break;
                 case ShotAction.Translate:
                     Show(new TextToolWindow(this, null, true));
@@ -123,7 +124,25 @@ internal sealed class CaptureTools : IDisposable
     {
         if (disposing || !placement.HasArea)
             return;
-        closedPins.Add(new(document, placement, opacity));
+        RememberPin(() => new ShotWindow(this, document, placement: placement, initialOpacity: opacity));
+    }
+
+    private Window ValuePin(string value, PixelRect? placement)
+    {
+        var pin = new ValuePinWindow(value, placement);
+        PixelRect closedAt = default;
+        pin.Closing += (_, _) => closedAt = Native.VisibleRect(new WindowInteropHelper(pin).Handle);
+        pin.Closed += (_, _) =>
+        {
+            if (!disposing)
+                RememberPin(() => ValuePin(value, closedAt));
+        };
+        return pin;
+    }
+
+    private void RememberPin(Func<Window> reopen)
+    {
+        closedPins.Add(reopen);
         if (closedPins.Count > 10)
             closedPins.RemoveAt(0);
     }
@@ -134,7 +153,7 @@ internal sealed class CaptureTools : IDisposable
             return false;
         var last = closedPins[^1];
         closedPins.RemoveAt(closedPins.Count - 1);
-        Show(new ShotWindow(this, last.Document, placement: last.Placement, initialOpacity: last.Opacity));
+        Show(last());
         return true;
     }
 
@@ -290,6 +309,16 @@ internal sealed class CaptureTools : IDisposable
                 case ImageAction.Ocr:
                 case ImageAction.Translate:
                     Show(new TextToolWindow(this, image, action == ImageAction.Translate));
+                    break;
+                case ImageAction.Document:
+                case ImageAction.Table:
+                case ImageAction.Formula:
+                    Show(new RecognitionWindow(recognitionModels, Ocr, image, action switch
+                    {
+                        ImageAction.Document => RecognitionKind.Document,
+                        ImageAction.Table => RecognitionKind.Table,
+                        _ => RecognitionKind.Formula
+                    }));
                     break;
             }
 

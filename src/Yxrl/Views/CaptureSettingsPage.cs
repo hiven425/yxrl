@@ -220,7 +220,7 @@ internal sealed class CaptureSettingsPage : StackPanel
         Grid.SetColumn(modelCol, 0);
         twoCol.Children.Add(modelCol);
 
-        foreach (var preset in new[] { "简体中文", "繁體中文", "英文", "日文", "韩文", "法文", "德文" })
+        foreach (var preset in TranslationOptions.Languages)
             target.Items.Add(preset);
         var targetCol = new StackPanel();
         Field(targetCol, "默认目标语言", target, topMargin: 0);

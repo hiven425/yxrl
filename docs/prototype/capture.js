@@ -10,16 +10,22 @@ const CapturePreview = (function createPreview() {
     record: "G",
     scroll: "L",
     restorePin: "Ctrl+3",
+    document: "Shift+E",
+    table: "Shift+Q",
+    formula: "Shift+F",
   };
   const labels = {
     start: "开始截图",
-    clipboard: "钉住剪贴板图片",
+    clipboard: "钉住剪贴板内容",
     pin: "钉住选区",
     ocr: "提取文字",
     translate: "打开翻译",
     record: "录制屏幕",
     scroll: "滚动长截图",
     restorePin: "恢复关闭的贴图",
+    document: "文档识别",
+    table: "图片转表格",
+    formula: "公式识别",
   };
   const names = {
     rect: "矩形",
@@ -54,7 +60,7 @@ const CapturePreview = (function createPreview() {
     undo: "撤销",
     redo: "重做",
     clearMarks: "清空标注",
-    ocr: "提取文字",
+    "recognition-menu": "识别",
     translate: "翻译",
     pin: "钉住",
     scroll: "长截图",
@@ -76,6 +82,10 @@ const CapturePreview = (function createPreview() {
     ["Friday, 14:30", "周五 14:30"],
     ["Room B · Design review", "B 会议室 · 设计评审"],
   ];
+  const languages = ["简体中文", "繁體中文", "英文", "日文", "韩文", "法文", "德文", "西班牙语", "欧洲葡萄牙语", "印度尼西亚语", "马来语", "意大利语", "俄语", "泰语", "越南语", "阿拉伯语", "土耳其语"];
+  const languageOptions = languages.map(name => `<option value="${name}"></option>`).join("");
+  const recognitionKinds = ["ocr", "document", "table", "formula"];
+  const installed = new Set();
   let keys,
     enabled,
     endpoint,
@@ -113,6 +123,7 @@ const CapturePreview = (function createPreview() {
     model = "";
     language = "简体中文";
     apiStatus = { tone: "muted", text: "空配置下也可使用截图、贴图和离线识别" };
+    installed.clear();
     clipboard = null;
     recording = null;
     selHistory = [];
@@ -134,7 +145,7 @@ const CapturePreview = (function createPreview() {
       "captureSettings",
       `<section class="option-group"><div class="option-row"><span class="option-label shot-enable-label"><strong>启用截图工具</strong><small class="shot-status">开启后可通过全局快捷键（Ctrl+1 截图、Ctrl+2 贴图、Ctrl+3 恢复）与月历入口呼出</small></span><label class="shot-switch-wrap"><input id="shot-enabled" type="checkbox" class="shot-switch-input" ${enabled ? "checked" : ""} aria-label="启用截图工具"><span class="shot-switch-track" aria-hidden="true"><i></i></span></label></div><div class="shot-ocr-banner"><i aria-hidden="true"></i><span>已内置 PP-OCRv5 离线文字识别模型，无需网络或 API 即可直接提取与校对中英文。</span></div></section>
        <section class="option-group shot-shortcuts-group" data-enabled="${enabled}"><div class="shot-group-head"><div><h3>快捷键</h3><small class="shot-status">点击按键帽后按下新组合键，按 Esc 取消录入</small></div>${button("restore", "恢复默认快捷键", "恢复默认快捷键", "shot-btn secondary")}</div>${rows}</section>
-       <section class="option-group"><div class="shot-group-head"><div><h3>翻译服务（可选）</h3><small class="shot-status">兼容 OpenAI Chat Completions 接口，密钥保存在 Windows 凭据管理器。</small></div><div class="shot-preset-chips">${button("preset-ollama", "填充 Ollama 本机默认参数", "Ollama 本机", "shot-btn secondary shot-preset-chip")}${button("preset-openai", "填充 OpenAI 官方模板", "OpenAI", "shot-btn secondary shot-preset-chip")}</div></div><div class="shot-api-grid"><label class="field span-2">API 基础地址<input id="shot-url" placeholder="http://localhost:11434/v1" value="${e(endpoint)}"></label><label class="field">模型名<input id="shot-model" placeholder="qwen2.5:7b" value="${e(model)}"></label><label class="field">默认目标语言<input id="shot-default-lang" placeholder="简体中文" value="${e(language)}"></label><label class="field span-2">API 密钥（可选）<input type="password" autocomplete="off" placeholder="原型使用演示样例，桌面版存本机凭据" disabled></label></div><div class="shot-api-test-row">${button("test-api", "测试连接", "测试连接", "shot-btn secondary")}<span class="shot-api-status" data-tone="${apiStatus.tone}">${e(apiStatus.text)}</span></div></section>`,
+       <section class="option-group"><div class="shot-group-head"><div><h3>翻译服务（可选）</h3><small class="shot-status">兼容 OpenAI Chat Completions 接口，密钥保存在 Windows 凭据管理器。</small></div><div class="shot-preset-chips">${button("preset-ollama", "填充 Ollama 本机默认参数", "Ollama 本机", "shot-btn secondary shot-preset-chip")}${button("preset-openai", "填充 OpenAI 官方模板", "OpenAI", "shot-btn secondary shot-preset-chip")}</div></div><div class="shot-api-grid"><label class="field span-2">API 基础地址<input id="shot-url" placeholder="http://localhost:11434/v1" value="${e(endpoint)}"></label><label class="field">模型名<input id="shot-model" placeholder="qwen2.5:7b" value="${e(model)}"></label><label class="field">默认目标语言<input id="shot-default-lang" list="shot-default-lang-options" placeholder="简体中文" value="${e(language)}"><datalist id="shot-default-lang-options">${languageOptions}</datalist></label><label class="field span-2">API 密钥（可选）<input type="password" autocomplete="off" placeholder="原型使用演示样例，桌面版存本机凭据" disabled></label></div><div class="shot-api-test-row">${button("test-api", "测试连接", "测试连接", "shot-btn secondary")}<span class="shot-api-status" data-tone="${apiStatus.tone}">${e(apiStatus.text)}</span></div></section>`,
     );
   }
   function element(tag, cls, parent) {
@@ -192,6 +203,11 @@ const CapturePreview = (function createPreview() {
       w: Math.abs(b.x - a.x),
       h: Math.abs(b.y - a.y),
     };
+  }
+  function sampleTarget(ed, point, elementOnly) {
+    const { window: sampleWindow, words } = ed.source;
+    return (elementOnly && words.find(box => inside(box, point))) ||
+      (inside(sampleWindow, point) ? sampleWindow : { x: 0, y: 0, w: ed.c.width, h: ed.c.height });
   }
   const clamp = (v, min, max) => Math.max(min, Math.min(v, max));
   const inside = (r, p) =>
@@ -406,6 +422,11 @@ const CapturePreview = (function createPreview() {
     if (!r) {
       g.fillStyle = "#10182055";
       g.fillRect(0, 0, c.width, c.height);
+      if (ed.hover) {
+        g.strokeStyle = "#168be2";
+        g.lineWidth = 2;
+        g.strokeRect(ed.hover.x, ed.hover.y, ed.hover.w, ed.hover.h);
+      }
     } else {
       g.save();
       g.beginPath();
@@ -496,7 +517,7 @@ const CapturePreview = (function createPreview() {
     }
     g.stroke();
     g.setLineDash([]);
-    const size = 99, infoH = 38;
+    const size = 114, infoH = 52;
     const lx = clamp(p.x + 16 + size <= g.canvas.width - 4 ? p.x + 16 : p.x - size - 16, 4, g.canvas.width - size - 4);
     const ly = clamp(p.y + 16 + size + infoH <= g.canvas.height - 4 ? p.y + 16 : p.y - size - infoH - 16, 4, g.canvas.height - size - infoH - 4);
     g.fillStyle = "rgb(22 30 38 / 92%)";
@@ -508,18 +529,37 @@ const CapturePreview = (function createPreview() {
     const sy = clamp(p.y - 5, 0, Math.max(0, imgCanvas.height - 11));
     g.drawImage(imgCanvas, sx, sy, 11, 11, lx + 1, ly + 1, size - 2, size - 2);
     g.strokeStyle = "#1893ee";
-    g.strokeRect(lx + 1 + (p.x - sx) * 9, ly + 1 + (p.y - sy) * 9, 9, 9);
+    const pixel = (size - 2) / 11;
+    g.strokeRect(lx + 1 + (p.x - sx) * pixel, ly + 1 + (p.y - sy) * pixel, pixel, pixel);
     const val = imgCanvas.getContext("2d").getImageData(p.x, p.y, 1, 1).data;
-    const color = editor.hexColor === false
-      ? `${val[0]},${val[1]},${val[2]}`
-      : "#" + [...val.slice(0, 3)].map(v => v.toString(16).padStart(2, "0")).join("").toUpperCase();
+    const color = colorValues(val)[editor.colorFormat || 0];
     g.fillStyle = "#fff";
     g.font = "11px Segoe UI";
-    g.fillText(`${p.x},${p.y} ${color}`, lx + 6, ly + size + 14);
+    g.fillText(`${p.x},${p.y}`, lx + 6, ly + size + 13);
+    g.fillText(color, lx + 6, ly + size + 28, size - 12);
     g.fillStyle = "#bcc8d4";
     g.font = "10px Segoe UI";
-    g.fillText("C 复制 · Shift 切换", lx + 6, ly + size + 29);
+    g.fillText("C 复制 · Shift 切换", lx + 6, ly + size + 44);
     g.restore();
+  }
+  function colorValues([red, green, blue]) {
+    const [r, g, b] = [red, green, blue].map(n => n / 255);
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    const delta = max - min, light = (max + min) / 2;
+    let hue = 0;
+    if (delta) {
+      if (max === r) hue = (g - b) / delta;
+      else if (max === g) hue = (b - r) / delta + 2;
+      else hue = (r - g) / delta + 4;
+    }
+    const degrees = Math.round((hue * 60 + 360) % 360) % 360;
+    const percent = n => Math.round(n * 100) + "%";
+    return [
+      "#" + [red, green, blue].map(n => n.toString(16).padStart(2, "0")).join("").toUpperCase(),
+      `rgb(${red}, ${green}, ${blue})`,
+      `hsv(${degrees}, ${percent(max ? delta / max : 0)}, ${percent(max)})`,
+      `hsl(${degrees}, ${percent(delta ? delta / (1 - Math.abs(2 * light - 1)) : 0)}, ${percent(light)})`,
+    ];
   }
   function finish() {
     if (editor) {
@@ -672,7 +712,10 @@ const CapturePreview = (function createPreview() {
     c.onpointermove = (ev) => {
       if (editor) editor.pointer = point(ev);
       if (!drag) {
-        if (editor?.loupe) draw();
+        if (editor && !editor.sel) {
+          editor.hover = sampleTarget(editor, editor.pointer, ev.ctrlKey);
+          draw();
+        } else if (editor?.loupe) draw();
         return;
       }
       const ed = editor,
@@ -747,9 +790,7 @@ const CapturePreview = (function createPreview() {
         }
         ed.pending = null;
       } else if (drag.type === "new" && (!ed.sel || ed.sel.w < 3 || ed.sel.h < 3)) {
-        ed.sel = inside(source.window, point(ev))
-          ? { ...source.window }
-          : { x: 0, y: 0, w: c.width, h: c.height };
+        ed.sel = { ...sampleTarget(ed, point(ev), ev.ctrlKey) };
       }
       ed.moving = false;
       ed.duplicating = false;
@@ -830,7 +871,7 @@ const CapturePreview = (function createPreview() {
     const tools = element("div", "shot-pin-actions", box);
     tools.innerHTML =
       button("edit-pin", "标注") +
-      button("ocr", "提取文字") +
+      button("recognition-menu", "识别") +
       button("translate", "翻译") +
       button("pin-top", "置顶 (T)", "置顶") +
       button("pin-lock", "锁定 (L)", "锁定") +
@@ -940,7 +981,7 @@ const CapturePreview = (function createPreview() {
     const layoutBar = shot
       ? `<div class="shot-layout-bar"><div class="shot-layout-left"><span class="shot-bar-label">排版</span><select class="shot-para" aria-label="段落模式"><option value="smart">智能分段</option><option value="merge">合并换行</option><option value="keep">保留换行</option></select><select class="shot-punct" aria-label="标点转换"><option value="keep">原标点</option><option value="cjk">中文标点</option><option value="en">英文标点</option></select><label class="shot-inline-opt"><input type="checkbox" class="shot-nospace">去空格</label><span class="shot-sep" aria-hidden="true"></span><span class="shot-bar-label">字号</span><div class="segments shot-size-seg" role="group" aria-label="字号"><button type="button" data-font-size="small" aria-pressed="false">小</button><button type="button" data-font-size="medium" aria-pressed="true">中</button><button type="button" data-font-size="large" aria-pressed="false">大</button></div></div><div class="shot-layout-right"><label class="shot-pill-toggle"><input type="checkbox" class="shot-show-orig" checked><span>原图</span></label><label class="shot-pill-toggle"><input type="checkbox" class="shot-panel-pin"><span>置顶</span></label></div></div>`
       : `<div class="shot-layout-bar"><div class="shot-layout-left"><span class="shot-bar-label">粘贴或输入文本，使用已配置的模型接口进行翻译</span></div><div class="shot-layout-right"><label class="shot-pill-toggle"><input type="checkbox" class="shot-panel-pin"><span>置顶</span></label></div></div>`;
-    panel.innerHTML = `<header><b>${shot ? "截图提取与翻译" : "粘贴文字翻译"}</b>${button("close-panel", "关闭文字面板", glyphs.close, "shot-btn shot-tool-icon")}</header>${layoutBar}<div class="shot-columns">${shot ? '<div class="shot-original"><div class="shot-col-head"><div class="shot-col-title"><h3>识别原图</h3><span class="shot-count-pill" id="shot-ocr-count"></span></div></div><div class="shot-original-stage"><img alt="识别原图"><canvas></canvas></div><small class="shot-pane-hint">点选或拖框文字块可同步右侧选区</small></div>' : ""}<div class="shot-fields"><div class="shot-col-head"><div class="shot-col-title"><label for="shot-source-area">${shot ? "识别与校对原文" : "原文"}</label><span class="shot-count-pill" id="shot-src-count"></span></div><div class="shot-col-actions">${button("copy-text", "复制原文", "复制原文", "shot-btn secondary")}</div></div><textarea id="shot-source-area" class="shot-source size-medium" rows="4" placeholder="在此校对或输入需要翻译的内容"></textarea><div class="shot-translate-bridge"><label class="shot-bridge-lang"><span>目标语言</span><input class="shot-language" list="shot-lang-presets" value="${e(language)}"></label><datalist id="shot-lang-presets"><option value="简体中文"><option value="繁體中文"><option value="英文"><option value="日文"><option value="韩文"><option value="法文"><option value="德文"></datalist>${button("send", "翻译", "翻译", "shot-btn primary")}</div><div class="shot-col-head"><div class="shot-col-title"><label for="shot-result-area">译文</label><span class="shot-count-pill" id="shot-dst-count"></span></div><div class="shot-col-actions">${button("copy-result", "复制译文", "复制译文", "shot-btn secondary")}</div></div><textarea id="shot-result-area" class="shot-result size-medium" rows="3" readonly placeholder="选择目标语言后点击「翻译」，优先翻译当前选中内容"></textarea></div></div><footer class="shot-panel-footer"><div class="shot-status-wrap"><i class="shot-status-dot" data-state="muted" aria-hidden="true"></i><small role="status" class="shot-status"></small></div><div class="shot-footer-right">${shot ? '<label class="shot-inline-opt"><input type="checkbox" class="shot-copy-close">复制全部后关闭</label>' : ""}<span class="shot-esc-hint">Esc 关闭</span></div></footer>`;
+    panel.innerHTML = `<header><b>${shot ? "截图提取与翻译" : "粘贴文字翻译"}</b>${button("close-panel", "关闭文字面板", glyphs.close, "shot-btn shot-tool-icon")}</header>${layoutBar}<div class="shot-columns">${shot ? '<div class="shot-original"><div class="shot-col-head"><div class="shot-col-title"><h3>识别原图</h3><span class="shot-count-pill" id="shot-ocr-count"></span></div></div><div class="shot-original-stage"><img alt="识别原图"><canvas></canvas></div><small class="shot-pane-hint">点选或拖框文字块可同步右侧选区</small></div>' : ""}<div class="shot-fields"><div class="shot-col-head"><div class="shot-col-title"><label for="shot-source-area">${shot ? "识别与校对原文" : "原文"}</label><span class="shot-count-pill" id="shot-src-count"></span></div><div class="shot-col-actions">${button("copy-text", "复制原文", "复制原文", "shot-btn secondary")}</div></div><textarea id="shot-source-area" class="shot-source size-medium" rows="4" placeholder="在此校对或输入需要翻译的内容"></textarea><div class="shot-translate-bridge"><label class="shot-bridge-lang"><span>目标语言</span><input class="shot-language" list="shot-lang-presets" value="${e(language)}"></label><datalist id="shot-lang-presets">${languageOptions}</datalist>${button("send", "翻译", "翻译", "shot-btn primary")}</div><div class="shot-col-head"><div class="shot-col-title"><label for="shot-result-area">译文</label><span class="shot-count-pill" id="shot-dst-count"></span></div><div class="shot-col-actions">${button("copy-result", "复制译文", "复制译文", "shot-btn secondary")}</div></div><textarea id="shot-result-area" class="shot-result size-medium" rows="3" readonly placeholder="选择目标语言后点击「翻译」，优先翻译当前选中内容"></textarea></div></div><footer class="shot-panel-footer"><div class="shot-status-wrap"><i class="shot-status-dot" data-state="muted" aria-hidden="true"></i><small role="status" class="shot-status"></small></div><div class="shot-footer-right">${shot ? '<label class="shot-inline-opt"><input type="checkbox" class="shot-copy-close">复制全部后关闭</label>' : ""}<span class="shot-esc-hint">Esc 关闭</span></div></footer>`;
 
     const srcArea = panel.querySelector(".shot-source");
     const dstArea = panel.querySelector(".shot-result");
@@ -1072,6 +1113,173 @@ const CapturePreview = (function createPreview() {
       shot && !shot.words.length ? "muted" : "positive",
     );
     panel.querySelector(translate ? ".shot-language" : ".shot-source").focus();
+  }
+  function openRecognitionMenu(from) {
+    menu?.remove();
+    menu = element("div", "shot-menu", desk());
+    const box = from.getBoundingClientRect(), desktop = desk().getBoundingClientRect();
+    menu.style.zIndex = "60";
+    menu.style.right = Math.max(4, desktop.right - box.right) + "px";
+    menu.style.bottom = Math.max(4, desktop.bottom - box.top + 4) + "px";
+    menu.innerHTML = recognitionKinds.map(kind => button(kind, labels[kind])).join("");
+    menu.sourcePin = from.closest(".shot-pin");
+    menu.querySelector("button").focus();
+  }
+  function recognitionSample(kind, rows) {
+    const paper = canvas(406, kind === "table" ? 156 : 122);
+    const context = paper.getContext("2d");
+    context.fillStyle = "#fff";
+    context.fillRect(0, 0, paper.width, paper.height);
+    context.fillStyle = "#24313c";
+    if (kind === "table") {
+      context.font = "17px Segoe UI, Microsoft YaHei UI";
+      context.strokeStyle = "#c0cfdb";
+      rows.forEach((row, r) => row.forEach((value, c) => {
+        const x = 15 + c * 188, y = 15 + r * 42;
+        context.strokeRect(x, y, 188, 42);
+        context.fillText(value, x + 12, y + 27);
+      }));
+    } else {
+      context.font = "32px Cambria Math";
+      context.fillText("a", 32, 65);
+      context.fillText("= a", 72, 65);
+      context.fillText("+ (n−1)d", 139, 65);
+      context.font = "19px Cambria Math";
+      context.fillText("n", 50, 74);
+      context.fillText("1", 122, 74);
+    }
+    return paper;
+  }
+  function recognitionPanel(shot, kind) {
+    panel?.remove();
+    panel = element("section", "shot-panel shot-recognition-panel", desk());
+    panel.setAttribute("aria-label", labels[kind]);
+    const view = panel;
+    const samplesByKind = {
+      document: "项目周会\n\n周五 14:30\nB 会议室 · 设计评审",
+      formula: "a_{n} = a_{1} + (n-1)d",
+      table: [["编号", "项目"], ["0012", "会议预约"], ["0013", ""]],
+    };
+    const canExport = kind !== "formula";
+    view.innerHTML = `<header><b>${labels[kind]}</b>${button("close-panel", "关闭", glyphs.close)}</header>
+      <div class="shot-columns"><section class="shot-original"><h3>${kind === "document" ? "原图" : "示例原图"}</h3><img alt="识别原图"></section>
+      <section class="shot-fields"><h3>识别结果</h3><div class="shot-recognition-editor"></div></section></div>
+      <footer><span role="status" class="shot-status">离线原型</span><div class="shot-recognition-actions"></div></footer>`;
+    const original = kind === "document" ? shot.image : recognitionSample(kind, samplesByKind.table);
+    view.querySelector("img").src = original.toDataURL();
+    const status = view.querySelector("[role=status]");
+    const editorSlot = view.querySelector(".shot-recognition-editor");
+    const actionSlot = view.querySelector(".shot-recognition-actions");
+    const size = { document: "约 7 MB", table: "约 8 MB", formula: "约 120 MB" }[kind];
+    function showResult() {
+      installed.add(kind);
+      editorSlot.replaceChildren();
+      actionSlot.replaceChildren();
+      let value;
+      if (kind === "table") {
+        const table = element("table", "shot-recognition-grid", editorSlot);
+        samplesByKind.table.forEach((row, r) => {
+          const tr = table.insertRow();
+          row.forEach((text, c) => {
+            const input = element("input", "", tr.insertCell());
+            input.value = text;
+            input.setAttribute("aria-label", `第 ${r + 1} 行第 ${c + 1} 列`);
+          });
+        });
+        value = () => [...table.rows].map(row => [...row.cells].map(cell => cell.firstChild.value).join("\t")).join("\n");
+      } else {
+        const field = element("textarea", "shot-source", editorSlot);
+        field.setAttribute("aria-label", kind === "formula" ? "LaTeX 源码" : "文档内容");
+        field.value = samplesByKind[kind];
+        value = () => field.value;
+      }
+      status.textContent = "演示结果，可对照原图校对";
+      const copy = element("button", "shot-btn", actionSlot);
+      copy.textContent = kind === "formula" ? "复制 LaTeX" : "复制";
+      copy.onclick = async () => {
+        try {
+          await navigator.clipboard.writeText(value());
+          status.textContent = "已复制";
+        } catch {
+          status.textContent = "剪贴板不可用，请选中结果后复制";
+        }
+      };
+      if (canExport) {
+        const save = element("button", "shot-btn primary", actionSlot);
+        save.textContent = kind === "table" ? "导出 Excel" : "导出 Word";
+        save.onclick = () => { status.textContent = "桌面版会导出校对后的文件"; };
+      }
+    }
+    if (installed.has(kind)) return showResult();
+    const prompt = element("p", "shot-status", editorSlot);
+    prompt.textContent = `首次使用需下载本机模型（${size}），安装后可断网识别。`;
+    const install = element("button", "shot-btn primary", actionSlot);
+    install.textContent = "下载模型";
+    let pending;
+    install.onclick = () => {
+      if (pending) {
+        clearTimeout(pending);
+        pending = null;
+        status.textContent = "下载已取消";
+        install.textContent = "重试";
+        return;
+      }
+      status.textContent = "模拟下载中…";
+      install.textContent = "取消下载";
+      pending = setTimeout(() => { if (view.isConnected) showResult(); }, 850);
+    };
+  }
+  function pinClipboardValue(value, previous = {}) {
+    const color = /^#[0-9a-f]{6}$/i.test(value);
+    const card = element("article", "shot-pin shot-value-pin", desk());
+    card.tabIndex = 0;
+    card.setAttribute("aria-label", color ? "颜色贴图" : "文字贴图");
+    card.style.left = previous.left || "24px";
+    card.style.top = previous.top || "54px";
+    const header = element("header", "", card);
+    header.textContent = color ? "颜色贴图" : "文字贴图";
+    const close = element("button", "shot-btn", header);
+    close.textContent = "关闭";
+    function dismiss() {
+      closedPins.push({ value, left: card.style.left, top: card.style.top });
+      if (closedPins.length > 10) closedPins.shift();
+      pins.delete(card);
+      card.remove();
+    }
+    close.onclick = dismiss;
+    card.onkeydown = ev => {
+      if (ev.key !== "Escape") return;
+      ev.stopPropagation();
+      dismiss();
+    };
+    header.onpointerdown = ev => {
+      if (ev.target === close) return;
+      const origin = { x: ev.clientX - card.offsetLeft, y: ev.clientY - card.offsetTop };
+      header.setPointerCapture(ev.pointerId);
+      header.onpointermove = move => {
+        card.style.left = clamp(move.clientX - origin.x, 0, Math.max(0, desk().clientWidth - card.offsetWidth)) + "px";
+        card.style.top = clamp(move.clientY - origin.y, 0, Math.max(0, desk().clientHeight - card.offsetHeight)) + "px";
+      };
+      header.onlostpointercapture = () => { header.onpointermove = null; };
+    };
+    if (color) {
+      const swatch = element("div", "shot-value-swatch", card);
+      swatch.style.background = value;
+      const channels = [1, 3, 5].map(start => Number.parseInt(value.slice(start, start + 2), 16));
+      for (const code of colorValues(channels)) {
+        const copy = element("button", "shot-btn", card);
+        copy.textContent = code;
+        copy.onclick = async () => {
+          try { await navigator.clipboard.writeText(code); announce("已复制 " + code); }
+          catch { announce("剪贴板不可用"); }
+        };
+      }
+    } else {
+      const body = element("div", "shot-value-text", card);
+      body.textContent = value;
+    }
+    pins.add(card);
+    card.focus();
   }
   function closeRecording() {
     if (!recordingClip) return;
@@ -1374,8 +1582,9 @@ const CapturePreview = (function createPreview() {
     }
   }
   function execute(id, from) {
-    const pin = from?.closest(".shot-pin"),
+    const pin = from?.closest(".shot-pin") || from?.closest(".shot-menu")?.sourcePin,
       ed = editor;
+    if (id === "recognition-menu") return openRecognitionMenu(from);
     if (id === "menu") {
       if (menu) { menu.remove(); menu = null; return; }
       menu = element("div", "shot-menu", desk());
@@ -1384,7 +1593,9 @@ const CapturePreview = (function createPreview() {
         button("start", "开始截图") +
         button("video-select", "录制屏幕") +
         button("video-recover", "恢复录屏") +
-        button("clipboard", "钉住剪贴板图片") +
+        button("clipboard", "钉住剪贴板内容") +
+        button("demo-text-pin", "试用文字贴图") +
+        button("demo-color-pin", "试用颜色贴图") +
         button("restorePin", "恢复关闭的贴图") +
         button("manual", "粘贴文字翻译") +
         button("settings", "截图与翻译设置");
@@ -1454,6 +1665,7 @@ const CapturePreview = (function createPreview() {
     if (id === "restorePin") {
       const last = closedPins.pop();
       if (!last) return announce("没有已关闭的贴图");
+      if (last.value) return pinClipboardValue(last.value, last);
       return pinImage(last.shot, last);
     }
     if (id === "refresh" && ed && !ed.pin) {
@@ -1466,7 +1678,9 @@ const CapturePreview = (function createPreview() {
     if (!enabled) return announce("截图工具已关闭");
     if (id === "start") return start();
     if (id === "video-select") { start(); return announce("选择要录制的区域，再点击录屏"); }
-    if (id === "clipboard") return pinImage(clipboard);
+    if (id === "demo-text-pin") return pinClipboardValue("项目周会\n周五 14:30 · B 会议室");
+    if (id === "demo-color-pin") return pinClipboardValue("#0485F7");
+    if (id === "clipboard") return typeof clipboard === "string" ? pinClipboardValue(clipboard) : pinImage(clipboard);
     if (id === "edit-pin") return start(pin);
     if (id === "manual") return textPanel(null, false);
     if (id === "copy-text" || id === "copy-result" || id === "send") {
@@ -1564,6 +1778,7 @@ const CapturePreview = (function createPreview() {
     if (ed) finish();
     if (id === "pin") pinImage(shot);
     if (id === "ocr" || id === "translate") textPanel(shot, id === "translate");
+    if (recognitionKinds.includes(id) && id !== "ocr") recognitionPanel(shot, id);
   }
   function keyboard(ev) {
     const target = ev.target,
@@ -1602,7 +1817,7 @@ const CapturePreview = (function createPreview() {
       return;
     }
     if (editor && editor.loupe && base === "Shift" && !ev.repeat) {
-      editor.hexColor = !editor.hexColor;
+      editor.colorFormat = ((editor.colorFormat || 0) + 1) % 4;
       draw();
       return;
     }
@@ -1628,11 +1843,14 @@ const CapturePreview = (function createPreview() {
       ev.preventDefault();
       return;
     }
-    if (!id && chord === "C" && editor && !editor.pin && editor.pointer) {
+    if (!id && ["C", "Alt+C"].includes(chord) && editor && !editor.pin && editor.pointer) {
       const { x, y } = editor.pointer;
       const values = editor.source.image.getContext("2d").getImageData(x, y, 1, 1).data;
-      const color = "#" + [...values.slice(0, 3)].map(value => value.toString(16).padStart(2, "0")).join("").toUpperCase();
-      navigator.clipboard?.writeText(color).catch(() => {});
+      const formats = colorValues(values);
+      const color = formats[editor.colorFormat || 0];
+      clipboard = formats[0];
+      navigator.clipboard?.writeText(color).catch(() => announce("已复制到演示剪贴板 " + color));
+      finish();
       announce("取色 " + color);
       ev.preventDefault();
       return;

@@ -12,11 +12,15 @@ internal enum ShotAction
     Translate,
     Record,
     LongShot,
-    RestorePin
+    RestorePin,
+    Document,
+    Table,
+    Formula
 }
 
 internal sealed record ShotShortcuts(string Start = "Ctrl+1", string Clipboard = "Ctrl+2", string Pin = "Ctrl+T", string Ocr = "Shift+C",
-    string Translate = "Ctrl+Q", string Record = "G", string LongShot = "L", string RestorePin = "Ctrl+3")
+    string Translate = "Ctrl+Q", string Record = "G", string LongShot = "L", string RestorePin = "Ctrl+3",
+    string Document = "Shift+E", string Table = "Shift+Q", string Formula = "Shift+F")
 {
     public string this[ShotAction action] => action switch
     {
@@ -28,6 +32,9 @@ internal sealed record ShotShortcuts(string Start = "Ctrl+1", string Clipboard =
         ShotAction.Record => Record,
         ShotAction.LongShot => LongShot,
         ShotAction.RestorePin => RestorePin,
+        ShotAction.Document => Document,
+        ShotAction.Table => Table,
+        ShotAction.Formula => Formula,
         _ => throw new ArgumentOutOfRangeException(nameof(action))};
     public ShotShortcuts Bind(ShotAction action, string value) => action switch
     {
@@ -63,6 +70,9 @@ internal sealed record ShotShortcuts(string Start = "Ctrl+1", string Clipboard =
         {
             RestorePin = value
         },
+        ShotAction.Document => this with { Document = value },
+        ShotAction.Table => this with { Table = value },
+        ShotAction.Formula => this with { Formula = value },
         _ => throw new ArgumentOutOfRangeException(nameof(action))};
 }
 
@@ -74,13 +84,16 @@ internal sealed record CaptureOptions
     public static string Label(ShotAction action) => action switch
     {
         ShotAction.Start => "开始截图",
-        ShotAction.Clipboard => "钉住剪贴板图片",
+        ShotAction.Clipboard => "钉住剪贴板内容",
         ShotAction.Pin => "钉住选区",
         ShotAction.Ocr => "提取文字",
         ShotAction.Record => "录制屏幕",
         ShotAction.LongShot => "滚动长截图",
         ShotAction.Translate => "打开翻译",
         ShotAction.RestorePin => "恢复关闭的贴图",
+        ShotAction.Document => "文档识别",
+        ShotAction.Table => "图片转表格",
+        ShotAction.Formula => "公式识别",
         _ => throw new ArgumentOutOfRangeException(nameof(action))
     };
 
@@ -168,6 +181,12 @@ internal readonly record struct ShotChord(ModifierKeys Mods, Key Key)
 
 internal sealed record TranslationOptions(string BaseUrl = "", string Model = "", string TargetLanguage = "简体中文")
 {
+    internal static IReadOnlyList<string> Languages { get; } = Array.AsReadOnly(new[]
+    {
+        "简体中文", "繁體中文", "英文", "日文", "韩文", "法文", "德文", "西班牙语", "欧洲葡萄牙语",
+        "印度尼西亚语", "马来语", "意大利语", "俄语", "泰语", "越南语", "阿拉伯语", "土耳其语"
+    });
+
     internal const string ChatCompletionsPath = "/chat/completions";
 
     public Uri? Endpoint()

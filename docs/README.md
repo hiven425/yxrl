@@ -8,7 +8,7 @@
 
 <img src="prototype/screens/02-month.png" width="360" alt="2026 年 11 月的紧凑月历，26 日标为感恩节，下方是今日安排和任务栏原位时钟">
 
-**截图与录屏**　月历底栏「截图工具」可打开截图、贴图、录屏和文字翻译。截图支持序号、多行文字与滚动拼接，录屏可另存 MP4、GIF 或 WebP。[功能清单与界面流程](capture-recording.md)
+**截图与录屏**　月历底栏「截图工具」可打开截图、贴图、录屏和文字翻译。截图支持序号、多行文字与滚动拼接，录屏可另存 MP4、GIF 或 WebP。图片可识别成可编辑 Word、Excel 及 LaTeX。[功能清单与界面流程](capture-recording.md)
 
 ## 体验路径
 

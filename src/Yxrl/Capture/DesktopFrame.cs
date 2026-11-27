@@ -1,10 +1,12 @@
 using System.Runtime.InteropServices;
+using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Media.Imaging;
 using Yxrl.Desktop;
 
 namespace Yxrl.Capture;
 
-internal sealed record DesktopFrame(BitmapSource Image, PixelRect Bounds, PixelRect[] Windows, PixelRect[]? Monitors = null)
+internal sealed record DesktopFrame(BitmapSource Image, PixelRect Bounds, PixelRect[] Windows, PixelRect[]? Monitors = null, nint[]? WindowHandles = null)
 {
     [DllImport("user32")]
     private static extern int GetSystemMetrics(int index);
@@ -67,17 +69,21 @@ internal sealed record DesktopFrame(BitmapSource Image, PixelRect Bounds, PixelR
             return true;
         }, 0);
         var windows = new List<PixelRect>();
+        var handles = new List<nint>();
         Native.EnumWindows((hwnd, _) =>
         {
             if (!Native.IsWindowVisible(hwnd) || IsIconic(hwnd) || (DwmGetWindowAttribute(hwnd, 14, out int cloaked, 4) == 0 && cloaked != 0))
                 return true;
             var rect = Native.VisibleRect(hwnd).Intersect(bounds);
             if (rect.HasArea)
+            {
                 windows.Add(rect);
+                handles.Add(hwnd);
+            }
             return true;
         }, 0);
         using var pixels = new ScreenPixels(bounds);
-        return new(pixels.Image(), bounds, windows.ToArray(), monitors.ToArray());
+        return new(pixels.Image(), bounds, windows.ToArray(), monitors.ToArray(), handles.ToArray());
     }
 
     internal PixelRect ToolsArea(PixelRect selection)
@@ -103,5 +109,57 @@ internal sealed record DesktopFrame(BitmapSource Image, PixelRect Bounds, PixelR
         var absolute = new PixelPoint(local.X + Bounds.Left, local.Y + Bounds.Top);
         var hit = Windows.FirstOrDefault(r => r.Contains(absolute));
         return hit.HasArea ? hit.Offset(-Bounds.Left, -Bounds.Top) : MonitorAt(local);
+    }
+
+    // The screenshot overlay covers the pointer. Start the search at the original window.
+    internal PixelRect ControlAt(PixelPoint local)
+    {
+        if (WindowHandles is null)
+            return default;
+        var absolute = new PixelPoint(local.X + Bounds.Left, local.Y + Bounds.Top);
+        int index = Array.FindIndex(Windows, bounds => bounds.Contains(absolute));
+        if (index < 0)
+            return default;
+
+        try
+        {
+            var window = AutomationElement.FromHandle(WindowHandles[index]);
+            var walker = TreeWalker.ControlViewWalker;
+            var cache = new CacheRequest();
+            cache.Add(AutomationElement.BoundingRectangleProperty);
+            cache.Add(AutomationElement.ControlTypeProperty);
+            cache.Add(AutomationElement.IsOffscreenProperty);
+            var point = new Point(absolute.X, absolute.Y);
+            int budget = 350;
+            PixelRect best = default;
+            void Search(AutomationElement parent, int level)
+            {
+                if (level >= 24 || budget <= 0)
+                    return;
+                for (var child = walker.GetFirstChild(parent, cache); child is not null && budget-- > 0; child = walker.GetNextSibling(child, cache))
+                {
+                    var bounds = child.Cached.BoundingRectangle;
+                    if (child.Cached.IsOffscreen || (!bounds.IsEmpty && !bounds.Contains(point)))
+                        continue;
+                    if (!bounds.IsEmpty && child.Cached.ControlType is { } type &&
+                        type != ControlType.Pane && type != ControlType.Group && type != ControlType.Window &&
+                        type != ControlType.Custom && type != ControlType.Document)
+                    {
+                        var hit = new PixelRect((int)Math.Floor(bounds.Left), (int)Math.Floor(bounds.Top),
+                            (int)Math.Ceiling(bounds.Right), (int)Math.Ceiling(bounds.Bottom)).Intersect(Windows[index]);
+                        if (hit.Contains(absolute) && hit != Windows[index] &&
+                            (!best.HasArea || (long)hit.Width * hit.Height < (long)best.Width * best.Height))
+                            best = hit;
+                    }
+                    Search(child, level + 1);
+                }
+            }
+            Search(window, 0);
+            return best.HasArea ? best.Offset(-Bounds.Left, -Bounds.Top) : default;
+        }
+        catch (Exception ex) when (ex is ElementNotAvailableException or InvalidOperationException or COMException or UnauthorizedAccessException or ArgumentException)
+        {
+            return default;
+        }
     }
 }

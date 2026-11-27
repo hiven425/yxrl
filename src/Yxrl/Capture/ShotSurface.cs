@@ -16,6 +16,7 @@ internal sealed class ShotSurface : FrameworkElement
     private static readonly Pen GuidePen = new(new SolidColorBrush(Color.FromArgb(145, 24, 147, 238)), 1) { DashStyle = DashStyles.Dash };
     private static readonly Brush LoupeBg = new SolidColorBrush(Color.FromArgb(232, 22, 30, 38));
     private static readonly Pen LoupeBorder = new(new SolidColorBrush(Color.FromArgb(200, 180, 200, 220)), 1);
+    private static readonly Pen PixelGrid = new(new SolidColorBrush(Color.FromArgb(85, 90, 103, 115)), .7);
     static ShotSurface()
     {
         Shade.Freeze();
@@ -24,6 +25,7 @@ internal sealed class ShotSurface : FrameworkElement
         GuidePen.Freeze();
         LoupeBg.Freeze();
         LoupeBorder.Freeze();
+        PixelGrid.Freeze();
     }
 
     private DesktopFrame? desktop;
@@ -33,9 +35,11 @@ internal sealed class ShotSurface : FrameworkElement
     private PixelRect? viewport;
     private PixelPoint pointerPixel = new(-1, -1);
     private bool showLoupe;
-    private bool hexColorFormat = true;
+    private int colorFormat;
     private List<Point>? points;
     private PixelRect hover;
+    private PixelRect controlHover;
+    private bool probingControl;
     private ShotMark? pending;
     private ShotMark? selected;
     private int? requestedNumber;
@@ -62,15 +66,10 @@ internal sealed class ShotSurface : FrameworkElement
             InvalidateVisual();
         }
     }
-    public bool HexColorFormat
+    public void CycleColorFormat()
     {
-        get => hexColorFormat;
-        set
-        {
-            if (hexColorFormat == value) return;
-            hexColorFormat = value;
-            if (showLoupe) InvalidateVisual();
-        }
+        colorFormat = (colorFormat + 1) % 4;
+        InvalidateVisual();
     }
     public MarkKind? Tool { get; private set; }
     public ShotMark? Selected => selected;
@@ -98,6 +97,7 @@ internal sealed class ShotSurface : FrameworkElement
     public void UpdateDesktop(DesktopFrame next)
     {
         desktop = next;
+        controlHover = default;
         Document.ReplaceImage(next.Image);
         Refresh();
     }
@@ -157,19 +157,18 @@ internal sealed class ShotSurface : FrameworkElement
 
     public string? PickColor()
     {
-        var p = Pointer();
-        if (desktop is null || !Document.Full.Contains(p))
+        var p = desktop is not null ? Pointer() : pointerPixel;
+        if (!IsMouseOver || !Document.Full.Contains(p))
             return null;
-        var (r, g, b) = SamplePixel(p.X, p.Y);
-        return hexColorFormat ? $"#{r:X2}{g:X2}{b:X2}" : $"rgb({r}, {g}, {b})";
+        return SamplePixel(p.X, p.Y).Format(colorFormat);
     }
 
-    private (byte R, byte G, byte B) SamplePixel(int x, int y)
+    private ShotColor SamplePixel(int x, int y)
     {
         var bytes = new byte[4];
         var source = new FormatConvertedBitmap(new CroppedBitmap(Document.Image, new Int32Rect(x, y, 1, 1)), PixelFormats.Bgr32, null, 0);
         source.CopyPixels(bytes, 4, 0);
-        return (bytes[2], bytes[1], bytes[0]);
+        return new(bytes[2], bytes[1], bytes[0]);
     }
 
     public void UseTool(MarkKind? tool)
@@ -300,9 +299,13 @@ internal sealed class ShotSurface : FrameworkElement
                 dc.DrawEllipse(Brushes.White, Outline, hv, 4.0, 4.0);
             }
         }
-        if (desktop is null)
-            return;
         var bounds = new Rect(RenderSize);
+        if (desktop is null)
+        {
+            if (showLoupe && Document.Full.Contains(pointerPixel))
+                DrawLoupeAndGuides(dc, bounds, default);
+            return;
+        }
         var r = Selection.HasArea ? Selection : hover;
         if (!r.HasArea)
         {
@@ -339,9 +342,8 @@ internal sealed class ShotSurface : FrameworkElement
             dc.DrawLine(GuidePen, new Point(sel.Left * ScaleX, cv.Y), new Point(sel.Right * ScaleX, cv.Y));
         }
 
-        const int patch = 11, boxSize = 110, infoH = 44;
-        var monitor = desktop!.MonitorAt(pointerPixel);
-        var mView = ViewRect(monitor);
+        const int patch = 11, boxSize = 142, infoH = 52;
+        var mView = desktop is null ? bounds : ViewRect(desktop.MonitorAt(pointerPixel));
         double lx = pv.X + 18 + boxSize <= mView.Right - 8 ? pv.X + 18 : pv.X - boxSize - 18;
         double ly = pv.Y + 18 + boxSize + infoH <= mView.Bottom - 8 ? pv.Y + 18 : pv.Y - boxSize - infoH - 18;
         lx = Math.Clamp(lx, mView.Left + 6, Math.Max(mView.Left + 6, mView.Right - boxSize - 6));
@@ -363,22 +365,25 @@ internal sealed class ShotSurface : FrameworkElement
             RenderOptions.SetBitmapScalingMode(group, BitmapScalingMode.NearestNeighbor);
             group.Children.Add(new ImageDrawing(crop, new Rect(lx + 1, ly + 1, boxSize - 2, boxSize - 2)));
             dc.DrawDrawing(group);
+            double cellWidth = (boxSize - 2.0) / sw, cellHeight = (boxSize - 2.0) / sh;
+            for (int x = 1; x < sw; x++)
+                dc.DrawLine(PixelGrid, new Point(lx + 1 + x * cellWidth, ly + 1), new Point(lx + 1 + x * cellWidth, ly + boxSize - 1));
+            for (int y = 1; y < sh; y++)
+                dc.DrawLine(PixelGrid, new Point(lx + 1, ly + 1 + y * cellHeight), new Point(lx + boxSize - 1, ly + 1 + y * cellHeight));
+            int relX = pointerPixel.X - sx0, relY = pointerPixel.Y - sy0;
+            dc.DrawRectangle(null, Outline, new Rect(lx + 1 + relX * cellWidth, ly + 1 + relY * cellHeight, cellWidth, cellHeight));
         }
 
-        double cell = (boxSize - 2.0) / patch;
-        int relX = Math.Clamp(pointerPixel.X - sx0, 0, patch - 1);
-        int relY = Math.Clamp(pointerPixel.Y - sy0, 0, patch - 1);
-        dc.DrawRectangle(null, Outline, new Rect(lx + 1 + relX * cell, ly + 1 + relY * cell, cell, cell));
-
-        var (r, g, b) = SamplePixel(pointerPixel.X, pointerPixel.Y);
-        string colorText = hexColorFormat ? $"#{r:X2}{g:X2}{b:X2}" : $"{r}, {g}, {b}";
-        string line1 = $"{pointerPixel.X + desktop.Bounds.Left}, {pointerPixel.Y + desktop.Bounds.Top} · {colorText}";
+        string colorText = SamplePixel(pointerPixel.X, pointerPixel.Y).Format(colorFormat);
+        string line1 = $"{pointerPixel.X + (desktop?.Bounds.Left ?? 0)}, {pointerPixel.Y + (desktop?.Bounds.Top ?? 0)}";
         var t1 = new FormattedText(line1, System.Globalization.CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
             new Typeface("Segoe UI, Microsoft YaHei UI"), 11, Brushes.White, 1);
         var t2 = new FormattedText("C 复制颜色 · Shift 切格式", System.Globalization.CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
             new Typeface("Segoe UI, Microsoft YaHei UI"), 10, Brushes.LightGray, 1);
         dc.DrawText(t1, new Point(lx + 7, ly + boxSize + 5));
-        dc.DrawText(t2, new Point(lx + 7, ly + boxSize + 22));
+        dc.DrawText(new FormattedText(colorText, System.Globalization.CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
+            new Typeface("Segoe UI"), 11, Brushes.White, 1), new Point(lx + 7, ly + boxSize + 20));
+        dc.DrawText(t2, new Point(lx + 7, ly + boxSize + 36));
     }
 
     public void Refresh()
@@ -495,20 +500,17 @@ internal sealed class ShotSurface : FrameworkElement
     protected override void OnMouseMove(MouseEventArgs e)
     {
         Point view = e.GetPosition(this), p = Pixel(view);
-        pointerPixel = new PixelPoint((int)p.X, (int)p.Y);
+        pointerPixel = desktop is null
+            ? new PixelPoint(Math.Min((int)p.X, Document.Width - 1), Math.Min((int)p.Y, Document.Height - 1))
+            : Pointer();
         var mods = Keyboard.Modifiers;
         if (drag is null)
         {
             if (desktop is not null && !Selection.HasArea)
             {
-                var hit = desktop.WindowAt(new((int)p.X, (int)p.Y));
-                if (hit != hover)
-                {
-                    hover = hit;
-                    InvalidateVisual();
-                }
+                UpdateHover(mods.HasFlag(ModifierKeys.Control));
             }
-            else if (desktop is not null && showLoupe)
+            else if (showLoupe)
                 InvalidateVisual();
 
             Cursor = HandleAt(view) switch
@@ -612,12 +614,49 @@ internal sealed class ShotSurface : FrameworkElement
         Refresh();
     }
 
+    internal void UpdateHover(bool control)
+    {
+        if (desktop is not { } frame || Selection.HasArea || drag is not null || !Document.Full.Contains(pointerPixel))
+            return;
+        var hit = control && controlHover.Contains(pointerPixel) ? controlHover : frame.WindowAt(pointerPixel);
+        if (hit != hover || showLoupe)
+        {
+            hover = hit;
+            InvalidateVisual();
+        }
+        if (control && !probingControl && !controlHover.Contains(pointerPixel))
+            _ = ProbeControl(frame, pointerPixel);
+    }
+
+    private async Task ProbeControl(DesktopFrame frame, PixelPoint point)
+    {
+        probingControl = true;
+        try
+        {
+            var hit = await Task.Run(() => frame.ControlAt(point));
+            if (desktop == frame && IsLoaded && hit.Contains(pointerPixel))
+                controlHover = hit;
+        }
+        finally
+        {
+            probingControl = false;
+        }
+        if (desktop == frame && IsLoaded && controlHover.Contains(pointerPixel))
+            UpdateHover(Keyboard.Modifiers.HasFlag(ModifierKeys.Control));
+    }
+
     protected override void OnMouseLeftButtonUp(MouseButtonEventArgs e)
     {
         if (drag is null)
             return;
         if (drag == "new" && (!Selection.HasArea || (Pixel(e.GetPosition(this)) - anchor).Length < 3) && desktop is not null)
-            SelectWindowAt(new((int)anchor.X, (int)anchor.Y));
+        {
+            var point = new PixelPoint((int)anchor.X, (int)anchor.Y);
+            if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control) && controlHover.Contains(point))
+                SetSelection(controlHover);
+            else
+                SelectWindowAt(point);
+        }
         if (pending is { } mark)
         {
             if ((drag == "edit" || drag.StartsWith("mark-handle:", StringComparison.Ordinal)) && selected is { } old)

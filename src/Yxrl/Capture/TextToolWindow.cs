@@ -413,7 +413,7 @@ internal sealed class TextToolWindow : Window
         rightGrid.Children.Add(srcPane);
 
         // Row 1: Translation bridge strip
-        foreach (var preset in new[] { "简体中文", "繁體中文", "英文", "日文", "韩文", "法文", "德文" })
+        foreach (var preset in TranslationOptions.Languages)
             language.Items.Add(preset);
         language.Text = tools.Translation.TargetLanguage;
         AutomationProperties.SetName(language, "目标语言");

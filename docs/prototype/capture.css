@@ -466,6 +466,56 @@
   gap: 12px;
   margin-top: 10px;
 }
+.shot-recognition-panel .shot-original img {
+  display: block;
+  width: 100%;
+  max-height: 320px;
+  object-fit: contain;
+}
+.shot-recognition-editor {
+  max-height: 320px;
+  overflow: auto;
+}
+.shot-recognition-editor textarea {
+  width: 100%;
+  min-height: 140px;
+}
+.shot-recognition-grid {
+  width: 100%;
+  border-collapse: collapse;
+}
+.shot-recognition-grid input {
+  width: 100%;
+  min-width: 5em;
+  box-sizing: border-box;
+}
+.shot-recognition-actions {
+  display: flex;
+  gap: 6px;
+}
+.shot-value-pin {
+  display: grid;
+  gap: 6px;
+  width: min(260px, 90%);
+  padding: 8px;
+  color: var(--text);
+  background: var(--paper);
+}
+.shot-value-pin header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: move;
+}
+.shot-value-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+.shot-value-swatch {
+  min-height: 60px;
+  border-radius: 6px;
+}
 .shot-original,
 .shot-fields {
   background: var(--paper);

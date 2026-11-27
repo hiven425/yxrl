@@ -75,6 +75,8 @@ internal sealed class SettingsStore(string directory)
             Disabled = disabled.ToHashSet();
             CustomRules = custom;
             var capture = doc["capture"]?.Deserialize<Capture.CaptureOptions>(Json) ?? new();
+            if (doc["capture"]?["shortcuts"] is JsonObject shortcuts && capture.Shortcuts is not null)
+                capture = PreserveShortcutBindings(capture, shortcuts);
             var translation = doc["translation"]?.Deserialize<Capture.TranslationOptions>(Json) ?? new();
             capture.Validate(); translation.Validate();
             Current = new(clock, calendar, city, Bool(doc["weather"], "directConnection", false)) { Capture = capture, Translation = translation };
@@ -86,6 +88,26 @@ internal sealed class SettingsStore(string directory)
         }
     }
     private static bool Bool(JsonNode? node, string name, bool fallback) => node?[name]?.GetValue<bool>() ?? fallback;
+
+    private static Capture.CaptureOptions PreserveShortcutBindings(Capture.CaptureOptions options, JsonObject saved)
+    {
+        var added = new[] { Capture.ShotAction.Document, Capture.ShotAction.Table, Capture.ShotAction.Formula };
+        var missing = added.Where(action =>
+        {
+            string name = JsonNamingPolicy.CamelCase.ConvertName(action.ToString());
+            return !saved.Any(pair => pair.Key.Equals(name, StringComparison.OrdinalIgnoreCase));
+        }).ToArray();
+        var keys = options.Shortcuts;
+        var used = new HashSet<Capture.ShotChord>();
+        foreach (var action in Enum.GetValues<Capture.ShotAction>().Except(missing))
+            if (Capture.ShotChord.TryParse(keys[action], out var chord, Capture.CaptureOptions.AllowsSingleKey(action)))
+                used.Add(chord);
+        foreach (var action in missing)
+            if (Capture.ShotChord.TryParse(keys[action], out var chord) && !used.Add(chord))
+                keys = keys.Bind(action, "");
+        return options with { Shortcuts = keys };
+    }
+
     public static void ValidateCalendar(CalendarOptions cal)
     {
         if (cal.WeekStart is < 0 or > 6 || cal.From.HasValue != cal.To.HasValue || cal.To < cal.From)

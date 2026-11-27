@@ -140,6 +140,16 @@ internal static class CaptureWindowsChecks
             var relative = bounds.Offset(-capture.Bounds.Left, -capture.Bounds.Top);
             var selected = capture.WindowAt(new(current.X - capture.Bounds.Left, current.Y - capture.Bounds.Top));
             Check(relative == selected, "点选窗口与真实物理边界不一致");
+            if (liveScreen)
+            {
+                var point = new PixelPoint(current.X - capture.Bounds.Left, current.Y - capture.Bounds.Top);
+                var control = Task.Run(() => capture.ControlAt(point));
+                var limit = DateTime.UtcNow.AddSeconds(4);
+                while (!control.IsCompleted && DateTime.UtcNow < limit) Pump(50);
+                Check(control.IsCompletedSuccessfully && control.Result.Contains(point) &&
+                    control.Result.Width < selected.Width && control.Result.Height < selected.Height, "UI Automation 未定位到窗口内部的文字控件");
+                Console.WriteLine($"真实 UI Automation 控件选区 {control.Result.Width}×{control.Result.Height} px。");
+            }
             var raster = new ShotDocument(capture.Image).Crop(selected).Render();
             var text = tools.Ocr.ReadAsync(raster, CancellationToken.None).GetAwaiter().GetResult();
             if (!text.Contains("会议") || !text.Contains("Room", StringComparison.OrdinalIgnoreCase))
@@ -226,6 +236,8 @@ internal static class CaptureWindowsChecks
                 if (Array.IndexOf(args, "--recording-quick") is int quick && quick >= 0)
                     VerifyQuickRecording(tools, fixture, current, args[quick + 1]);
             }
+            if (liveScreen && args.Contains("--clipboard-pins"))
+                VerifyClipboardPins(app, tools, directory);
             VerifyRecordingFrameUi(directory);
             VerifyCalendarMenu(store, tools);
             string source = liveScreen ? "真实 GDI 桌面" : "公开样例像素";
@@ -236,6 +248,62 @@ internal static class CaptureWindowsChecks
             tools.Dispose();
             fixture.Close();
             app.Shutdown();
+        }
+    }
+
+    private static void VerifyClipboardPins(Application app, CaptureTools tools, string directory)
+    {
+        var previous = Clipboard.GetDataObject();
+        try
+        {
+            byte[] rgb = [20, 84, 205, 200, 130, 36, 30, 205, 88, 247, 190, 32];
+            var input = BitmapSource.Create(2, 2, 96, 96, PixelFormats.Bgr24, null, rgb, 6);
+            var png = new PngBitmapEncoder();
+            png.Frames.Add(BitmapFrame.Create(input));
+            using var encoded = new MemoryStream();
+            png.Save(encoded);
+            foreach (var format in new[] { PixelFormats.Bgr24, PixelFormats.Bgra32 })
+            {
+                var data = new DataObject();
+                data.SetData(DataFormats.Bitmap, new FormatConvertedBitmap(input, format, null, 0));
+                using var copy = new MemoryStream(encoded.ToArray());
+                data.SetData("PNG", copy, autoConvert: false);
+                Clipboard.SetDataObject(data);
+                tools.Invoke(ShotAction.Clipboard);
+                Pump(90);
+                var pin = app.Windows.OfType<ShotWindow>().Last(w => !w.Selecting);
+                var surface = Child<ShotSurface>(pin)!;
+                Check(pin.IsVisible && surface.Document.Width == 2 && surface.Document.Height == 2, "真实剪贴板未创建贴图");
+                var pngPath = Path.Combine(directory, $"clipboard-{format.BitsPerPixel}.png");
+                CaptureTools.SavePng(surface.Document, pngPath);
+                var decoded = BitmapFrame.Create(new Uri(pngPath));
+                var pixels = new byte[12];
+                new FormatConvertedBitmap(decoded, PixelFormats.Bgr24, null, 0).CopyPixels(pixels, 6, 0);
+                Check(pixels.SequenceEqual(rgb), $"{format.BitsPerPixel} 位剪贴板导出丢失原始颜色");
+                pin.Close();
+            }
+            foreach (var (value, title) in new[] { ("项目周会\n14:30", "文字贴图"), ("#0485F7", "颜色贴图") })
+            {
+                Clipboard.SetText(value);
+                tools.Invoke(ShotAction.Clipboard);
+                Pump(90);
+                var pin = app.Windows.OfType<ValuePinWindow>().Single();
+                Check(pin.IsVisible && pin.Title.EndsWith(title, StringComparison.Ordinal), $"真实剪贴板未显示{title}");
+                if (title == "文字贴图")
+                    Check(All<TextBox>(pin).Single().Text == value, "文字贴图丢失原文字");
+                else
+                    Check(All<Button>(pin).Any(button => Equals(button.Content, value)), "颜色贴图丢失 HEX");
+                pin.Close();
+                Check(tools.RestoreLastPin(), $"{title}无法恢复");
+                Pump(50);
+                app.Windows.OfType<ValuePinWindow>().Single().Close();
+            }
+            Console.WriteLine("通过：系统剪贴板实测同图 24/32 位和 PNG 混合、导出像素、文字与颜色贴图及恢复。");
+        }
+        finally
+        {
+            if (previous is not null) Clipboard.SetDataObject(previous, true);
+            else Clipboard.Clear();
         }
     }
 

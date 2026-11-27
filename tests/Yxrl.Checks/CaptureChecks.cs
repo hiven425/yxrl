@@ -57,6 +57,9 @@ internal static class CaptureChecks
         }
 
         await Task.Run(() => Sta(() => CheckImages(dir.FullName, args)));
+        await Task.Run(() => Sta(() => RecognitionChecks.Verify(dir.FullName)));
+        if (Array.IndexOf(args, "--recognition-live") is int recognitionIndex && recognitionIndex >= 0)
+            await Task.Run(() => Sta(() => RecognitionChecks.Live(args[recognitionIndex + 1], args[recognitionIndex + 2], !args.Contains("--recognition-offline"))));
         if (args.Contains("--recording"))
             await Task.Run(() => Sta(() => RecordingChecks.Verify(dir.FullName)));
         if (args.Contains("--capture-windows") || args.Contains("--capture-ui"))

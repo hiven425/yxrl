@@ -22,7 +22,10 @@ internal enum ImageAction
     Save,
     Pin,
     Ocr,
-    Translate
+    Translate,
+    Document,
+    Table,
+    Formula
 }
 
 internal sealed class ShotWindow : Window
@@ -385,7 +388,10 @@ internal sealed class ShotWindow : Window
             surface.ClearAllMarks();
         });
         AddSeparator();
-        AddToolButton("提取文字", "提取文字", () => Run(ImageAction.Ocr));
+        var recognition = AddToolButton("识别 ▾", "识别", () => { });
+        recognition.ContextMenu = new ContextMenu { Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom, PlacementTarget = recognition };
+        AddRecognitionItems(recognition.ContextMenu.Items);
+        recognition.Click += (_, _) => recognition.ContextMenu.IsOpen = true;
         AddToolButton("翻译", "打开翻译", () => Run(ImageAction.Translate));
         if (Selecting)
         {
@@ -710,7 +716,9 @@ internal sealed class ShotWindow : Window
         }
 
         Item("标注", ToggleEditing);
-        Item("提取文字", () => Run(ImageAction.Ocr));
+        var recognition = new MenuItem { Header = "识别" };
+        AddRecognitionItems(recognition.Items);
+        ContextMenu.Items.Add(recognition);
         Item("翻译", () => Run(ImageAction.Translate));
         Item("复制图片", () => Run(ImageAction.Copy));
         Item("保存 PNG", () => Run(ImageAction.Save));
@@ -749,6 +757,20 @@ internal sealed class ShotWindow : Window
             if (menuPassthrough is not null) menuPassthrough.IsChecked = isPassthrough;
             if (menuThumbnail is not null) menuThumbnail.IsChecked = thumbnailMode;
         };
+    }
+
+    private void AddRecognitionItems(ItemCollection items)
+    {
+        foreach (var (action, shortcut) in new[]
+        {
+            (ImageAction.Ocr, ShotAction.Ocr), (ImageAction.Document, ShotAction.Document),
+            (ImageAction.Table, ShotAction.Table), (ImageAction.Formula, ShotAction.Formula)
+        })
+        {
+            var item = new MenuItem { Header = CaptureOptions.Label(shortcut), InputGestureText = tools.Options.Shortcuts[shortcut] };
+            item.Click += (_, _) => Run(action);
+            items.Add(item);
+        }
     }
 
     private void HookPinInteractions()
@@ -1428,24 +1450,29 @@ internal sealed class ShotWindow : Window
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)
     {
         var key = EffectiveKey(e);
-        if (Selecting && key is Key.LeftAlt or Key.RightAlt)
+        if (key is Key.LeftAlt or Key.RightAlt)
         {
             surface.ShowLoupe = true;
             return;
         }
-        if (Selecting && surface.ShowLoupe && key is Key.LeftShift or Key.RightShift && !e.IsRepeat)
+        if (surface.ShowLoupe && key is Key.LeftShift or Key.RightShift && !e.IsRepeat)
         {
-            surface.HexColorFormat = !surface.HexColorFormat;
+            surface.CycleColorFormat();
+            e.Handled = true;
             return;
         }
+        if (Selecting && key is Key.LeftCtrl or Key.RightCtrl)
+            surface.UpdateHover(true);
         OnKey(sender, e);
     }
 
     private void OnPreviewKeyUp(object sender, KeyEventArgs e)
     {
         var key = EffectiveKey(e);
-        if (Selecting && key is Key.LeftAlt or Key.RightAlt && (Keyboard.Modifiers & ModifierKeys.Alt) == 0)
+        if (key is Key.LeftAlt or Key.RightAlt && (Keyboard.Modifiers & ModifierKeys.Alt) == 0)
             surface.ShowLoupe = false;
+        if (Selecting && key is Key.LeftCtrl or Key.RightCtrl)
+            surface.UpdateHover(Keyboard.Modifiers.HasFlag(ModifierKeys.Control));
     }
 
     private void OnKey(object sender, KeyEventArgs e)
@@ -1527,6 +1554,9 @@ internal sealed class ShotWindow : Window
             {
                 ShotAction.Pin,
                 ShotAction.Ocr,
+                ShotAction.Document,
+                ShotAction.Table,
+                ShotAction.Formula,
                 ShotAction.Translate,
                 ShotAction.Record,
                 ShotAction.LongShot
@@ -1541,7 +1571,15 @@ internal sealed class ShotWindow : Window
                 else if (action == ShotAction.LongShot)
                     OpenScroll();
                 else
-                    Run(action == ShotAction.Pin ? ImageAction.Pin : action == ShotAction.Ocr ? ImageAction.Ocr : ImageAction.Translate);
+                    Run(action switch
+                    {
+                        ShotAction.Pin => ImageAction.Pin,
+                        ShotAction.Ocr => ImageAction.Ocr,
+                        ShotAction.Document => ImageAction.Document,
+                        ShotAction.Table => ImageAction.Table,
+                        ShotAction.Formula => ImageAction.Formula,
+                        _ => ImageAction.Translate
+                    });
                 e.Handled = true;
                 return;
             }
@@ -1560,16 +1598,19 @@ internal sealed class ShotWindow : Window
         else if (Selecting && recordingSelection && key == Key.Enter && mods == ModifierKeys.None
             && Keyboard.FocusedElement is not Button)
             OpenRecorder();
-        else if (Selecting && key == Key.C && mods == ModifierKeys.None && surface.PickColor() is { } hex)
+        else if (key == Key.C && (Selecting && mods == ModifierKeys.None || surface.ShowLoupe && mods == ModifierKeys.Alt)
+            && surface.PickColor() is { } colorValue)
         {
             try
             {
-                Clipboard.SetText(hex);
-                dimensions.Text += $"   ·   已复制 {hex}";
+                Clipboard.SetText(colorValue);
+                if (Selecting) Close();
+                else ShowHud("已复制 " + colorValue);
             }
             catch (ExternalException)
             {
-                dimensions.Text += "   ·   剪贴板正忙";
+                if (Selecting) dimensions.Text += "   ·   剪贴板正忙";
+                else ShowHud("剪贴板正忙");
             }
         }
         else if ((key == Key.Enter && mods == ModifierKeys.None && Keyboard.FocusedElement is not Button) || (mods == ModifierKeys.Control && key == Key.C))
