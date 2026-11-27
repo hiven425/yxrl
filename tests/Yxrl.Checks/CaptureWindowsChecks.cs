@@ -255,8 +255,15 @@ internal static class CaptureWindowsChecks
             Pump(150);
         Check(video.NaturalDuration.HasTimeSpan && video.Source is not null, "本机回放未打开刚录制的 MP4");
         Check(video.NaturalVideoWidth > 0 && video.NaturalVideoHeight > 0, "回放未读取真实录制区域的尺寸");
-        var clip = new RecordedClip(video.Source!.LocalPath, video.NaturalVideoWidth, video.NaturalVideoHeight,
-            24, video.NaturalDuration.TimeSpan, audio);
+        var clip = playback.SourceClip;
+        string? audibleFile = null;
+        if (audio)
+        {
+            Check(clip.Tracks is { System: not null, Microphone: null }, "系统声音应保留为单独轨道");
+            audibleFile = Path.Combine(clip.Session!.Folder, "test-mix.mp4");
+            RecordingExport.Save(clip, audibleFile, RecordingFormat.Mp4, TimeSpan.Zero, clip.Duration, CancellationToken.None);
+            clip = clip with { Path = audibleFile, Tracks = null };
+        }
         using (var foundation = new MediaFoundation())
         using (var readback = new ClipReader(clip, audio, 0))
         {
@@ -290,10 +297,11 @@ internal static class CaptureWindowsChecks
                 RecordingExport.Save(clip, Path.Combine(files.FullName, $"live-region.{format.ToString().ToLowerInvariant()}"),
                     format, TimeSpan.Zero, clip.Duration, CancellationToken.None);
         }
+        if (audibleFile is not null) File.Delete(audibleFile);
         Click(playback, "播放");
         Pump(250);
         Check(video.Position > TimeSpan.Zero, "回放未推进");
-        playback.Shutdown();
+        playback.Shutdown(preserveRecording: false);
         Console.WriteLine($"通过：Windows 公开桌面实录 {clip.Width}×{clip.Height}，{clip.Duration.TotalSeconds:F2} 秒，读回录制前后画面，暂停画面未写入。");
     }
 

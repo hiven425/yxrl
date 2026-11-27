@@ -62,6 +62,7 @@ public partial class App : Application
         timer=new DispatcherTimer {Interval=TimeSpan.FromMilliseconds(25)};
         timer.Tick+=(_,_)=>Tick(); timer.Start(); Tick();
         reminderDelivery.Start();
+        Dispatcher.InvokeAsync(() => capture.OfferRecovery(), DispatcherPriority.ContextIdle);
     }
     private void PreferenceChanged(object sender,UserPreferenceChangedEventArgs e) => Dispatcher.BeginInvoke(() => {
         if(stopping) return;
@@ -80,10 +81,22 @@ public partial class App : Application
         bool resumeDate = panel.IsVisible;
         if (!panel.IsPinned) panel.Dismiss();
         settingsWindow = new SettingsWindow(store, calendar, weather, capture, ApplySettings,
-            () => panel.Present(ActiveAnchor, resetDate: !resumeDate), Shutdown);
+            () => panel.Present(ActiveAnchor, resetDate: !resumeDate), ExitCalendar);
         settingsWindow.Closed += (_, _) => settingsWindow = null;
         UpdateStatus();
         settingsWindow.Present(ActiveAnchor, section);
+    }
+
+    private void ExitCalendar()
+    {
+        capture.PreserveRecordings();
+        Shutdown();
+    }
+
+    protected override void OnSessionEnding(SessionEndingCancelEventArgs e)
+    {
+        base.OnSessionEnding(e);
+        if (!e.Cancel) capture?.PreserveRecordings();
     }
     private void ApplySettings()
     {

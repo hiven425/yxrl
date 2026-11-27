@@ -15,6 +15,8 @@ internal sealed class CaptureTools : IDisposable
     private ShotWindow? selection;
     private RecordingWindow? recorder;
     private ScrollWindow? scrolling;
+    private RecordingRecoveryWindow? recovery;
+    private string RecordingsFolder => Path.Combine(settings.DirectoryPath, "RecordingRecovery");
     public ShotHotkeys Hotkeys { get; }
     public OcrReader Ocr { get; }
     public TranslationService Translator { get; } = new();
@@ -112,10 +114,40 @@ internal sealed class CaptureTools : IDisposable
             recorder.Activate();
             return;
         }
-        var window = new RecordingWindow(area, clip => Show(new RecordingPreview(clip, () => OpenRecording(area))));
+        var window = new RecordingWindow(area, RecordingsFolder, clip => ShowRecording(clip, area));
         recorder = window;
         window.Closed += (_, _) => recorder = null;
         Show(window);
+    }
+
+    private void ShowRecording(RecordedClip clip, PixelRect area) => Show(new RecordingPreview(clip, () => OpenRecording(area)));
+
+    public void OfferRecovery(bool interactive = false)
+    {
+        if (recovery is not null)
+        {
+            if (interactive) recovery.Activate();
+            return;
+        }
+        try
+        {
+            var claimed = windows.OfType<RecordingPreview>().Select(window => window.SourceClip.Session?.Folder).ToHashSet();
+            var sessions = RecordingSession.Recoverable(RecordingsFolder)
+                .Where(session => session.Folder != recorder?.ActiveSession?.Folder && !claimed.Contains(session.Folder))
+                .OrderByDescending(session => session.Header.Started).ToArray();
+            if (sessions.Length == 0)
+            {
+                if (interactive) Feedback("没有可恢复的录屏。");
+                return;
+            }
+            recovery = new RecordingRecoveryWindow(sessions, clip => ShowRecording(clip, clip.Session!.Header.Area));
+            recovery.Closed += (_, _) => recovery = null;
+            Show(recovery);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            if (interactive) Feedback("无法读取录屏恢复目录。 " + ex.Message);
+        }
     }
 
     internal void OpenScroll(ShotWindow owner, PixelRect area)
@@ -275,14 +307,15 @@ internal sealed class CaptureTools : IDisposable
     public void Dispose()
     {
         Hotkeys.Dispose();
-        foreach (var win in windows.ToArray())
-            switch (win)
-            {
-                case RecordingWindow recording: recording.Shutdown(); break;
-                case RecordingPreview preview: preview.Shutdown(); break;
-                default: win.Close(); break;
-            }
+        PreserveRecordings();
+        foreach (var win in windows.ToArray()) win.Close();
         Ocr.Dispose();
         Translator.Dispose();
+    }
+
+    public void PreserveRecordings()
+    {
+        recorder?.Shutdown();
+        foreach (var preview in windows.OfType<RecordingPreview>().ToArray()) preview.Shutdown();
     }
 }

@@ -67,7 +67,7 @@ internal interface MfAttributes
     [PreserveSig] void UnusedGetGuid();
     [PreserveSig] void UnusedGetStringLength();
     [PreserveSig] void UnusedGetString();
-    [PreserveSig] void UnusedGetAllocatedString();
+    [PreserveSig] int GetAllocatedString(in Guid key, out nint text, out int length);
     [PreserveSig] void UnusedGetBlobSize();
     [PreserveSig] void UnusedGetBlob();
     [PreserveSig] void UnusedGetAllocatedBlob();
@@ -79,6 +79,7 @@ internal interface MfAttributes
     [PreserveSig] int SetUInt64(in Guid key, long value);
     [PreserveSig] void UnusedSetDouble();
     [PreserveSig] int SetGuid(in Guid key, in Guid value);
+    [PreserveSig] int SetString(in Guid key, [MarshalAs(UnmanagedType.LPWStr)] string value);
 }
 
 [ComImport, Guid("045fa593-8799-42b8-bc8d-8968c6453507"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]

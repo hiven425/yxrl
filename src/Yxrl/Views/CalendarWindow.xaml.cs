@@ -85,6 +85,13 @@ internal partial class CalendarWindow : Window
         Dispatcher.InvokeAsync(() => captureTools.Invoke(action), System.Windows.Threading.DispatcherPriority.ContextIdle);
     }
 
+    private void RecoverRecording(object sender, RoutedEventArgs e)
+    {
+        CaptureEntry.ContextMenu.IsOpen = false;
+        Dispatcher.InvokeAsync(() => captureTools.OfferRecovery(interactive: true),
+            System.Windows.Threading.DispatcherPriority.ContextIdle);
+    }
+
     internal void RefreshTheme()
     {
         ApplyChrome();

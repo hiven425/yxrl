@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Threading;
 using Microsoft.Win32;
 using Yxrl.Desktop;
@@ -14,22 +15,32 @@ namespace Yxrl.Capture;
 internal sealed class RecordingWindow : Window
 {
     private readonly PixelRect area;
+    private readonly string sessionRoot;
     private readonly Action<RecordedClip> showPreview;
     private readonly TextBlock elapsed = new(), status = new() { TextWrapping = TextWrapping.Wrap };
     private readonly StackPanel options = new() { Orientation = Orientation.Vertical };
     private readonly ComboBox fps = new(), delay = new(), mode = new();
     private readonly CheckBox cursor = new() { Content = "显示光标", IsChecked = true };
     private readonly CheckBox system = new() { Content = "系统声音" }, microphone = new() { Content = "麦克风" };
+    private readonly CheckBox mouseCues = new() { Content = "鼠标点击和滚轮" }, keyCues = new() { Content = "显示快捷键" },
+        camera = new() { Content = "摄像头" }, circle = new() { Content = "圆形" };
+    private readonly ComboBox device = new() { MinWidth = 120, MaxWidth = 195 }, corner = new();
+    private readonly ComboBox microphoneDevice = new() { MinWidth = 120, MaxWidth = 270, HorizontalAlignment = HorizontalAlignment.Left,
+        Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 0, 8) };
+    private readonly WrapPanel cameraControls = new() { Visibility = Visibility.Collapsed, Margin = new Thickness(0, 0, 0, 9) };
     private readonly Button start = new() { Content = "开始录制" }, pause = new() { Content = "暂停" };
     private readonly Button cancel = new() { Content = "放弃" };
     private readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromMilliseconds(100) };
     private CancellationTokenSource? countdown;
     private RegionRecording? recording;
+    internal RecordingSession? ActiveSession => recording?.Session;
+    private RecordingInput? inputCapture;
     private bool paused, abandoned, closing, forceClose, placeOk, stopping;
 
-    public RecordingWindow(PixelRect area, Action<RecordedClip> showPreview)
+    public RecordingWindow(PixelRect area, string sessionRoot, Action<RecordedClip> showPreview)
     {
         this.area = area;
+        this.sessionRoot = sessionRoot;
         this.showPreview = showPreview;
         Title = "YXRL 屏幕录制";
         AutomationProperties.SetAutomationId(this, "YxrlRecorder");
@@ -66,12 +77,28 @@ internal sealed class RecordingWindow : Window
         }
         options.Children.Add(fields);
         var inputs = new WrapPanel { Margin = new Thickness(0, 5, 0, 10) };
-        foreach (var control in new[] { cursor, system, microphone })
+        foreach (var control in new[] { cursor, system, microphone, mouseCues, keyCues, camera })
         {
-            control.Margin = new Thickness(0, 0, 13, 0);
+            control.Margin = new Thickness(0, 2, 13, 2);
             inputs.Children.Add(control);
         }
         options.Children.Add(inputs);
+        AutomationProperties.SetName(microphoneDevice, "麦克风设备");
+        microphoneDevice.ToolTip = "麦克风设备";
+        microphone.Checked += (_, _) => ChooseMicrophone();
+        microphone.Unchecked += (_, _) => microphoneDevice.Visibility = Visibility.Collapsed;
+        options.Children.Add(microphoneDevice);
+        foreach (string value in new[] { "右下", "左下", "右上", "左上" }) corner.Items.Add(value);
+        corner.SelectedIndex = 0;
+        foreach (var (control, name) in new (Control, string)[] { (device, "摄像头设备"), (corner, "摄像头位置"), (circle, "圆形摄像头") })
+        {
+            AutomationProperties.SetName(control, name);
+            control.Margin = new Thickness(0, 0, 8, 0);
+            cameraControls.Children.Add(control);
+        }
+        camera.Checked += async (_, _) => await ChooseCamera();
+        camera.Unchecked += async (_, _) => await ChooseCamera();
+        options.Children.Add(cameraControls);
         var actions = new WrapPanel();
         column.Children.Add(actions);
         start.SetResourceReference(StyleProperty, "PrimaryButton");
@@ -92,15 +119,58 @@ internal sealed class RecordingWindow : Window
         SetStatus("就绪");
         timer.Tick += (_, _) => elapsed.Text = $"{area.Width} × {area.Height} px   ·   {TimeLabel(recording?.Elapsed ?? TimeSpan.Zero)}";
         ContentRendered += (_, _) => PositionControls();
+        SizeChanged += (_, _) => { if (IsLoaded) PositionControls(); };
         PreviewKeyDown += (_, e) =>
         {
-            if (e.Key != Key.Escape || mode.IsDropDownOpen || fps.IsDropDownOpen || delay.IsDropDownOpen)
+            if (e.Key != Key.Escape || mode.IsDropDownOpen || fps.IsDropDownOpen || delay.IsDropDownOpen ||
+                device.IsDropDownOpen || corner.IsDropDownOpen || microphoneDevice.IsDropDownOpen)
                 return;
             e.Handled = true;
             Close();
         };
         Closing += ConfirmClose;
-        Closed += (_, _) => timer.Stop();
+        Closed += (_, _) =>
+        {
+            timer.Stop();
+            inputCapture?.Dispose();
+        };
+    }
+
+    private void ChooseMicrophone()
+    {
+        var previous = (microphoneDevice.SelectedItem as RecordingMicrophone)?.Id;
+        try { microphoneDevice.ItemsSource = RecordingAudio.Microphones(); }
+        catch (ExternalException) { microphoneDevice.ItemsSource = new[] { new RecordingMicrophone(null, "Windows 默认麦克风") }; }
+        microphoneDevice.SelectedItem = microphoneDevice.Items.OfType<RecordingMicrophone>().FirstOrDefault(item => item.Id == previous)
+            ?? microphoneDevice.Items[0];
+        microphoneDevice.Visibility = Visibility.Visible;
+    }
+
+    private async Task ChooseCamera()
+    {
+        cameraControls.Visibility = camera.IsChecked == true ? Visibility.Visible : Visibility.Collapsed;
+        if (camera.IsChecked != true)
+        {
+            SetStatus("就绪");
+            return;
+        }
+        start.IsEnabled = false;
+        SetStatus("正在读取摄像头设备…");
+        try
+        {
+            var available = await Task.Run(RecordingCamera.List);
+            if (closing || camera.IsChecked != true) return;
+            device.ItemsSource = available;
+            var preferred = available.FirstOrDefault(item => !item.Name.Contains("IR Camera", StringComparison.OrdinalIgnoreCase));
+            device.SelectedItem = preferred ?? available.FirstOrDefault();
+            SetStatus(available.Length > 0 ? "就绪" : "没有检测到摄像头。", available.Length == 0);
+        }
+        catch (Exception ex) when (ex is ExternalException or DllNotFoundException or EntryPointNotFoundException or InvalidCastException)
+        {
+            if (!closing)
+                SetStatus("无法读取摄像头列表。 " + ex.Message, true);
+        }
+        finally { if (!closing) start.IsEnabled = true; }
     }
 
     private void PositionControls()
@@ -140,11 +210,20 @@ internal sealed class RecordingWindow : Window
         }
         if (!placeOk)
             return;
+        CameraOptions? cameraOptions = null;
+        if (camera.IsChecked == true)
+        {
+            if (device.SelectedItem is not CameraDevice selectedDevice)
+            {
+                SetStatus("请选择可用的摄像头，或关闭摄像头后录制。", true);
+                return;
+            }
+            cameraOptions = new(selectedDevice, (CameraCorner)corner.SelectedIndex, circle.IsChecked == true);
+        }
         var session = new CancellationTokenSource();
         countdown = session;
         options.IsEnabled = start.IsEnabled = false;
         cancel.Visibility = Visibility.Visible;
-        string? staging = null;
         try
         {
             if (!RegionRecording.EnsureDisplay())
@@ -155,10 +234,14 @@ internal sealed class RecordingWindow : Window
                 await Task.Delay(TimeSpan.FromSeconds(1), session.Token);
             }
             session.Token.ThrowIfCancellationRequested();
-            staging = target is null ? RecordingFiles.TempClip() : RecordingFiles.Staging(target);
             var preferences = new RecordingOptions((int)fps.SelectedItem, cursor.IsChecked == true,
-                system.IsChecked == true, microphone.IsChecked == true);
-            recording = new RegionRecording(area, preferences, staging);
+                system.IsChecked == true, microphone.IsChecked == true,
+                mouseCues.IsChecked == true, keyCues.IsChecked == true, cameraOptions, (microphoneDevice.SelectedItem as RecordingMicrophone)?.Id);
+            var newRecording = new RegionRecording(area, preferences, sessionRoot);
+            recording = newRecording;
+            if (preferences.MouseCues || preferences.KeyCues)
+                inputCapture = new RecordingInput(area, new WindowInteropHelper(this).Handle, preferences.MouseCues, preferences.KeyCues,
+                    newRecording.CueTime, newRecording.AddCue);
             start.Content = "停止录制";
             start.IsEnabled = pause.IsEnabled = true;
             pause.Visibility = Visibility.Visible;
@@ -176,13 +259,14 @@ internal sealed class RecordingWindow : Window
             {
                 try
                 {
-                    File.Move(result.Path, target, true);
+                    await Task.Run(() => RecordingExport.Save(result, target, RecordingFormat.Mp4, TimeSpan.Zero,
+                        result.Duration, session.Token));
+                    result.Session?.Delete();
                     CloseImmediately();
                 }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ExternalException or InvalidOperationException)
                 {
                     showPreview(result);
-                    staging = null;
                     MessageBox.Show($"无法保存到指定位置。可在回放中重新保存。\n{ex.Message}", "YXRL 屏幕录制", MessageBoxButton.OK, MessageBoxImage.Information);
                     CloseImmediately();
                 }
@@ -190,7 +274,6 @@ internal sealed class RecordingWindow : Window
             else
             {
                 showPreview(result);
-                staging = null;
                 CloseImmediately();
             }
         }
@@ -199,13 +282,18 @@ internal sealed class RecordingWindow : Window
             or DllNotFoundException or EntryPointNotFoundException)
         {
             if (!closing)
-                SetStatus("录制失败。 " + ex.Message, true);
+            {
+                if (recording is { } failed && !failed.Completion.IsCompleted) failed.Stop(abandon: true);
+                var recover = recording?.Session.Parts().Any() == true ? " 已封存片段可从「恢复录屏」打开。" : "";
+                SetStatus("录制失败。 " + ex.Message + recover, true);
+            }
         }
         finally
         {
             countdown = null;
             session.Dispose();
-            if (staging is not null) RecordingFiles.Remove(staging);
+            inputCapture?.Dispose();
+            inputCapture = null;
             recording = null;
             timer.Stop();
             if (!closing)
@@ -260,7 +348,7 @@ internal sealed class RecordingWindow : Window
         _ = running.Completion.ContinueWith(task =>
         {
             if (task.IsCompletedSuccessfully && task.Result is { } clip)
-                RecordingFiles.Remove(clip.Path);
+                clip.Session?.Delete();
             _ = task.Exception;
         }, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
     }
@@ -274,7 +362,14 @@ internal sealed class RecordingWindow : Window
     public void Shutdown()
     {
         forceClose = true;
-        Abort();
+        closing = true;
+        countdown?.Cancel();
+        if (recording is { } running)
+        {
+            running.Stop(interrupt: true);
+            try { running.Completion.Wait(TimeSpan.FromSeconds(2)); }
+            catch (AggregateException) { } // Earlier sealed parts remain available for recovery.
+        }
         Close();
     }
 

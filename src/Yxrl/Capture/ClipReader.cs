@@ -93,7 +93,7 @@ internal sealed class ClipReader : IDisposable
                 }
                 if (sample is null || (video ? videoEnded : audioEnded))
                     continue;
-                var data = ReadBytes(sample, video);
+                var data = ReadBytes(sample, clip.Width, clip.Height, videoStride, video);
                 long fallback = video ? TimeSpan.TicksPerSecond / clip.Fps :
                     (long)data.Length * TimeSpan.TicksPerSecond / (Mp4Writer.AudioRate * Mp4Writer.AudioFrameBytes);
                 yield return new(video, data, time, sample.GetSampleDuration(out long length) >= 0 && length > 0 ? length : fallback);
@@ -105,7 +105,7 @@ internal sealed class ClipReader : IDisposable
         }
     }
 
-    private byte[] ReadBytes(MfSample sample, bool video)
+    internal static byte[] ReadBytes(MfSample sample, int width, int height, int videoStride, bool video = true)
     {
         Check(sample.ConvertToContiguousBuffer(out var buffer));
         try
@@ -119,15 +119,15 @@ internal sealed class ClipReader : IDisposable
                     Marshal.Copy(bytes, pcm, 0, length);
                     return pcm;
                 }
-                int rowBytes = clip.Width * 4, pitch = Math.Abs(videoStride);
-                if (pitch < rowBytes || (long)(clip.Height - 1) * pitch + rowBytes > length)
+                int rowBytes = width * 4, pitch = Math.Abs(videoStride);
+                if (pitch < rowBytes || (long)(height - 1) * pitch + rowBytes > length)
                     throw new IOException("视频帧尺寸与录制源不一致。");
-                var pixels = new byte[rowBytes * clip.Height];
+                var pixels = new byte[rowBytes * height];
                 if (videoStride == rowBytes)
                     Marshal.Copy(bytes, pixels, 0, pixels.Length);
                 else
-                    for (int y = 0; y < clip.Height; y++)
-                        Marshal.Copy(bytes + (videoStride > 0 ? y : clip.Height - 1 - y) * pitch,
+                    for (int y = 0; y < height; y++)
+                        Marshal.Copy(bytes + (videoStride > 0 ? y : height - 1 - y) * pitch,
                             pixels, y * rowBytes, rowBytes);
                 return pixels;
             }

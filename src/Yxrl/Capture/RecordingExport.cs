@@ -5,7 +5,7 @@ namespace Yxrl.Capture;
 
 internal enum RecordingFormat { Mp4, Gif, Webp }
 
-internal sealed record RecordingEdits(PixelRect Crop, double Speed)
+internal sealed record RecordingEdits(PixelRect Crop, double Speed, RecordingMix? Mix = null, bool MouseCues = true, bool KeyCues = true)
 {
     public static RecordingEdits Whole(RecordedClip clip) => new(new(0, 0, clip.Width, clip.Height), 1);
     public long Time(long ticks) => (long)Math.Round(ticks / Speed);
@@ -35,20 +35,25 @@ internal static class RecordingExport
             edits.Crop.Width < Mp4Writer.MinimumEdge || edits.Crop.Height < Mp4Writer.MinimumEdge ||
             (edits.Crop.Width & 1) != 0 || (edits.Crop.Height & 1) != 0 || !double.IsFinite(edits.Speed) || edits.Speed is < .25 or > 2)
             throw new ArgumentException($"裁剪后每条边至少保留 {Mp4Writer.MinimumEdge} 像素且为偶数，倍速须在 0.25 到 2 之间。");
+        if (edits.Mix is { } mix && (!(mix.System >= 0 && mix.System <= 1) || !(mix.Microphone >= 0 && mix.Microphone <= 1)))
+            throw new ArgumentException("录屏音量须在 0% 至 100% 之间。");
         string stage = RecordingFiles.Staging(path);
         try
         {
-            if (format == RecordingFormat.Mp4 && from == TimeSpan.Zero && to == clip.Duration && edits == whole)
+            bool hasCues = clip.Cues?.Any(cue => cue.Kind == CueKind.Shortcut ? edits.KeyCues : edits.MouseCues) == true;
+            if (format == RecordingFormat.Mp4 && from == TimeSpan.Zero && to == clip.Duration &&
+                edits.Crop == whole.Crop && edits.Speed == 1 && !hasCues && clip.Tracks?.Available != true)
                 File.Copy(clip.Path, stage);
             else
             {
                 using var media = new MediaFoundation();
-                bool sound = clip.HasAudio && format == RecordingFormat.Mp4;
+                bool sound = clip.HasAudio && format == RecordingFormat.Mp4 && clip.Tracks?.Available != true;
                 using var reader = new ClipReader(clip, sound, from.Ticks);
+                using var effects = hasCues ? new CuePainter(new(clip.Cues!)) : null;
                 if (format == RecordingFormat.Mp4)
-                    TrimVideo(clip, reader, stage, from.Ticks, to.Ticks, edits, cancellation, progress);
+                    TrimVideo(clip, reader, stage, from.Ticks, to.Ticks, edits, sound, effects, cancellation, progress);
                 else
-                    ExportAnimation(clip, reader, stage, format, from.Ticks, to.Ticks, edits, cancellation, progress);
+                    ExportAnimation(clip, reader, stage, format, from.Ticks, to.Ticks, edits, effects, cancellation, progress);
             }
             cancellation.ThrowIfCancellationRequested();
             File.Move(stage, path, true);
@@ -60,12 +65,14 @@ internal static class RecordingExport
     }
 
     private static void TrimVideo(RecordedClip clip, ClipReader reader, string path, long start, long end, RecordingEdits edits,
-        CancellationToken cancellation, IProgress<double>? progress)
+        bool embeddedAudio, CuePainter? effects, CancellationToken cancellation, IProgress<double>? progress)
     {
         int fps = Math.Max(1, (int)Math.Round(clip.Fps * edits.Speed));
-        using var writer = new Mp4Writer(path, edits.Crop.Width, edits.Crop.Height, fps, clip.HasAudio);
+        using var mixer = clip.Tracks is { Available: true } tracks
+            ? new RecordingMixer(tracks, edits.Mix ?? new(), start, edits.Speed) : null;
+        using var writer = new Mp4Writer(path, edits.Crop.Width, edits.Crop.Height, fps, embeddedAudio || mixer is not null);
         int frames = 0;
-        foreach (var frame in reader.Samples(clip.HasAudio, end))
+        foreach (var frame in reader.Samples(embeddedAudio, end))
         {
             cancellation.ThrowIfCancellationRequested();
             long first = Math.Max(start, frame.Time), last = Math.Min(end, frame.Time + frame.Duration);
@@ -74,7 +81,9 @@ internal static class RecordingExport
             long time = edits.Time(first - start), duration = edits.Time(last - start) - time;
             if (frame.IsVideo)
             {
+                effects?.Draw(frame.Data, clip.Width, clip.Height, first, edits.MouseCues, edits.KeyCues);
                 writer.Frame(edits.Pixels(clip, frame.Data), time, duration);
+                mixer?.WriteThrough(writer, time + duration);
                 frames++;
                 progress?.Report((double)(last - start) / (end - start));
             }
@@ -82,6 +91,7 @@ internal static class RecordingExport
                 WriteTrimmedAudio(writer, frame, first, last, time, duration);
         }
         EnsureFrames(frames);
+        mixer?.WriteThrough(writer, edits.Time(end - start));
         writer.Complete();
     }
 
@@ -111,7 +121,7 @@ internal static class RecordingExport
     }
 
     private static void ExportAnimation(RecordedClip clip, ClipReader reader, string path, RecordingFormat format,
-        long start, long end, RecordingEdits edits, CancellationToken cancellation, IProgress<double>? progress)
+        long start, long end, RecordingEdits edits, CuePainter? effects, CancellationToken cancellation, IProgress<double>? progress)
     {
         using AnimatedRecording writer = format == RecordingFormat.Gif
             ? new GifRecording(path, edits.Crop.Width, edits.Crop.Height) : new WebpRecording(path, edits.Crop.Width, edits.Crop.Height);
@@ -120,6 +130,12 @@ internal static class RecordingExport
         byte[]? previous = null;
         long written = start;
         int frames = 0;
+        void WriteFrame(byte[] pixels, long until)
+        {
+            effects?.Draw(pixels, clip.Width, clip.Height, written, edits.MouseCues, edits.KeyCues);
+            writer.Frame(edits.Pixels(clip, pixels), edits.Time(until - start) - edits.Time(written - start));
+            frames++;
+        }
         foreach (var frame in reader.Samples(false, end))
         {
             cancellation.ThrowIfCancellationRequested();
@@ -129,18 +145,14 @@ internal static class RecordingExport
                 previous = frame.Data;
             else if (edits.Time(frame.Time - written) >= interval)
             {
-                writer.Frame(edits.Pixels(clip, previous), edits.Time(frame.Time - start) - edits.Time(written - start));
-                frames++;
+                WriteFrame(previous, frame.Time);
                 progress?.Report((double)(frame.Time - start) / (end - start));
                 written = frame.Time;
                 previous = frame.Data;
             }
         }
         if (previous is not null && end > written)
-        {
-            writer.Frame(edits.Pixels(clip, previous), edits.Time(end - start) - edits.Time(written - start));
-            frames++;
-        }
+            WriteFrame(previous, end);
         EnsureFrames(frames);
         writer.Complete();
     }

@@ -80,7 +80,83 @@ internal static class RecordingChecks
                 frames.All(s => s.Data.Length == 80 * 48 * 4 && s.Data[0] > 190) && samples.Any(s => !s.IsVideo),
                 "裁画面和倍速后的 MP4 像素、时序和音轨");
         }
-        Console.WriteLine("通过：Windows H.264/AAC 编码、MP4 读回、片段剪辑和画面裁剪、倍速、GIF 和 WebP 导出。");
+        VerifyRecovery(directory);
+        Console.WriteLine("通过：Windows H.264/AAC、剪辑、动图、两轨独立调音、键鼠合成及未完成片段恢复。");
+    }
+
+    private static void VerifyRecovery(string directory)
+    {
+        string root = Path.Combine(directory, "recovery");
+        const int width = 96, height = 64, fps = 24, frames = 12;
+        const long partTime = TimeSpan.TicksPerSecond / 2, wholeTime = partTime * 2;
+        var session = RecordingSession.Create(root, new(0, 0, width, height), new(fps, false, true, true));
+        for (int part = 0; part < 2; part++)
+        {
+            using (var sink = new Mp4Writer(session.PartFile(part), width, height, fps))
+                WriteVideo(sink, part);
+            session.Seal(part, partTime, part == 0 ? [new(0, CueKind.Left, 28, 22), new(0, CueKind.Shortcut, 0, 0, "Ctrl+T")] : []);
+        }
+        void WriteVideo(Mp4Writer sink, int part)
+        {
+            var pixels = new byte[width * height * 4];
+            for (int i = 0; i < pixels.Length; i += 4) pixels[i + (part == 0 ? 2 : 1)] = 180;
+            for (int i = 0; i < frames; i++)
+                sink.Frame(pixels, i * TimeSpan.TicksPerSecond / fps, TimeSpan.TicksPerSecond / fps);
+            sink.Complete();
+        }
+        File.WriteAllBytes(session.PartFile(2), [8, 9, 10]);
+        WriteTone(session.RawSound(false), 510);
+        WriteTone(session.RawSound(true), 930);
+        var recovered = RecordingSession.Recoverable(root).Single();
+        Check(recovered.Parts().Count() == 2, "恢复需要忽略未提交的末尾");
+        var clip = RecordingAssembler.Prepare(recovered);
+        Check(clip.Duration.Ticks == wholeTime && clip.Tracks?.System is not null && clip.Tracks.Microphone is not null,
+            "恢复后的时长与原始音轨");
+        using (var reader = new ClipReader(clip, false, 0))
+        {
+            var samples = reader.Samples(false, wholeTime).ToList();
+            Check(samples.Count == 24 && samples.First().Data[2] > 150 && samples.Last().Data[1] > 150, "恢复两段画面可逐帧解码");
+        }
+        Check(RecordingInput.Label('A', false, false, false, true) is null &&
+            RecordingInput.Label('A', true, false, false, false) == "Ctrl+A", "普通打字与快捷键动画的界限");
+        var mix = Path.Combine(directory, "mix-adjusted.mp4");
+        RecordingExport.Save(clip, mix, RecordingFormat.Mp4, TimeSpan.Zero, clip.Duration, CancellationToken.None,
+            edits: RecordingEdits.Whole(clip) with { Mix = new(.5, 0) });
+        using (var reader = new ClipReader(clip with { Path = mix }, true, 0))
+        {
+            var samples = reader.Samples(true, wholeTime).ToList();
+            var audio = samples.Where(s => !s.IsVideo).SelectMany(s => s.Data).ToArray();
+            Check(ToneLevel(audio, 510, 0, .8) is > 3400 and < 4900 && ToneLevel(audio, 930, 0, .8) < 200,
+                "系统声音半音量、麦克风静音后独立混音");
+            var original = samples.First(s => s.IsVideo).Data;
+            Check(original.Where((value, i) => i % 4 == 0 && value > 90).Count() > 20, "合成后的键鼠动画画面");
+        }
+        session.Delete();
+        Check(!RecordingSession.Recoverable(root).Any(), "显式删除后的恢复目录");
+    }
+
+    private static void WriteTone(string file, int frequency)
+    {
+        using var output = new BinaryWriter(File.Create(file));
+        for (int i = 0; i < Mp4Writer.AudioRate; i++)
+        {
+            short value = (short)(8000 * Math.Sin(2 * Math.PI * frequency * i / Mp4Writer.AudioRate));
+            output.Write(value);
+            output.Write(value);
+        }
+    }
+
+    internal static double ToneLevel(byte[] data, double frequency, double start, double end)
+    {
+        int first = (int)(start * Mp4Writer.AudioRate), last = Math.Min(data.Length / Mp4Writer.AudioFrameBytes, (int)(end * Mp4Writer.AudioRate));
+        double re = 0, im = 0, step = 2 * Math.PI * frequency / Mp4Writer.AudioRate;
+        for (int i = first; i < last; i++)
+        {
+            var sample = BitConverter.ToInt16(data, i * Mp4Writer.AudioFrameBytes);
+            re += sample * Math.Cos(step * i);
+            im += sample * Math.Sin(step * i);
+        }
+        return last > first ? 2 * Math.Sqrt(re * re + im * im) / (last - first) : 0;
     }
 
     private static void Check(bool condition, string message)

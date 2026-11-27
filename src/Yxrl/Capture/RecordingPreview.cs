@@ -16,7 +16,11 @@ namespace Yxrl.Capture;
 internal sealed class RecordingPreview : Window
 {
     private readonly RecordedClip clip;
+    internal RecordedClip SourceClip => clip;
     private readonly MediaElement video = new() { LoadedBehavior = MediaState.Manual, UnloadedBehavior = MediaState.Manual, Stretch = Stretch.Uniform };
+    private readonly CuePreview cues;
+    private readonly RecordingTrackView? systemTrack, microphoneTrack;
+    private readonly CheckBox mouse = new() { Content = "鼠标动画", IsChecked = true }, keys = new() { Content = "快捷键动画", IsChecked = true };
     private readonly Slider position = new();
     private readonly TextBox first = new() { Width = 75 }, last = new() { Width = 75 };
     private readonly TextBox[] crop = [MarginInput(), MarginInput(), MarginInput(), MarginInput()];
@@ -24,10 +28,10 @@ internal sealed class RecordingPreview : Window
     private readonly Button play = new() { Content = "播放", IsEnabled = false }, save = new() { Content = "另存为" },
         cancel = new() { Content = "取消导出", Visibility = Visibility.Collapsed };
     private readonly ComboBox format = new(), speed = new();
-    private readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromMilliseconds(100) };
+    private readonly DispatcherTimer timer = new() { Interval = TimeSpan.FromMilliseconds(50) };
     private CancellationTokenSource? export;
     private Task? exportJob;
-    private bool playing, updatingSeek, saved, forceClose;
+    private bool playing, updatingSeek, saved, forceClose, preserve;
 
     public RecordingPreview(RecordedClip clip, Action repeat)
     {
@@ -47,7 +51,11 @@ internal sealed class RecordingPreview : Window
         var controls = new StackPanel();
         DockPanel.SetDock(controls, Dock.Bottom);
         frame.Children.Add(controls);
-        frame.Children.Add(new Border { Background = Brushes.Black, Child = video, CornerRadius = new CornerRadius(6) });
+        var picture = new Grid();
+        picture.Children.Add(video);
+        cues = new CuePreview(clip.Width, clip.Height, new CueTimeline(clip.Cues ?? [])) { IsHitTestVisible = false };
+        picture.Children.Add(cues);
+        frame.Children.Add(new Border { Background = Brushes.Black, Child = picture, CornerRadius = new CornerRadius(6) });
 
         position.Maximum = clip.Duration.TotalSeconds;
         position.IsMoveToPointEnabled = true;
@@ -55,7 +63,11 @@ internal sealed class RecordingPreview : Window
         position.ValueChanged += (_, _) =>
         {
             if (!updatingSeek && position.IsEnabled)
+            {
                 video.Position = TimeSpan.FromSeconds(position.Value);
+                SyncTracks(video.Position, playing);
+                UpdateCues();
+            }
             time.Text = $"{RecordingWindow.TimeLabel(TimeSpan.FromSeconds(position.Value))} / {RecordingWindow.TimeLabel(clip.Duration)}";
         };
         AutomationProperties.SetName(position, "回放进度");
@@ -87,9 +99,34 @@ internal sealed class RecordingPreview : Window
         speed.SelectionChanged += (_, _) =>
         {
             if (speed.SelectedItem is ComboBoxItem { Tag: double ratio })
+            {
                 video.SpeedRatio = ratio;
+                SyncTracks(video.Position, playing);
+            }
         };
         AddField(spatial, "倍速", speed);
+        var soundEffects = new WrapPanel { Margin = new Thickness(0, 0, 0, 8) };
+        if (clip.Tracks?.System is { } systemPath)
+        {
+            systemTrack = new("系统声音", systemPath, message => SetStatus(message, true));
+            soundEffects.Children.Add(systemTrack);
+        }
+        if (clip.Tracks?.Microphone is { } microphonePath)
+        {
+            microphoneTrack = new("麦克风", microphonePath, message => SetStatus(message, true));
+            soundEffects.Children.Add(microphoneTrack);
+        }
+        foreach (var (button, condition) in new[] { (mouse, clip.Cues?.Any(c => c.Kind != CueKind.Shortcut) == true),
+            (keys, clip.Cues?.Any(c => c.Kind == CueKind.Shortcut) == true) })
+        {
+            if (!condition) continue;
+            button.Margin = new Thickness(0, 4, 12, 4);
+            button.Checked += (_, _) => UpdateCues();
+            button.Unchecked += (_, _) => UpdateCues();
+            soundEffects.Children.Add(button);
+        }
+        if (soundEffects.Children.Count > 0)
+            controls.Children.Add(new Expander { Header = "音轨与动画", IsExpanded = true, Content = soundEffects, Margin = new Thickness(0, 0, 0, 5) });
         var actions = new WrapPanel();
         controls.Children.Add(actions);
         foreach (string name in new[] { "MP4", "GIF", "WebP" }) format.Items.Add(name);
@@ -122,6 +159,7 @@ internal sealed class RecordingPreview : Window
             play.IsEnabled = position.IsEnabled = true;
             UpdateCropPreview();
             ReadPosition();
+            SyncTracks(video.Position, false);
         };
         video.SizeChanged += (_, _) => UpdateCropPreview();
         video.MediaEnded += (_, _) => PausePlayback();
@@ -129,6 +167,12 @@ internal sealed class RecordingPreview : Window
         timer.Tick += (_, _) =>
         {
             ReadPosition();
+            UpdateCues();
+            if (!video.IsBuffering)
+            {
+                systemTrack?.Drift(video.Position);
+                microphoneTrack?.Drift(video.Position);
+            }
             if (TryRange(out _, out var end) && video.Position >= end)
                 PausePlayback();
         };
@@ -136,6 +180,8 @@ internal sealed class RecordingPreview : Window
         {
             video.Source = new Uri(clip.Path);
             video.Play();
+            systemTrack?.Open();
+            microphoneTrack?.Open();
         };
         PreviewKeyDown += async (_, e) =>
         {
@@ -181,7 +227,9 @@ internal sealed class RecordingPreview : Window
         if (bounds.Width < Mp4Writer.MinimumEdge || bounds.Height < Mp4Writer.MinimumEdge)
             return false;
         bounds = bounds with { Right = bounds.Right - bounds.Width % 2, Bottom = bounds.Bottom - bounds.Height % 2 };
-        edits = new(bounds, (double)((ComboBoxItem)speed.SelectedItem).Tag);
+        edits = new(bounds, (double)((ComboBoxItem)speed.SelectedItem).Tag,
+            new RecordingMix(systemTrack?.Gain ?? 1, microphoneTrack?.Gain ?? 1),
+            mouse.IsChecked == true, keys.IsChecked == true);
         return true;
     }
 
@@ -192,7 +240,8 @@ internal sealed class RecordingPreview : Window
         double scale = Math.Min(video.ActualWidth / clip.Width, video.ActualHeight / clip.Height);
         double x = (video.ActualWidth - clip.Width * scale) / 2, y = (video.ActualHeight - clip.Height * scale) / 2;
         var c = edits.Crop;
-        video.Clip = new RectangleGeometry(new Rect(x + c.Left * scale, y + c.Top * scale, c.Width * scale, c.Height * scale));
+        var visible = new RectangleGeometry(new Rect(x + c.Left * scale, y + c.Top * scale, c.Width * scale, c.Height * scale));
+        video.Clip = cues.Clip = visible;
     }
 
     private void AddTime(WrapPanel panel, string label, TextBox field, double seconds)
@@ -238,6 +287,7 @@ internal sealed class RecordingPreview : Window
         video.Play();
         timer.Start();
         playing = true;
+        SyncTracks(video.Position, true);
         play.Content = "暂停播放";
     }
 
@@ -246,8 +296,18 @@ internal sealed class RecordingPreview : Window
         video.Pause();
         timer.Stop();
         playing = false;
+        SyncTracks(video.Position, false);
         play.Content = "播放";
     }
+
+    private void SyncTracks(TimeSpan time, bool play)
+    {
+        double ratio = video.SpeedRatio;
+        systemTrack?.Sync(time, ratio, play);
+        microphoneTrack?.Sync(time, ratio, play);
+    }
+
+    private void UpdateCues() => cues.Set(TimeSpan.FromSeconds(position.Value).Ticks, mouse.IsChecked == true, keys.IsChecked == true);
 
     private bool TryRange(out TimeSpan from, out TimeSpan to)
     {
@@ -334,16 +394,26 @@ internal sealed class RecordingPreview : Window
     {
         timer.Stop();
         video.Close();
+        systemTrack?.Close();
+        microphoneTrack?.Close();
         export?.Cancel();
+        if (preserve)
+            return;
+        void Clean()
+        {
+            if (clip.Session is { } session) session.Delete();
+            else RecordingFiles.Remove(clip.Path);
+        }
         if (exportJob is { } job)
-            _ = job.ContinueWith(_ => RecordingFiles.Remove(clip.Path), TaskScheduler.Default);
+            _ = job.ContinueWith(_ => Clean(), TaskScheduler.Default);
         else
-            RecordingFiles.Remove(clip.Path);
+            Clean();
     }
 
-    public void Shutdown()
+    public void Shutdown(bool preserveRecording = true)
     {
         forceClose = true;
+        preserve = preserveRecording && !saved;
         Close();
     }
 }

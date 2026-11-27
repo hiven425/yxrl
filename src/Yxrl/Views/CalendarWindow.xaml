@@ -153,6 +153,7 @@
                     <ContextMenu>
                       <MenuItem Header="开始截图" Tag="Start" Click="CaptureCommand"/>
                       <MenuItem Header="录制屏幕" Tag="Record" Click="CaptureCommand"/>
+                      <MenuItem Header="恢复录屏" Click="RecoverRecording"/>
                       <MenuItem Header="钉住剪贴板图片" Tag="Clipboard" Click="CaptureCommand"/>
                       <MenuItem Header="粘贴文字翻译" Tag="Translate" Click="CaptureCommand"/>
                       <MenuItem Header="截图与翻译设置" Click="CaptureCommand"/>

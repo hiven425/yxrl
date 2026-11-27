@@ -4,24 +4,43 @@ using Yxrl.Desktop;
 
 namespace Yxrl.Capture;
 
-internal sealed record RecordingOptions(int Fps, bool Cursor, bool SystemAudio, bool Microphone)
+internal sealed record RecordingOptions(int Fps, bool Cursor, bool SystemAudio, bool Microphone,
+    bool MouseCues = false, bool KeyCues = false, CameraOptions? Camera = null, string? MicrophoneDevice = null)
 {
     public bool HasAudio => SystemAudio || Microphone;
 }
 
-internal sealed record RecordedClip(string Path, int Width, int Height, int Fps, TimeSpan Duration, bool HasAudio);
+internal sealed record RecordedClip(string Path, int Width, int Height, int Fps, TimeSpan Duration, bool HasAudio,
+    RecordingTracks? Tracks = null, RecordingSession? Session = null, InputCue[]? Cues = null);
 
 internal sealed class RegionRecording
 {
     private readonly object gate = new();
     private readonly Stopwatch clock = new();
-    private bool paused, stop, discard;
+    private readonly List<InputCue> cues = [];
+    private bool paused, stop, discard, interrupted;
+    public RecordingSession Session { get; }
     public Task<RecordedClip?> Completion { get; }
 
-    public RegionRecording(PixelRect area, RecordingOptions options, string path)
+    public RegionRecording(PixelRect area, RecordingOptions options, string folder)
     {
-        Completion = Task.Factory.StartNew(() => Record(area, options, path), CancellationToken.None,
+        Session = RecordingSession.Create(folder, area, options);
+        Completion = Task.Factory.StartNew(() => Record(area, options), CancellationToken.None,
             TaskCreationOptions.LongRunning, TaskScheduler.Default);
+    }
+
+    public long? CueTime()
+    {
+        lock (gate) return !paused && !stop && clock.IsRunning ? clock.Elapsed.Ticks : null;
+    }
+
+    public void AddCue(InputCue cue)
+    {
+        lock (gate)
+        {
+            if (!paused && !stop && cues.Count < 15_000)
+                cues.Add(cue);
+        }
     }
 
     public TimeSpan Elapsed
@@ -42,93 +61,132 @@ internal sealed class RegionRecording
         }
     }
 
-    public void Stop(bool abandon = false)
+    public void Stop(bool abandon = false, bool interrupt = false)
     {
         lock (gate)
         {
             stop = true;
             discard |= abandon;
+            interrupted |= interrupt;
             clock.Stop();
             Monitor.Pulse(gate);
         }
     }
 
-    private RecordedClip? Record(PixelRect area, RecordingOptions options, string path)
+    private RecordedClip? Record(PixelRect area, RecordingOptions options)
     {
-        bool keep = false;
         try
         {
             using var media = new MediaFoundation();
-            long duration;
-            using (var sink = new Mp4Writer(path, area.Width, area.Height, options.Fps, options.HasAudio))
-                duration = Capture(area, options, sink);
+            Capture(area, options);
             lock (gate)
-                keep = duration > 0 && !discard;
-            return keep ? new(path, area.Width, area.Height, options.Fps, TimeSpan.FromTicks(duration), options.HasAudio) : null;
+                if (discard || interrupted) return null;
+            return Session.Parts().Any() ? RecordingAssembler.Prepare(Session) : null;
         }
         finally
         {
-            if (!keep) RecordingFiles.Remove(path);
+            bool abandoned;
+            lock (gate) abandoned = discard;
+            if (abandoned || !Session.Parts().Any())
+                Session.Delete();
         }
     }
 
-    private long Capture(PixelRect area, RecordingOptions options, Mp4Writer sink)
+    private void Capture(PixelRect area, RecordingOptions options)
     {
         using var source = new ScreenPixels(area);
-        using var audio = options.HasAudio ? new RecordingAudio(options.SystemAudio, options.Microphone) : null;
+        using var camera = options.Camera is { } settings ? new RecordingCamera(settings) : null;
+        if (camera is not null && !camera.WaitForFrame(TimeSpan.FromSeconds(6)))
+            throw new InvalidOperationException("没有收到摄像头画面。请检查设备或选择其他摄像头。");
+        using var audio = options.HasAudio ? new RecordingAudio(Session, options.MicrophoneDevice) : null;
         var pixels = new byte[source.Length];
-        long next = 0, duration = 0, checkedAt = -TimeSpan.TicksPerSecond;
+        const long PartLimit = 3 * TimeSpan.TicksPerSecond, AudioLag = 100 * TimeSpan.TicksPerMillisecond;
+        long lastCheck = -TimeSpan.TicksPerSecond, partStart = 0, duration = 0;
+        int part = 0;
+        bool wasPaused = false;
+        Mp4Writer? sink = null;
         long interval = TimeSpan.TicksPerSecond / options.Fps;
-        lock (gate)
-            if (!paused && !stop)
-                clock.Start();
-
-        while (true)
+        void Seal()
         {
-            long now;
+            if (sink is not { } current) return;
+            sink = null;
+            using (current) current.Complete();
+            using (var video = new FileStream(Session.PartFile(part), FileMode.Open, FileAccess.Write, FileShare.Read))
+                video.Flush(flushToDisk: true);
+            audio?.Flush(duration - AudioLag, durable: true);
+            InputCue[] events;
             lock (gate)
             {
-                if (stop)
-                    break;
-                now = clock.Elapsed.Ticks;
-                if (paused || now < next)
-                {
-                    bool flush = paused;
-                    Monitor.Wait(gate, flush ? 25 : (int)Math.Clamp((next - now) / TimeSpan.TicksPerMillisecond, 1, 25));
-                    if (!flush || stop)
-                        continue;
-                }
+                events = cues.Where(cue => cue.Time < duration).ToArray();
+                cues.RemoveAll(cue => cue.Time < duration);
             }
-            if (IsPaused())
-            {
-                audio?.Flush(sink, duration, paused: true);
-                continue;
-            }
-            if (now - checkedAt >= TimeSpan.TicksPerSecond)
-            {
-                if (DesktopFrame.SessionLocked())
-                    throw new InvalidOperationException("Windows 桌面已锁定，录制已停止。");
-                checkedAt = now;
-            }
-
-            long time = duration == 0 ? 0 : Math.Max(next, now - now % interval);
-            source.CopyFrame(pixels, options.Cursor);
-            sink.Frame(pixels, time, interval);
-            audio?.Flush(sink, time, paused: false);
-            next = duration = time + interval;
+            Session.Seal(part, duration - partStart, events);
+            partStart = duration;
+            part++;
         }
-
         lock (gate)
-            if (discard || duration == 0)
-                return 0;
-        audio?.Flush(sink, duration, paused: false);
-        sink.Complete();
-        return duration;
-    }
+            if (!paused && !stop) clock.Start();
+        audio?.Resume(0);
+        try
+        {
+            while (true)
+            {
+                long now;
+                bool waiting;
+                lock (gate)
+                {
+                    if (stop) break;
+                    now = clock.Elapsed.Ticks;
+                    waiting = paused;
+                    if (waiting || now < duration)
+                    {
+                        Monitor.Wait(gate, waiting ? 25 : (int)Math.Clamp((duration - now) / TimeSpan.TicksPerMillisecond, 1, 25));
+                        if (!waiting || stop) continue;
+                    }
+                }
+                if (waiting)
+                {
+                    if (!wasPaused)
+                    {
+                        audio?.Flush(duration);
+                        wasPaused = true;
+                    }
+                    audio?.DiscardPaused();
+                    continue;
+                }
+                if (wasPaused)
+                {
+                    audio?.Resume(now);
+                    wasPaused = false;
+                }
+                if (now - lastCheck >= TimeSpan.TicksPerSecond)
+                {
+                    if (DesktopFrame.SessionLocked() || !DesktopFrame.HasActiveDisplay())
+                        throw new InvalidOperationException("Windows 桌面暂不可录制。可恢复已封存的片段。");
+                    lastCheck = now;
+                }
 
-    private bool IsPaused()
-    {
-        lock (gate) return paused;
+                if (duration - partStart >= PartLimit) Seal();
+                long time = sink is null ? partStart : Math.Max(duration, now - now % interval);
+                lock (gate)
+                {
+                    if (paused || stop) continue;
+                    source.CopyFrame(pixels, options.Cursor);
+                }
+                sink ??= new Mp4Writer(Session.PartFile(part), area.Width, area.Height, options.Fps);
+                camera?.Overlay(pixels, area.Width, area.Height);
+                sink.Frame(pixels, time - partStart, interval);
+                duration = time + interval;
+                audio?.Flush(duration - AudioLag);
+            }
+            lock (gate)
+                if (discard || duration <= partStart) return;
+            if (!wasPaused && audio is not null)
+                Thread.Sleep(75);
+            audio?.Flush(duration, durable: true);
+            Seal();
+        }
+        finally { sink?.Dispose(); }
     }
 
     internal static bool EnsureDisplay()
@@ -143,8 +201,6 @@ internal static class RecordingFiles
 {
     public static string Staging(string target) => Path.Combine(Path.GetDirectoryName(Path.GetFullPath(target))!,
         $".YXRL-{Guid.NewGuid():N}{Path.GetExtension(target)}");
-
-    public static string TempClip() => Path.Combine(Path.GetTempPath(), $"YXRL-{Guid.NewGuid():N}.mp4");
 
     public static void Remove(string path)
     {

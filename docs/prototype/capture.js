@@ -68,6 +68,7 @@ const CapturePreview = (function createPreview() {
     editor,
     recording,
     recordingClip,
+    recoverySample,
     scrollClip,
     menu,
     panel,
@@ -77,6 +78,7 @@ const CapturePreview = (function createPreview() {
   function reset() {
     finish();
     closeRecording();
+    recoverySample = null;
     closeScroll();
     panel?.remove();
     panel = null;
@@ -676,25 +678,49 @@ const CapturePreview = (function createPreview() {
     recordingClip.view.remove();
     recordingClip = null;
   }
-  function recordingPanel(shot) {
+  function recordingPanel(shot, recovered = null) {
     closeRecording();
     const view = element("section", "shot-recorder", desk());
     view.setAttribute("aria-label", "屏幕录制演示");
     view.innerHTML = `<header><b>屏幕录制</b>${button("video-close", "关闭录屏", "×")}</header>
-      <div class="shot-video-image"><img alt="录制区域"><span class="shot-video-position" hidden></span></div>
+      <div class="shot-video-image"><img alt="录制区域"><span class="shot-video-position" hidden></span><kbd class="shot-video-key" hidden>Ctrl+T</kbd><span class="shot-video-camera" hidden>摄像头示例</span></div>
       <div class="shot-video-options"><label>帧率 <select id="shot-fps">${[5, 16, 24, 30, 60].map(value => `<option ${value === 24 ? "selected" : ""}>${value}</option>`).join("")}</select></label>
       <label>延时（秒） <select id="shot-delay">${[0, 1, 2, 3, 5, 10].map(value => `<option>${value}</option>`).join("")}</select></label>
       <label>模式 <select id="shot-mode"><option>普通录制</option><option>快速保存 MP4</option></select></label>
-      <label><input type="checkbox" checked> 显示光标</label><label><input type="checkbox"> 系统声音</label><label><input type="checkbox"> 麦克风</label></div>
+      <label><input type="checkbox" checked> 显示光标</label><label><input type="checkbox" id="shot-video-system"> 系统声音</label><label><input type="checkbox" id="shot-video-mic"> 麦克风</label>
+      <label><input type="checkbox" id="shot-video-mouse"> 鼠标点击和滚轮</label><label><input type="checkbox" id="shot-video-keys"> 显示快捷键</label>
+      <label><input type="checkbox" id="shot-video-camera"> 摄像头</label>
+      <label class="shot-microphone-field" hidden>麦克风设备 <select aria-label="麦克风设备"><option>Windows 默认麦克风</option><option>内置麦克风阵列（示例）</option></select></label>
+      <div class="shot-camera-fields" hidden><label>摄像头设备 <select><option>本机摄像头（示例）</option></select></label>
+      <label>位置 <select id="shot-camera-corner" aria-label="摄像头位置"><option>右下</option><option>左下</option><option>右上</option><option>左上</option></select></label><label><input type="checkbox" id="shot-camera-circle"> 圆形</label></div></div>
       <div class="shot-video-trim" hidden><label>回放进度 <input id="shot-playhead" type="range" min="0" step="0.1"></label>
       <label>开始（秒） <input type="number" min="0" value="0" step=".1"></label><label>结束（秒） <input id="shot-video-end" type="number" min="0" step=".1"></label>
       <label>倍速 <select id="shot-speed">${[.25,.5,1,1.25,1.5,2].map(speed => `<option ${speed === 1 ? "selected" : ""}>${speed}</option>`).join("")}</select></label>
       <label>导出格式 <select><option>MP4</option><option>GIF</option><option>WebP</option></select></label>
       ${["左", "上", "右", "下"].map(side => `<label>裁${side} <input type="number" min="0" value="0" data-crop="${side}"></label>`).join("")}</div>
-      <div class="shot-row">${button("video-start", "开始录制")}${button("video-pause", "暂停")}${button("video-save", "另存为")}${button("video-repeat", "重新录制")}</div>
+      <fieldset class="shot-video-mixer" hidden><legend>音轨与动画</legend>
+      ${[["system","系统声音"],["mic","麦克风"]].map(([id,label]) => `<div data-track="${id}"><label>${label} <input type="range" min="0" max="100" value="100" aria-label="${label}音量"></label><output>100%</output><label><input type="checkbox" aria-label="${label}静音"> 静音</label></div>`).join("")}
+      <label data-effect="mouse"><input type="checkbox" checked> 鼠标动画</label><label data-effect="keys"><input type="checkbox" checked> 快捷键动画</label></fieldset>
+      <div class="shot-row">${button("video-start", "开始录制")}${button("video-pause", "暂停")}${button("video-save", "另存为")}${button("video-repeat", "重新录制")}${button("video-interrupt", "模拟中断")}</div>
       <p class="shot-video-status" role="status"></p>`;
     view.querySelector("img").src = shot.image.toDataURL();
-    recordingClip = { view, shot, stage: "ready", elapsed: 0, left: 0, position: 0, timer: null };
+    recordingClip = { view, shot, stage: recovered ? "review" : "ready", elapsed: recovered?.elapsed || 0, left: 0, position: 0,
+      options: recovered?.options || {}, timer: null };
+    if (recovered) {
+      view.querySelector("#shot-video-end").value = recovered.elapsed.toFixed(1);
+      view.querySelector("#shot-playhead").max = recovered.elapsed.toFixed(1);
+      recordingClock(recordingClip);
+    }
+    view.querySelector(".shot-video-options").onchange = () => {
+      recordingClip.options = Object.fromEntries(["system", "mic", "mouse", "keys", "camera"].map(
+        value => [value, view.querySelector("#shot-video-" + value).checked]));
+      recordingClip.options.corner = view.querySelector("#shot-camera-corner").selectedIndex;
+      recordingClip.options.circle = view.querySelector("#shot-camera-circle").checked;
+      updateRecording();
+    };
+    view.querySelector(".shot-video-mixer").onchange = updateRecording;
+    view.querySelectorAll("[data-track] input[type=range]").forEach(range => range.oninput = () =>
+      range.closest("[data-track]").querySelector("output").value = range.value + "%");
     view.querySelector("#shot-playhead").oninput = ev => {
       recordingClip.position = Number(ev.target.value);
       updateRecording();
@@ -712,13 +738,22 @@ const CapturePreview = (function createPreview() {
     const playhead = view.querySelector("#shot-playhead");
     playhead.value = clip.position.toFixed(1);
     view.querySelector(".shot-video-options").hidden = stage !== "ready";
+    view.querySelector(".shot-camera-fields").hidden = !clip.options.camera;
+    view.querySelector(".shot-microphone-field").hidden = !clip.options.mic;
+    const inset = view.querySelector(".shot-video-camera");
+    inset.hidden = !clip.options.camera;
+    inset.dataset.corner = clip.options.corner || 0;
+    inset.classList.toggle("round", !!clip.options.circle);
     view.querySelector(".shot-video-trim").hidden = !review;
+    const mixer = view.querySelector(".shot-video-mixer");
+    mixer.hidden = !review || !["system", "mic", "mouse", "keys"].some(key => clip.options[key]);
+    mixer.querySelectorAll("[data-track],[data-effect]").forEach(row => row.hidden = !clip.options[row.dataset.track || row.dataset.effect]);
     const primary = view.querySelector('[data-shot="video-start"]');
     primary.hidden = stage === "delay";
     const title = review ? (clip.playing ? "暂停播放" : "播放") : live || paused ? "停止录制" : "开始录制";
     primary.textContent = title;
     primary.setAttribute("aria-label", title);
-    for (const [id, visible] of [["pause", live || paused], ["save", review], ["repeat", review]]) {
+    for (const [id, visible] of [["pause", live || paused], ["save", review], ["repeat", review], ["interrupt", live || paused]]) {
       const control = view.querySelector(`[data-shot="video-${id}"]`);
       control.hidden = !visible;
       if (id === "pause") {
@@ -733,33 +768,37 @@ const CapturePreview = (function createPreview() {
     status.textContent = `${label} · ${(review ? clip.position : clip.elapsed).toFixed(1)} 秒 · 离线演示`;
     status.dataset.live = String(live);
     const marker = view.querySelector(".shot-video-position");
-    marker.hidden = !review && !live && !paused;
+    marker.hidden = !(clip.options.mouse && (review || live || paused)) ||
+      (review && !mixer.querySelector('[data-effect="mouse"] input').checked);
+    const key = view.querySelector(".shot-video-key");
+    key.hidden = !(clip.options.keys && (review || live || paused)) ||
+      (review && !mixer.querySelector('[data-effect="keys"] input').checked);
     marker.style.left = 21 + ((review ? clip.position : clip.elapsed) * 12) % 58 + "%";
     marker.style.top = 48 + Math.sin((review ? clip.position : clip.elapsed) * 1.8) * 12 + "%";
   }
   function videoAction(id) {
     const clip = recordingClip;
+    if (id === "video-recover") {
+      if (!recoverySample) return announce("没有可恢复的录屏");
+      const restored = recoverySample;
+      recoverySample = null;
+      return recordingPanel(restored.shot, restored);
+    }
     if (!clip) return;
     if (id === "video-close") return closeRecording();
     if (id === "video-repeat") return recordingPanel(clip.shot);
+    if (id === "video-interrupt") {
+      recoverySample = { shot: clip.shot, elapsed: clip.elapsed, options: { ...clip.options } };
+      closeRecording();
+      return announce("已留下可恢复的录屏片段");
+    }
     if (id === "video-save") return announce("离线原型已完成导出流程，桌面版生成实际文件");
     if (id === "video-pause") clip.stage = clip.stage === "paused" ? "live" : "paused";
     if (id === "video-start") {
       if (clip.stage === "ready") {
         clip.left = Number(clip.view.querySelector("#shot-delay").value);
         clip.stage = clip.left ? "delay" : "live";
-        let previous = performance.now();
-        clip.timer = setInterval(() => {
-          const now = performance.now(), delta = (now - previous) / 1000;
-          previous = now;
-          if (clip.stage === "delay" && (clip.left -= delta) <= 0) clip.stage = "live";
-          else if (clip.stage === "live") clip.elapsed += delta;
-          else if (clip.stage === "review" && clip.playing) {
-            clip.position = Math.min(clip.elapsed, clip.position + delta * Number(clip.view.querySelector("#shot-speed").value));
-            if (clip.position >= clip.elapsed) clip.playing = false;
-          } else if (clip.stage === "paused" || clip.stage === "review") return;
-          updateRecording();
-        }, 100);
+        recordingClock(clip);
       } else if (clip.stage === "review") {
         if (clip.position >= clip.elapsed) clip.position = 0;
         clip.playing = !clip.playing;
@@ -777,6 +816,20 @@ const CapturePreview = (function createPreview() {
       }
     }
     updateRecording();
+  }
+  function recordingClock(clip) {
+    let previous = performance.now();
+    clip.timer = setInterval(() => {
+      const now = performance.now(), delta = (now - previous) / 1000;
+      previous = now;
+      if (clip.stage === "delay" && (clip.left -= delta) <= 0) clip.stage = "live";
+      else if (clip.stage === "live") clip.elapsed += delta;
+      else if (clip.stage === "review" && clip.playing) {
+        clip.position = Math.min(clip.elapsed, clip.position + delta * Number(clip.view.querySelector("#shot-speed").value));
+        if (clip.position >= clip.elapsed) clip.playing = false;
+      } else if (clip.stage === "paused" || clip.stage === "review") return;
+      updateRecording();
+    }, 100);
   }
   function closeScroll() {
     scrollClip?.view.remove();
@@ -861,6 +914,7 @@ const CapturePreview = (function createPreview() {
       menu.innerHTML =
         button("start", "开始截图") +
         button("video-select", "录制屏幕") +
+        button("video-recover", "恢复录屏") +
         button("clipboard", "钉住剪贴板图片") +
         button("manual", "粘贴文字翻译") +
         button("settings", "截图与翻译设置");

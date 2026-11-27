@@ -17,7 +17,7 @@
 
 `capture.enabled` 默认开启。`capture.shortcuts` 包含 `start`、`clipboard`、`pin`、`ocr`、`translate`、`record` 和 `longShot`，默认依次为 `Ctrl+1`、`Ctrl+2`、`Ctrl+T`、`Shift+C`、`Ctrl+Q`、`G` 和 `L`。空字符串表示停用该绑定。只有前两项向 Windows 注册。旧配置中省略的字段使用默认值。录屏和长截图可使用单键或组合键。
 
-录屏每次从普通模式、24 帧/秒、无延时、显示光标开始。系统声音和麦克风默认关闭。录制和回放设置保存在当前会话，保存位置由用户选择。
+录屏每次从普通模式、24 帧/秒、无延时、显示光标开始。系统声音、麦克风、摄像头和键鼠动画默认关闭。录制和回放选项按次生效，保存位置由用户选择。恢复素材位于 `%LOCALAPPDATA%\Yxrl\RecordingRecovery`。成功快速保存、主动关闭已保存的回放或确认放弃时清理该次素材。
 
 `translation.baseUrl` 为含版本前缀的 HTTP(S) 基础地址，例如 `http://localhost:11434/v1`。`translation.model` 为服务端模型名，两项默认留空。`translation.targetLanguage` 默认「简体中文」。可选 API 密钥按服务地址保存在 Windows 当前用户凭据管理器。点击翻译才调用基础地址下的 `chat/completions`，发送校对后的选段或全文。截图、识别文本和译文仅在会话内使用，用户可以主动复制或另存 PNG。
 
